@@ -1,0 +1,19 @@
+.tox
+*.egg-info
+MANIFEST
+
+# Python
+*.pyc
+
+# Vim
+*.swp
+
+# IntelliJ
+*.iml
+.idea/
+
+# Ghost Driver
+ghostdriver.log
+
+# Nose
+.noseids
