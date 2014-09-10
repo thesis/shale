@@ -1,5 +1,5 @@
-gepetto
-=======
+shale
+=====
 
 A Flask-backed REST API to manage Selenium sessions.
 
@@ -14,7 +14,7 @@ and other supervision, are being developed.
 Clone the repo and install the requirements
 
 ```sh
-git clone git@github.com:cardforcoin/gepetto.git
+git clone git@github.com:cardforcoin/shale.git
 pip install -r requirements.txt
 ```
 

@@ -21,7 +21,7 @@ __all__ = ['app']
 
 app.debug = True
 
-REDIS_KEY_PREFIX = '_gepetto'
+REDIS_KEY_PREFIX = '_shale'
 SESSION_SET_KEY = '{}_session_set'.format(REDIS_KEY_PREFIX)
 SESSION_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}'
 SESSION_TAGS_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}_tags'
