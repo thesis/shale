@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import os
 import json
 from decorator import decorator
 from redis import ConnectionPool, Redis, WatchError
@@ -12,6 +13,7 @@ from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.exceptions import NotFound
 
 from .webdriver import ResumableRemote
+from .hubs import DefaultHubPool
 from .utils import permit, merge, retry
 
 from flask import Flask
@@ -20,6 +22,13 @@ app = Flask(__name__)
 __all__ = ['app']
 
 app.debug = True
+app.config.update(
+    DEBUG=True,
+    HUB_POOL=DefaultHubPool(),
+)
+
+if 'SHALE_SETTINGS' in os.environ:
+    app.config.from_envvar('SHALE_SETTINGS')
 
 REDIS_KEY_PREFIX = '_shale'
 SESSION_SET_KEY = '{}_session_set'.format(REDIS_KEY_PREFIX)
@@ -73,7 +82,8 @@ class SessionAPI(RedisView, MethodView):
                 ['browser_name', 'hub', 'tags', 'reserved', 'current_url'])
         cleaned = merge(permitted, defaults)
         # if hub was set to None, choose one
-        cleaned['hub'] = cleaned['hub'] or defaults['hub']
+        cleaned['hub'] = cleaned['hub'] or \
+                app.config['HUB_POOL'].get_hub(**cleaned)
 
         cap = {
             'chrome': DesiredCapabilities.CHROME,

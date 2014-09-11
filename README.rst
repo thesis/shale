@@ -35,6 +35,13 @@ In production, use gunicorn.
 
     gunicorn -b 127.0.0.1:5000 wsgi:app -t 120 --log-file -
 
+Configuration
+-------------
+
+To provide a configuration module, include a  variable `SHALE_SETTINGS` in your
+environment. Current options include the basic config provided by Flask, as well
+as a configurable `HUB_POOL` for dynamic hub selection.
+
 Examples
 --------
 
