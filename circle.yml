@@ -11,12 +11,12 @@ dependencies:
 
 test:
   pre:
-    - cd shale && python wsgi.py:
+    - python shale/wsgi.py:
       background: true
     - cd shale && bash ./get_selenium.sh
-    - cd shale && PATH="$PATH:~/shale/phantomjs/bin/" java -jar selenium -role hub:
+    - 'PATH="$PATH:~/shale/phantomjs/bin/" java -jar selenium -role hub':
       background: true
-    - cd shale && PATH="$PATH:~/shale/phantomjs/bin/" java -jar selenium -role node -hub http://localhost:4444/register/grid -nodeConfig ./libs/selenium/nodeConfig.json:
+    - 'PATH="$PATH:~/shale/phantomjs/bin/" java -jar shale/selenium -role node -hub http://localhost:4444/register/grid -nodeConfig ./libs/selenium/nodeConfig.json':
       background: true
   override:
     - env PATH="$HOME/bin:$PATH" tox
