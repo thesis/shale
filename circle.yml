@@ -14,7 +14,7 @@ dependencies:
 
 test:
   pre:
-    - python wsgi.py:
+    - .tox/py34/bin/python wsgi.py:
         background: true
     - PATH="$PATH:~/shale/phantomjs/bin/" java -jar selenium -role hub:
         background: true

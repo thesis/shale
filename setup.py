@@ -31,6 +31,6 @@ setup(
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
     ],
-    install_requires=read('requirements-install.txt').split('\n'),
-    tests_require=read('requirements-test.txt').split('\n'),
+    install_requires=read('requirements.txt').split('\n'),
+    tests_require=read('test_requirements.txt').split('\n'),
 )
