@@ -79,16 +79,19 @@ class SessionAPI(RedisView, MethodView):
             'phantomjs':DesiredCapabilities.PHANTOMJS,
         }.get(cleaned['browser_name'])
 
-        wd = ResumableRemote(command_executor='http://{}/wd/hub'.format(cleaned['hub']),
-                             desired_capabilities=cap)
+        wd = ResumableRemote(
+            command_executor='http://{}/wd/hub'.format(cleaned['hub']),
+            desired_capabilities=cap)
         if 'current_url' in cleaned:
             # we do this in JS to prevent a blocking call
-            wd.execute_script('window.location = "{}";'.format(cleaned['current_url']))
+            wd.execute_script(
+                'window.location = "{}";'.format(cleaned['current_url']))
         with self.redis.pipeline() as pipe:
             pipe.sadd(SESSION_SET_KEY, wd.session_id)
             session_key = SESSION_KEY_TEMPLATE.format(wd.session_id)
-            permitted = permit(cleaned, ['browser_name', 'hub', 'reserved', 'current_url'])
             for key, value in permitted.iteritems():
+            permitted = permit(
+                cleaned, ['browser_name', 'hub', 'reserved', 'current_url'])
                 pipe.hset(session_key, key, value)
             tags_key = SESSION_TAGS_KEY_TEMPLATE.format(wd.session_id)
             pipe.delete(tags_key)
