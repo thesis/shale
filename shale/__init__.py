@@ -145,6 +145,8 @@ class SessionAPI(RedisView, MethodView):
                 data = retry(get_data, exception_type=WatchError, raises=False)
             else:
                 data = get_data()
+        if data and 'reserved' in data:
+            data['reserved'] = {'True':True, 'False':False}[data['reserved']]
         return merge({'id':session_id}, data) if data else None
 
     def view_models(self, session_ids=None):
