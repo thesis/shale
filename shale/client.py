@@ -43,10 +43,10 @@ class Client(object):
     def create_browser(self, browser_name='phantomjs', tags=[],
                        hub=None, reserve=False):
         data = {
-            'hub':hub,
-            'tags':tags,
-            'reserved':reserve,
-            'browser_name':browser_name,
+            'hub': hub,
+            'tags': tags,
+            'reserved': reserve,
+            'browser_name': browser_name,
         }
         resp = requests.post('{}/sessions/'.format(self.url_root),
                 data=json.dumps(data), headers=self.headers)
@@ -58,14 +58,14 @@ class Client(object):
 
     def reserve_browser(self, session_id):
         resp = requests.put('{}/sessions/{}'.format(self.url_root, session_id),
-                data=json.dumps({ 'reserved':True}), headers=self.headers)
+                data=json.dumps({'reserved': True}), headers=self.headers)
         resp_data = json.loads(resp.content)
         return ClientResumableRemote(client=self, session_id = resp_data['id'],
                 hub=resp_data['hub'])
 
     def release_browser(self, browser):
         requests.put('{}/sessions/{}'.format(self.url_root, browser.session_id),
-                data=json.dumps({'reserved':False}), headers=self.headers)
+                data=json.dumps({'reserved': False}), headers=self.headers)
 
     def destroy_browser(self, browser=None, session_id=None):
         to_delete = session_id or getattr(browser, 'session_id')
@@ -99,7 +99,7 @@ class Client(object):
 
     def set_browser_tags(self, session_id, tags=[]):
         requests.put('{}/sessions/{}'.format(self.url_root, session_id),
-            data=json.dumps({'tags':tags}), headers=self.headers)
+            data=json.dumps({'tags': tags}), headers=self.headers)
 
     @contextmanager
     def browser(self, *args, **kwargs):

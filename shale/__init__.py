@@ -64,19 +64,19 @@ class SessionAPI(RedisView, MethodView):
         data = json.loads(request.data) if request.data else {}
 
         defaults = {
-            'browser_name':'firefox',
-            'hub':'localhost:4444',
-            'tags':[],
-            'reserved':False,
+            'browser_name': 'firefox',
+            'hub': 'localhost:4444',
+            'tags': [],
+            'reserved': False,
         }
         permitted = permit(data,
                 ['browser_name', 'hub', 'tags', 'reserved', 'current_url'])
         cleaned = merge(permitted, defaults)
 
         cap = {
-            'chrome':DesiredCapabilities.CHROME,
-            'firefox':DesiredCapabilities.FIREFOX,
-            'phantomjs':DesiredCapabilities.PHANTOMJS,
+            'chrome': DesiredCapabilities.CHROME,
+            'firefox': DesiredCapabilities.FIREFOX,
+            'phantomjs': DesiredCapabilities.PHANTOMJS,
         }.get(cleaned['browser_name'])
 
         wd = ResumableRemote(

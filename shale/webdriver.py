@@ -27,5 +27,5 @@ class ResumableRemote(webdriver.Remote):
 
     def resume_session(self, session_id):
         self.session_id = session_id
-        response = self.command_executor.execute('get_session', {'sessionId':session_id})
+        response = self.command_executor.execute('get_session', {'sessionId': session_id})
         self.capabilities = response['value']
