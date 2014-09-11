@@ -149,8 +149,13 @@ class SessionAPI(RedisView, MethodView):
             else:
                 data = get_data()
         if data and 'reserved' in data:
-            data['reserved'] = {'True':True, 'False':False}[data['reserved']]
-        return merge({'id':session_id}, data) if data else None
+            data.update(**{
+                'reserved': r for r in [
+                    {'True': True, 'False': False}.get(data.get('reserved'))
+                ] if r is not None
+            })
+
+        return merge({'id': session_id}, data) if data else None
 
     def view_models(self, session_ids=None):
         def get_data():
