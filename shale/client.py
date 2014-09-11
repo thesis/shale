@@ -69,7 +69,7 @@ class Client(object):
 
     def destroy_browser(self, browser=None, session_id=None):
         to_delete = session_id or getattr(browser, 'session_id')
-        requests.delete('{}/sessions/{}'.format(self.url_root, session_id))
+        requests.delete('{}/sessions/{}'.format(self.url_root, to_delete))
 
     def running_browsers(self, reserved=None, browser_name=None,
             with_tags=None, without_tags=None):
