@@ -27,7 +27,8 @@ class ClientResumableRemote(ResumableRemote):
 
     @property
     def tags(self):
-        return tuple(self.client.browser_metadata(self.session_id).get('tags', []))
+        return tuple(
+            self.client.browser_metadata(self.session_id).get('tags', []))
 
     @tags.setter
     def tags(self, new_tags):
