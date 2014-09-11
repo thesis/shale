@@ -89,9 +89,9 @@ class SessionAPI(RedisView, MethodView):
         with self.redis.pipeline() as pipe:
             pipe.sadd(SESSION_SET_KEY, wd.session_id)
             session_key = SESSION_KEY_TEMPLATE.format(wd.session_id)
-            for key, value in permitted.iteritems():
             permitted = permit(
                 cleaned, ['browser_name', 'hub', 'reserved', 'current_url'])
+            for key, value in permitted.items():
                 pipe.hset(session_key, key, value)
             tags_key = SESSION_TAGS_KEY_TEMPLATE.format(wd.session_id)
             pipe.delete(tags_key)
