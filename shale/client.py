@@ -40,8 +40,11 @@ class Client(object):
         self.url_root = url_root
         self.headers = {'Content-type': 'application/json'}
 
-    def create_browser(self, browser_name='phantomjs', tags=[],
+    def create_browser(self, browser_name='phantomjs', tags=None,
                        hub=None, reserve=False):
+
+        tags = tags or []
+
         data = {
             'hub': hub,
             'tags': tags,
@@ -97,7 +100,10 @@ class Client(object):
         resp = requests.get('{}/sessions/{}'.format(self.url_root, session_id))
         return json.loads(resp.content)
 
-    def set_browser_tags(self, session_id, tags=[]):
+    def set_browser_tags(self, session_id, tags=None):
+
+        tags = tags or []
+
         requests.put('{}/sessions/{}'.format(self.url_root, session_id),
             data=json.dumps({'tags': tags}), headers=self.headers)
 
