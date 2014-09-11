@@ -57,7 +57,7 @@ class Client(object):
         if reserve:
             return ClientResumableRemote(client=self,
                     session_id=resp_data['id'], hub=resp_data['hub'])
-        return resp_data['id']
+        return resp_data
 
     def reserve_browser(self, session_id):
         resp = requests.put('{}/sessions/{}'.format(self.url_root, session_id),

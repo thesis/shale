@@ -72,6 +72,8 @@ class SessionAPI(RedisView, MethodView):
         permitted = permit(data,
                 ['browser_name', 'hub', 'tags', 'reserved', 'current_url'])
         cleaned = merge(permitted, defaults)
+        # if hub was set to None, choose one
+        cleaned['hub'] = cleaned['hub'] or defaults['hub']
 
         cap = {
             'chrome': DesiredCapabilities.CHROME,
