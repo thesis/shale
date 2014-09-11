@@ -16,8 +16,6 @@ def retry(func, exception_type=Exception, times=3, raises=False):
         except exception_type as e:
             exception = e
             continue
-        else:
-            break
     else:
         if raises:
             raise exception
