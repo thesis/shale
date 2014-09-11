@@ -9,8 +9,9 @@ mkdir -p ./libs
 if [[ ! -d ./libs/$PHANTOM_DIR_NAME ]]; then
     wget $PHANTOM_URL
     tar -xvjf $PHANTOM_FILE_NAME -C ./libs
-    ln -s ./libs/$PHANTOM_DIR_NAME phantomjs
 fi
+[[ -h phantomjs ]] && unlink phantomjs
+ln -s ./libs/$PHANTOM_DIR_NAME phantomjs
 
 SELENIUM_VERSION='2.43'
 SELENIUM_RELEASE_VERSION="$SELENIUM_VERSION.0"
@@ -20,8 +21,10 @@ SELENIUM_URL="http://selenium-release.storage.googleapis.com/$SELENIUM_VERSION/$
 if [[ ! -f ./libs/$SELENIUM_JAR ]]; then
     wget $SELENIUM_URL
     mv $SELENIUM_JAR ./libs/
-    ln -s ./libs/$SELENIUM_JAR selenium
 fi
+
+[[ -h selenium ]] && unlink selenium
+ln -s ./libs/$SELENIUM_JAR selenium
 
 mkdir -p ./libs/selenium
 SELENIUM_NODE_CONFIG_FILE="./libs/selenium/nodeConfig.json"
