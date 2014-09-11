@@ -72,7 +72,11 @@ class Client(object):
         requests.delete('{}/sessions/{}'.format(self.url_root, session_id))
 
     def running_browsers(self, reserved=None, browser_name=None,
-            with_tags=[], without_tags=[]):
+            with_tags=None, without_tags=None):
+
+        with_tags = with_tags or []
+        without_tags = without_tags or []
+
         resp = requests.get('{}/sessions/'.format(self.url_root))
         browser_data = json.loads(resp.content)
         browser_data = (b for b in browser_data
