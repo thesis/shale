@@ -82,6 +82,7 @@ class SessionAPI(RedisView, MethodView):
         wd = ResumableRemote(
             command_executor='http://{}/wd/hub'.format(cleaned['hub']),
             desired_capabilities=cap)
+        cleaned['hub'] = wd.command_executor._url
         if 'current_url' in cleaned:
             # we do this in JS to prevent a blocking call
             wd.execute_script(
