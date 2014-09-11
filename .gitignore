@@ -1,6 +1,9 @@
 .tox
 *.egg-info
 MANIFEST
+libs/
+selenium
+phantomjs
 
 # Python
 *.pyc
