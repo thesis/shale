@@ -25,6 +25,12 @@ class ClientResumableRemote(ResumableRemote):
         self.client.release_browser(self)
         self.released = True
 
+    def destroy(self):
+        self.client.destroy_browser(browser=self)
+
+    def refresh(self):
+        self.client.refresh_browser(browser=self)
+
     @property
     def tags(self):
         return tuple(
@@ -107,6 +113,14 @@ class Client(object):
         requests.put('{}/sessions/{}'.format(self.url_root, session_id),
             data=json.dumps({'tags': tags}), headers=self.headers)
 
+    def refresh_browser(self, browser=None, session_id=None):
+        to_refresh = session_id or getattr(browser, 'session_id')
+        if to_refresh is None:
+            requests.post('{}/sessions/refresh'.format(self.url_root))
+        else:
+            url = '{}/sessions/{}/refresh'.format(self.url_root, to_refresh)
+            requests.post(url)
+
     @contextmanager
     def browser(self, *args, **kwargs):
         browser = self.reserve_browser(*args, **kwargs)
@@ -122,6 +136,14 @@ reserve_browser = default_client.reserve_browser
 
 release_browser = default_client.reserve_browser
 
-browser = default_client.browser
+destroy_browser = default_client.destroy_browser
 
 running_browsers = default_client.running_browsers
+
+browser_metadata = default_client.browser_metadata
+
+set_browser_tags = default_client.set_browser_tags
+
+refresh_browser = default_client.refresh_browser
+
+browser = default_client.browser

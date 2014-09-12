@@ -3,7 +3,7 @@ from __future__ import absolute_import
 import os
 import json
 from decorator import decorator
-from redis import ConnectionPool, Redis, WatchError
+from redis import ConnectionPool, Redis, WatchError, RedisError
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.common.exceptions import WebDriverException
 
@@ -62,9 +62,9 @@ class SessionAPI(RedisView, MethodView):
 
     def get(self, session_id):
         if session_id is None:
-            return self.view_models()
+            return view_models(self.redis)
         # get the specified session or 404
-        view_model = self.view_model(session_id)
+        view_model = view_model(self.redis, session_id)
         if view_model is None:
             raise NotFound()
         return view_model
@@ -111,7 +111,7 @@ class SessionAPI(RedisView, MethodView):
             for tag in cleaned['tags']:
                 pipe.sadd(tags_key, tag)
             pipe.execute()
-        return self.view_model(wd.session_id, data=cleaned)
+        return view_model(self.redis, wd.session_id, data=cleaned)
 
     def put(self, session_id):
         data = json.loads(request.data) if request.data else {}
@@ -127,61 +127,97 @@ class SessionAPI(RedisView, MethodView):
                     pipe.hset(SESSION_KEY_TEMPLATE.format(session_id),
                               'reserved', cleaned['reserved'])
             pipe.execute()
-            return self.view_model(session_id)
+            return view_model(self.redis, session_id)
 
 
     def delete(self, session_id):
-        wd = ResumableRemote(session_id=session_id)
-        try:
-            wd.quit()
-        except WebDriverException:
-            pass
-        with self.redis.pipeline() as pipe:
-            pipe.srem(SESSION_SET_KEY, session_id)
-            pipe.delete(SESSION_KEY_TEMPLATE.format(session_id))
-            pipe.delete(SESSION_TAGS_KEY_TEMPLATE.format(session_id))
+        delete_session(redis, session_id)
+
+
+def delete_session(redis, session_id):
+    wd = ResumableRemote(session_id=session_id)
+    try:
+        wd.quit()
+    except WebDriverException:
+        pass
+    with redis.pipeline() as pipe:
+        pipe.srem(SESSION_SET_KEY, session_id)
+        pipe.delete(SESSION_KEY_TEMPLATE.format(session_id))
+        pipe.delete(SESSION_TAGS_KEY_TEMPLATE.format(session_id))
+        pipe.execute()
+    return True
+
+
+def view_model(redis, session_id, data=None, should_retry=True):
+    def get_data():
+        ret = None
+        with redis.pipeline() as pipe:
+            session_key = SESSION_KEY_TEMPLATE.format(session_id)
+            tags_key = SESSION_TAGS_KEY_TEMPLATE.format(session_id)
+            pipe.watch(session_key)
+            pipe.watch(tags_key)
+            if pipe.exists(session_key):
+                ret = pipe.hgetall(session_key)
+                ret['tags'] = list(pipe.smembers(tags_key))
             pipe.execute()
+        return ret
+    if data is None:
+        if should_retry:
+            data = retry(get_data, exception_type=WatchError, raises=False)
+        else:
+            data = get_data()
+    if data and 'reserved' in data:
+        data.update(**{
+            'reserved': r for r in [
+                {'True': True, 'False': False}.get(data.get('reserved'))
+            ] if r is not None
+        })
+
+    return merge({'id': session_id}, data) if data else None
+
+
+def view_models(redis, session_ids=None):
+    def get_data():
+        data = []
+        with redis.pipeline() as pipe:
+            pipe.watch(SESSION_SET_KEY)
+            ids = session_ids
+            ids = ids or list(pipe.smembers(SESSION_SET_KEY))
+            for session_id in ids:
+                data.append(view_model(redis, session_id))
+            pipe.execute()
+        return data
+    return retry(get_data, exception_type=WatchError, raises=False) or []
+
+
+class SessionRefreshAPI(RedisView, MethodView):
+
+    decorators = [returns_json]
+
+    def post(self, session_id):
+        sessions = [view_model(self.redis, session_id)] \
+                if session_id else view_models(self.redis)
+        for session in sessions:
+            try:
+
+                with self.redis.pipeline() as pipe:
+                    pipe.watch(SESSION_SET_KEY)
+                    session_key = SESSION_KEY_TEMPLATE.format(session_id)
+                    pipe.watch(session_key)
+
+                    hub = pipe.hget(session_key, 'hub')
+                    wd = ResumableRemote(command_executor=hub,
+                                         session_id=session['id'])
+                    pipe.hset(session_key, 'current_url', wd.current_url)
+
+                    pipe.execute()
+            except RedisError:
+                # TODO ?? not sure how to handle this
+                pass
+            except WebDriverException:
+                # delete the session
+                delete_session(self.redis, session_id)
         return True
-
-    def view_model(self, session_id, data=None, should_retry=True):
-        def get_data():
-            ret = None
-            with self.redis.pipeline() as pipe:
-                session_key = SESSION_KEY_TEMPLATE.format(session_id)
-                tags_key = SESSION_TAGS_KEY_TEMPLATE.format(session_id)
-                pipe.watch(session_key)
-                pipe.watch(tags_key)
-                if pipe.exists(session_key):
-                    ret = pipe.hgetall(session_key)
-                    ret['tags'] = list(pipe.smembers(tags_key))
-                pipe.execute()
-            return ret
-        if data is None:
-            if should_retry:
-                data = retry(get_data, exception_type=WatchError, raises=False)
-            else:
-                data = get_data()
-        if data and 'reserved' in data:
-            data.update(**{
-                'reserved': r for r in [
-                    {'True': True, 'False': False}.get(data.get('reserved'))
-                ] if r is not None
-            })
-
-        return merge({'id': session_id}, data) if data else None
-
-    def view_models(self, session_ids=None):
-        def get_data():
-            data = []
-            with self.redis.pipeline() as pipe:
-                pipe.watch(SESSION_SET_KEY)
-                ids = session_ids
-                ids = ids or list(pipe.smembers(SESSION_SET_KEY))
-                for session_id in ids:
-                    data.append(self.view_model(session_id))
-                pipe.execute()
-            return data
-        return retry(get_data, exception_type=WatchError, raises=False) or []
 
 
 session_view = SessionAPI.as_view('session_api')
@@ -190,5 +226,10 @@ app.add_url_rule('/sessions/', defaults={'session_id': None},
 app.add_url_rule('/sessions/', view_func=session_view, methods=['POST',])
 app.add_url_rule('/sessions/<session_id>', view_func=session_view,
                  methods=['GET', 'PUT', 'DELETE'])
+session_refresh_api = SessionRefreshAPI.as_view('session_refresh_api')
+app.add_url_rule('/sessions/refresh', view_func=session_refresh_api,
+                 defaults={'session_id':None}, methods=['POST'])
+app.add_url_rule('/sessions/<session_id>/refresh', view_func=session_refresh_api,
+                 methods=['POST'])
 
 app.wsgi_app = ProxyFix(app.wsgi_app)
