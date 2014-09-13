@@ -4,8 +4,9 @@ from contextlib import contextmanager
 
 from .webdriver import ResumableRemote
 
-__all__ = ['Client', 'default_client ', 'reserve_browser', 'release_browser',
-            'browser', 'candidates']
+__all__ = ['Client', 'default_client ', 'reserve_browser ', 'release_browser ',
+           'destroy_browser ', 'running_browsers ', 'browser_metadata ',
+           'set_browser_tags ', 'refresh_browser ', 'browser ']
 
 
 class ClientResumableRemote(ResumableRemote):
