@@ -131,7 +131,7 @@ class SessionAPI(RedisView, MethodView):
 
 
     def delete(self, session_id):
-        delete_session(redis, session_id)
+        delete_session(self.redis, session_id)
 
 
 def delete_session(redis, session_id):
