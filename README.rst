@@ -74,12 +74,28 @@ List all the active sessions
       "tags": []
     }]
 
-Create a new reserved session with tags
+Get or create a new session with tags
 
 .. code::
 
-    $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"], "reserved":true}' \
+    $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
            -XPOST http://localhost:5000/sessions/ \
+           --header "Content-Type:application/json"
+    {
+      "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
+      "reserved": false,
+      "hub": "localhost:4444",
+      "browser_name": "phantomjs",
+      "tags": ["walmart"],
+      "reserved": false
+    }
+
+Get or create a new reserved session with tags
+
+.. code::
+
+    $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
+           -XPOST http://localhost:5000/sessions/?reserved=True \
            --header "Content-Type:application/json"
     {
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
@@ -152,13 +168,16 @@ There's a handy context manager for reserving & releasing webdrivers.
 
 .. code:: python
 
-    >>> with client.browser(id) as browser:
+    >>> with client.browser(browser_name='chrome', tags=['logged-in']) as browser:
     ...     # do yo thang
     ...     pass
+    ...
+    >>> with client.browser(session_id='123...') as browser:
+    ...     # do yo thang with a particular browser session
+    ...     pass
 
-Finally, if there's not a good candidate running, you can create and reserve
-a new remote webdriver.
+You can also force create a new remote webdriver.
 
 .. code:: python
 
-    >>> browser = client.create_browser(reserve=True)
+    >>> browser = client.create_browser()

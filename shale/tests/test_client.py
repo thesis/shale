@@ -14,6 +14,7 @@ def teardown():
     resps = [requests.delete('http://localhost:5000/sessions/{id}'.format(**r))
              for r in resp_data]
 
+
 @with_setup(teardown=teardown)
 def test_create():
     browser_details = client.create_browser(browser_name='phantomjs')
@@ -23,12 +24,42 @@ def test_create():
     eq_(browser_details.get('reserved'), False)
 
     tags = ['test1','test2']
-    browser_details = client.create_browser(browser_name='phantomjs', tags=tags)
+    browser_details = client.get_or_create_browser(browser_name='phantomjs', tags=tags)
     eq_(set(browser_details.get('tags',[])), set(tags))
+
 
 def create_clients(kwarg_dicts):
     for d in kwarg_dicts:
-        client.create_browser(**d)
+        d = dict(d)
+        d['force_create'] = True
+        client.get_or_create_browser(**d)
+
+
+def setup_logged_in_clients():
+    browser_specs = [
+        {'browser_name':'phantomjs', 'tags':['logged-in']},
+        {'browser_name':'phantomjs', 'tags':['logged-out']},
+    ]
+    create_clients(browser_specs)
+
+
+@with_setup(setup=setup_logged_in_clients, teardown=teardown)
+def test_get_or_create():
+    # test that get_or_create doesn't create an unnecessary session
+    browser = client.get_or_create_browser(tags=['logged-in'])
+    eq_(len(client.running_browsers()), 2)
+
+    # and that it does create a new session with a new tag
+    browser = client.get_or_create_browser(tags=['some-other-state'])
+    eq_(len(client.running_browsers()), 3)
+
+
+@with_setup(setup=setup_logged_in_clients, teardown=teardown)
+def test_context_manager():
+    with client.browser(browser_name='phantomjs',tags=['logged-in']) as b1:
+        with client.browser(browser_name='phantomjs',tags=['logged-out']) as b2:
+            pass
+
 
 @with_setup(teardown=teardown)
 def test_running_browsers():

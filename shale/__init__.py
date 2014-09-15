@@ -14,7 +14,7 @@ from werkzeug.exceptions import NotFound
 
 from .webdriver import ResumableRemote
 from .hubs import DefaultHubPool
-from .utils import permit, merge, retry
+from .utils import permit, merge, retry, str_bool
 
 from flask import Flask
 app = Flask(__name__)
@@ -70,48 +70,28 @@ class SessionAPI(RedisView, MethodView):
         return view_model
 
     def post(self):
+        """
+        We're using POST here for get-or-create semantics.
+        """
         data = json.loads(request.data) if request.data else {}
 
-        defaults = {
-            'browser_name': 'firefox',
-            'hub': 'localhost:4444',
-            'tags': [],
-            'reserved': False,
-        }
-        permitted = permit(data,
+        force_create = str_bool(request.args.get('force_create', False))
+        reserve = str_bool(request.args.get('reserve', False))
+
+        permitted = permit(
+                dict((k, v) for k, v in data.items() if v is not None),
                 ['browser_name', 'hub', 'tags', 'reserved', 'current_url'])
-        cleaned = merge(permitted, defaults)
-        # if hub was set to None, choose one
-        cleaned['hub'] = cleaned['hub'] or \
-                app.config['HUB_POOL'].get_hub(**cleaned)
 
-        cap = {
-            'chrome': DesiredCapabilities.CHROME,
-            'firefox': DesiredCapabilities.FIREFOX,
-            'phantomjs': DesiredCapabilities.PHANTOMJS,
-        }.get(cleaned['browser_name'])
-
-        wd = ResumableRemote(
-            command_executor='http://{}/wd/hub'.format(cleaned['hub']),
-            desired_capabilities=cap)
-        cleaned['hub'] = wd.command_executor._url
-        if 'current_url' in cleaned:
-            # we do this in JS to prevent a blocking call
-            wd.execute_script(
-                'window.location = "{}";'.format(cleaned['current_url']))
         with self.redis.pipeline() as pipe:
-            pipe.sadd(SESSION_SET_KEY, wd.session_id)
-            session_key = SESSION_KEY_TEMPLATE.format(wd.session_id)
-            permitted = permit(
-                cleaned, ['browser_name', 'hub', 'reserved', 'current_url'])
-            for key, value in permitted.items():
-                pipe.hset(session_key, key, value)
-            tags_key = SESSION_TAGS_KEY_TEMPLATE.format(wd.session_id)
-            pipe.delete(tags_key)
-            for tag in cleaned['tags']:
-                pipe.sadd(tags_key, tag)
-            pipe.execute()
-        return view_model(self.redis, wd.session_id, data=cleaned)
+            if force_create:
+                session_id = create_session(self.redis, permitted)
+            else:
+                session_id = get_or_create_session(self.redis, permitted)
+
+            if reserve:
+                reserve_session(self.redis, session_id)
+
+            return view_model(self.redis, session_id)
 
     def put(self, session_id):
         data = json.loads(request.data) if request.data else {}
@@ -131,7 +111,87 @@ class SessionAPI(RedisView, MethodView):
 
 
     def delete(self, session_id):
-        delete_session(self.redis, session_id)
+        return delete_session(self.redis, session_id)
+
+
+def create_session(redis, requirements):
+    defaults = {
+        'browser_name': 'firefox',
+        'hub': 'localhost:4444',
+        'tags': [],
+        'reserved': False,
+    }
+    with redis.pipeline() as pipe:
+        # if hub was set to None, choose one
+        settings = dict(requirements)
+        settings['hub'] = settings.get('hub') or \
+                app.config['HUB_POOL'].get_hub(**requirements)
+        settings = merge(settings, defaults)
+        settings.setdefault('browser_name', 'phantomjs')
+
+        cap = {
+            'chrome': DesiredCapabilities.CHROME,
+            'firefox': DesiredCapabilities.FIREFOX,
+            'phantomjs': DesiredCapabilities.PHANTOMJS,
+        }.get(settings['browser_name'])
+
+        wd = ResumableRemote(
+            command_executor='http://{}/wd/hub'.format(settings['hub']),
+            desired_capabilities=cap)
+        settings['hub'] = wd.command_executor._url
+        if 'current_url' in settings:
+            # we do this in JS to prevent a blocking call
+            wd.execute_script(
+                'window.location = "{}";'.format(settings['current_url']))
+
+        session_id = wd.session_id
+        pipe.sadd(SESSION_SET_KEY, session_id)
+        session_key = SESSION_KEY_TEMPLATE.format(wd.session_id)
+        permitted = permit(
+            settings, ['browser_name', 'hub', 'reserved', 'current_url'])
+        for key, value in permitted.items():
+            pipe.hset(session_key, key, value)
+        tags_key = SESSION_TAGS_KEY_TEMPLATE.format(wd.session_id)
+        pipe.delete(tags_key)
+        for tag in settings['tags']:
+            pipe.sadd(tags_key, tag)
+        pipe.execute()
+        return session_id
+
+
+def reserve_session(redis, session_id):
+    with redis.pipeline() as pipe:
+        session_key = SESSION_KEY_TEMPLATE.format(session_id)
+        pipe.watch(session_key)
+        was_reserved = {'False':False, 'True':True}.get(
+                pipe.hget(session_key, 'reserved'), False)
+        if was_reserved:
+            raise ValueError("Session was already reserved- can't reserve a "
+                             "session twice.")
+        pipe.hset(session_key, 'reserved', True)
+        pipe.execute()
+
+
+def get_or_create_session(redis, requirements):
+    requirements = dict(requirements)
+    requirements.setdefault('reserved', False)
+
+    def match(candidate, reqs):
+        keys_for_match = ['browser_name', 'hub', 'reserved', 'current_url']
+        cand_tags = set(candidate.get('tags', []))
+        req_tags = set(reqs.get('tags', []))
+        return (set(permit(candidate, keys_for_match).items()) >=
+                    set(permit(reqs, keys_for_match).items())
+                and cand_tags >= req_tags)
+
+    with redis.pipeline() as pipe:
+        pipe.watch(SESSION_SET_KEY)
+        models = view_models(redis)
+        candidates = [m for m in models if match(m, requirements)]
+        if len(candidates) >= 1:
+            session_id = candidates[0]['id']
+            return session_id
+        return create_session(redis, requirements)
 
 
 def delete_session(redis, session_id):
@@ -198,26 +258,33 @@ class SessionRefreshAPI(RedisView, MethodView):
         sessions = [view_model(self.redis, session_id)] \
                 if session_id else view_models(self.redis)
         for session in sessions:
-            try:
-
-                with self.redis.pipeline() as pipe:
-                    pipe.watch(SESSION_SET_KEY)
-                    session_key = SESSION_KEY_TEMPLATE.format(session_id)
-                    pipe.watch(session_key)
-
-                    hub = pipe.hget(session_key, 'hub')
-                    wd = ResumableRemote(command_executor=hub,
-                                         session_id=session['id'])
-                    pipe.hset(session_key, 'current_url', wd.current_url)
-
-                    pipe.execute()
-            except RedisError:
-                # TODO ?? not sure how to handle this
-                pass
-            except WebDriverException:
-                # delete the session
-                delete_session(self.redis, session_id)
+            refresh_session(self.redis, session['id'])
         return True
+
+
+def refresh_session(redis, session_id):
+    try:
+        with redis.pipeline() as pipe:
+            pipe.watch(SESSION_SET_KEY)
+            session_key = SESSION_KEY_TEMPLATE.format(session_id)
+            # TODO handle if the key isn't there
+            pipe.watch(session_key)
+
+            hub = pipe.hget(session_key, 'hub') \
+                    or 'http://127.0.0.1:4444/wd/hub'
+            wd = ResumableRemote(command_executor=hub,
+                                 session_id=session_id)
+            pipe.hset(session_key, 'current_url', wd.current_url)
+
+            pipe.execute()
+    except RedisError:
+        # TODO ?? not sure how to handle this
+        pass
+    except WebDriverException:
+        # delete the session
+        delete_session(redis, session_id)
+        return False
+    return True
 
 
 session_view = SessionAPI.as_view('session_api')

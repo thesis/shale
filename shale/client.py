@@ -22,6 +22,9 @@ class ClientResumableRemote(ResumableRemote):
         self.client = client
         self.released = False
 
+    def reserve(self):
+        self.client.reserve_browser(self)
+
     def release(self):
         self.client.release_browser(self)
         self.released = True
@@ -47,24 +50,33 @@ class Client(object):
         self.url_root = url_root
         self.headers = {'Content-type': 'application/json'}
 
-    def create_browser(self, browser_name='phantomjs', tags=None,
-                       hub=None, reserve=False):
+    def get_or_create_browser(self, browser_name='phantomjs', tags=None,
+                              hub=None, reserve=False, force_create=False):
 
         tags = tags or []
 
         data = {
-            'hub': hub,
             'tags': tags,
-            'reserved': reserve,
             'browser_name': browser_name,
         }
+        if hub is not None:
+            data['hub'] = hub
         resp = requests.post('{}/sessions/'.format(self.url_root),
-                data=json.dumps(data), headers=self.headers)
+                             data=json.dumps(data),
+                             params={'force_create':force_create,
+                                     'reserve':reserve},
+                             headers=self.headers)
         resp_data = json.loads(resp.content)
         if reserve:
             return ClientResumableRemote(client=self,
                     session_id=resp_data['id'], hub=resp_data['hub'])
         return resp_data
+
+    def create_browser(self, browser_name='phantomjs', tags=None,
+                       hub=None, reserve=False):
+        return self.get_or_create_browser(browser_name=browser_name, tags=tags,
+                                          hub=hub, reserve=reserve,
+                                          force_create=True)
 
     def reserve_browser(self, session_id):
         resp = requests.put('{}/sessions/{}'.format(self.url_root, session_id),
@@ -123,8 +135,12 @@ class Client(object):
             requests.post(url)
 
     @contextmanager
-    def browser(self, *args, **kwargs):
-        browser = self.reserve_browser(*args, **kwargs)
+    def browser(self, session_id=None, browser_name=None, tags=None, hub=None):
+        if session_id:
+            browser = self.reserve_browser(session_id)
+        else:
+            browser = self.get_or_create_browser(
+                    browser_name=browser_name, tags=tags, hub=hub, reserve=True)
         try:
             yield browser
         finally:
@@ -132,6 +148,10 @@ class Client(object):
 
 
 default_client = Client()
+
+get_or_create_browser = default_client.get_or_create_browser
+
+create_browser = default_client.create_browser
 
 reserve_browser = default_client.reserve_browser
 
