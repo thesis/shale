@@ -60,6 +60,17 @@ def test_context_manager():
         with client.browser(browser_name='phantomjs',tags=['logged-out']) as b2:
             pass
 
+# TODO find a way to test the UA -  current approach doesn't seem to work
+#@with_setup(teardown=teardown)
+#def test_extra_cap():
+#    ua_key = 'phantomjs.page.settings.userAgent'
+#    ua = 'test-user-agent'
+#    browser = client.get_or_create_browser(
+#            browser_name='phantomjs', extra_desired_capabilities={ua_key:ua},
+#            reserve=True)
+#    browser_ua = browser.execute_script("return navigator.userAgent;")
+#    eq_(ua, browser_ua)
+
 
 @with_setup(teardown=teardown)
 def test_running_browsers():

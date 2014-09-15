@@ -78,9 +78,11 @@ class SessionAPI(RedisView, MethodView):
         force_create = str_bool(request.args.get('force_create', False))
         reserve = str_bool(request.args.get('reserve', False))
 
+        permitted_keys = ['browser_name', 'hub', 'tags', 'reserved',
+                          'current_url', 'extra_desired_capabilities']
         permitted = permit(
                 dict((k, v) for k, v in data.items() if v is not None),
-                ['browser_name', 'hub', 'tags', 'reserved', 'current_url'])
+                permitted_keys)
 
         with self.redis.pipeline() as pipe:
             if force_create:
@@ -120,6 +122,7 @@ def create_session(redis, requirements):
         'hub': 'localhost:4444',
         'tags': [],
         'reserved': False,
+        'extra_desired_capabilities':{}
     }
     with redis.pipeline() as pipe:
         # if hub was set to None, choose one
@@ -134,6 +137,7 @@ def create_session(redis, requirements):
             'firefox': DesiredCapabilities.FIREFOX,
             'phantomjs': DesiredCapabilities.PHANTOMJS,
         }.get(settings['browser_name'])
+        cap = merge(cap, settings.get('extra_desired_capabilities', {}))
 
         wd = ResumableRemote(
             command_executor='http://{}/wd/hub'.format(settings['hub']),

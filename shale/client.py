@@ -51,13 +51,15 @@ class Client(object):
         self.headers = {'Content-type': 'application/json'}
 
     def get_or_create_browser(self, browser_name='phantomjs', tags=None,
-                              hub=None, reserve=False, force_create=False):
+                              hub=None, reserve=False, force_create=False,
+                              extra_desired_capabilities=None):
 
         tags = tags or []
 
         data = {
             'tags': tags,
             'browser_name': browser_name,
+            'extra_desired_capabilities': extra_desired_capabilities,
         }
         if hub is not None:
             data['hub'] = hub
@@ -73,7 +75,8 @@ class Client(object):
         return resp_data
 
     def create_browser(self, browser_name='phantomjs', tags=None,
-                       hub=None, reserve=False):
+                       hub=None, extra_desired_capabilities=None,
+                       reserve=False):
         return self.get_or_create_browser(browser_name=browser_name, tags=tags,
                                           hub=hub, reserve=reserve,
                                           force_create=True)
@@ -135,12 +138,15 @@ class Client(object):
             requests.post(url)
 
     @contextmanager
-    def browser(self, session_id=None, browser_name=None, tags=None, hub=None):
+    def browser(self, session_id=None, browser_name=None, tags=None, hub=None,
+                extra_desired_capabilities=None):
         if session_id:
             browser = self.reserve_browser(session_id)
         else:
             browser = self.get_or_create_browser(
-                    browser_name=browser_name, tags=tags, hub=hub, reserve=True)
+                    browser_name=browser_name, tags=tags, hub=hub,
+                    extra_desired_capabilities=extra_desired_capabilities,
+                    reserve=True)
         try:
             yield browser
         finally:
