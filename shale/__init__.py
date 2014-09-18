@@ -280,9 +280,10 @@ def refresh_session(redis, session_id):
             pipe.watch(session_key)
 
             hub = pipe.hget(session_key, 'hub') \
-                    or 'http://127.0.0.1:4444/wd/hub'
-            wd = ResumableRemote(command_executor=hub,
-                                 session_id=session_id)
+                    or '127.0.0.1:4444'
+            wd = ResumableRemote(
+                command_executor='http://{host}/wd/hub'.format(host=hub),
+                session_id=session_id)
             pipe.hset(session_key, 'current_url', wd.current_url)
 
             pipe.execute()
