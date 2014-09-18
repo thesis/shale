@@ -3,7 +3,7 @@
 MANIFEST
 libs/
 selenium
-phantomjs
+/phantomjs*
 
 # Python
 *.pyc
