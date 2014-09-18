@@ -13,12 +13,5 @@ dependencies:
     - "libs/"
 
 test:
-  pre:
-    - .tox/py34/bin/python wsgi.py:
-        background: true
-    - PATH="$PATH:~/shale/phantomjs/bin/" java -jar selenium -role hub:
-        background: true
-    - PATH="$PATH:~/shale/phantomjs/bin/" java -jar selenium -role node -hub http://localhost:4444/register/grid -nodeConfig ./libs/selenium/nodeConfig.json:
-        background: true
   override:
     - env PATH="$HOME/bin:$PATH" tox
