@@ -10,7 +10,7 @@ client = shale.client.default_client
 def teardown():
     # kill all open sessions
     resp = requests.get('http://localhost:5000/sessions')
-    resp_data = json.loads(resp.content)
+    resp_data = json.loads(resp.content.decode('UTF-8'))
     resps = [requests.delete('http://localhost:5000/sessions/{id}'.format(**r))
              for r in resp_data]
 

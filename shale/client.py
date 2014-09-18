@@ -68,7 +68,7 @@ class Client(object):
                              params={'force_create':force_create,
                                      'reserve':reserve},
                              headers=self.headers)
-        resp_data = json.loads(resp.content)
+        resp_data = json.loads(resp.content.decode('UTF-8'))
         if reserve:
             return ClientResumableRemote(client=self,
                     session_id=resp_data['id'], hub=resp_data['hub'])
@@ -84,7 +84,7 @@ class Client(object):
     def reserve_browser(self, session_id):
         resp = requests.put('{}/sessions/{}'.format(self.url_root, session_id),
                 data=json.dumps({'reserved': True}), headers=self.headers)
-        resp_data = json.loads(resp.content)
+        resp_data = json.loads(resp.content.decode('UTF-8'))
         return ClientResumableRemote(client=self, session_id = resp_data['id'],
                 hub=resp_data['hub'])
 
@@ -103,7 +103,7 @@ class Client(object):
         without_tags = without_tags or []
 
         resp = requests.get('{}/sessions/'.format(self.url_root))
-        browser_data = json.loads(resp.content)
+        browser_data = json.loads(resp.content.decode('UTF-8'))
         browser_data = (b for b in browser_data
                         if (reserved is None
                             or (b.get('reserved', False) == reserved)))
@@ -120,7 +120,7 @@ class Client(object):
 
     def browser_metadata(self, session_id):
         resp = requests.get('{}/sessions/{}'.format(self.url_root, session_id))
-        return json.loads(resp.content)
+        return json.loads(resp.content.decode('UTF-8'))
 
     def set_browser_tags(self, session_id, tags=None):
 

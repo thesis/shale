@@ -1,5 +1,10 @@
 from __future__ import absolute_import
 
+try:
+    from urllib2 import URLError
+except:
+    from urllib.error import URLError
+
 import os
 import json
 from decorator import decorator
