@@ -290,7 +290,7 @@ def refresh_session(redis, session_id):
     except RedisError:
         # TODO ?? not sure how to handle this
         pass
-    except WebDriverException:
+    except (WebDriverException, URLError):
         # delete the session
         delete_session(redis, session_id)
         return False
