@@ -12,11 +12,11 @@ trap "cleanup" EXIT
 
 PATH="$PATH:$PWD/phantomjs/bin/"
 
-/bin/java -jar selenium -role hub &
+java -jar selenium -role hub &
 
 sleep 1
 
-/bin/java -jar selenium -role node \
+java -jar selenium -role node \
   -hub http://localhost:4444/register/grid \
   -nodeConfig ./libs/selenium/nodeConfig.json &
 
