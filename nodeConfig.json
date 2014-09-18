@@ -1,0 +1,9 @@
+{
+    "capabilities":[
+        {
+            "browserName": "phantomjs",
+            "maxInstances": 4
+        }
+    ],
+    "configuration": {}
+}

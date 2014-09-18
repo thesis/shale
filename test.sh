@@ -18,7 +18,7 @@ sleep 1
 
 java -jar selenium -role node \
   -hub http://localhost:4444/register/grid \
-  -nodeConfig ./libs/selenium/nodeConfig.json &
+  -nodeConfig nodeConfig.json &
 
 python wsgi.py &
 
