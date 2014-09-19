@@ -30,6 +30,9 @@ app.debug = True
 app.config.update(
     DEBUG=True,
     HUB_POOL=DefaultHubPool(),
+    REDIS_HOST='localhost',
+    REDIS_PORT=6379,
+    REDIS_DB=0,
 )
 
 if 'SHALE_SETTINGS' in os.environ:
@@ -40,7 +43,7 @@ SESSION_SET_KEY = '{}_session_set'.format(REDIS_KEY_PREFIX)
 SESSION_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}'
 SESSION_TAGS_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}_tags'
 
-pool = ConnectionPool(host='localhost', port=6379, db=0)
+pool = ConnectionPool(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
 
 
 def returns_json(func):
