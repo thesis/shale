@@ -8,11 +8,15 @@ except:
 import os
 import json
 from decorator import decorator
+from multiprocessing.pool import ThreadPool
+import threading
+import atexit
+
 from redis import ConnectionPool, Redis, WatchError, RedisError
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.common.exceptions import WebDriverException
 
-from flask import request, Response
+from flask import request, Response, Flask
 from flask.views import MethodView
 from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.exceptions import NotFound
@@ -21,7 +25,6 @@ from .webdriver import ResumableRemote
 from .hubs import DefaultHubPool
 from .utils import permit, merge, retry, str_bool
 
-from flask import Flask
 app = Flask(__name__)
 
 __all__ = ['app']
@@ -33,6 +36,7 @@ app.config.update(
     REDIS_HOST='localhost',
     REDIS_PORT=6379,
     REDIS_DB=0,
+    REFRESH_TIME=15, # seconds
 )
 
 if 'SHALE_SETTINGS' in os.environ:
@@ -276,8 +280,7 @@ class SessionRefreshAPI(RedisView, MethodView):
     def post(self, session_id):
         sessions = [view_model(self.redis, session_id)] \
                 if session_id else view_models(self.redis)
-        for session in sessions:
-            refresh_session(self.redis, session['id'])
+        refresh_sessions(self.redis, [s['id'] for s in sessions])
         return True
 
 
@@ -306,6 +309,18 @@ def refresh_session(redis, session_id):
         return False
     return True
 
+def refresh_sessions(redis, session_ids=None):
+    with redis.pipeline() as pipe:
+        pipe.watch(SESSION_SET_KEY)
+        session_ids = session_ids or list(pipe.smembers(SESSION_SET_KEY))
+        def refresh(session_id):
+            return refresh_session(redis, session_id)
+        pool = ThreadPool(len(session_ids))
+        pool.map(refresh, session_ids)
+        pool.close()
+        pipe.execute()
+
+# routing
 
 session_view = SessionAPI.as_view('session_api')
 app.add_url_rule('/sessions/', defaults={'session_id': None},
@@ -318,5 +333,14 @@ app.add_url_rule('/sessions/refresh', view_func=session_refresh_api,
                  defaults={'session_id':None}, methods=['POST'])
 app.add_url_rule('/sessions/<session_id>/refresh', view_func=session_refresh_api,
                  methods=['POST'])
+
+# background session-refreshing thread
+
+background_thread = threading.Timer(
+        app.config['REFRESH_TIME'], refresh_sessions, (Redis(pool),))
+def background_interrupt():
+    background_thread.cancel()
+atexit.register(background_interrupt)
+background_thread.start()
 
 app.wsgi_app = ProxyFix(app.wsgi_app)
