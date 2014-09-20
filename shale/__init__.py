@@ -8,7 +8,6 @@ except:
 import os
 import json
 from decorator import decorator
-from multiprocessing.pool import ThreadPool
 import threading
 import atexit
 
@@ -312,11 +311,8 @@ def refresh_sessions(redis, session_ids=None):
     with redis.pipeline() as pipe:
         pipe.watch(SESSION_SET_KEY)
         session_ids = session_ids or list(pipe.smembers(SESSION_SET_KEY))
-        def refresh(session_id):
-            return refresh_session(redis, session_id)
-        pool = ThreadPool(len(session_ids))
-        pool.map(refresh, session_ids)
-        pool.close()
+        for session_id in session_ids:
+            refresh_session(redis, session_id)
         pipe.execute()
 
 # routing
