@@ -216,10 +216,10 @@ def get_or_create_session(redis, requirements):
 
 
 def delete_session(redis, session_id):
-    wd = ResumableRemote(session_id=session_id)
     try:
+        wd = ResumableRemote(session_id=session_id)
         wd.quit()
-    except WebDriverException:
+    except (WebDriverException, URLError):
         pass
     with redis.pipeline() as pipe:
         pipe.srem(SESSION_SET_KEY, session_id)
