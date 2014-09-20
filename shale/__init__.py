@@ -336,11 +336,13 @@ app.add_url_rule('/sessions/<session_id>/refresh', view_func=session_refresh_api
 
 # background session-refreshing thread
 
-background_thread = threading.Timer(
-        app.config['REFRESH_TIME'], refresh_sessions, (Redis(pool),))
-def background_interrupt():
-    background_thread.cancel()
-atexit.register(background_interrupt)
-background_thread.start()
+@app.before_first_request
+def run_background():
+    background_thread = threading.Timer(
+            app.config['REFRESH_TIME'], refresh_sessions, (Redis(pool),))
+    def background_interrupt():
+        background_thread.cancel()
+    atexit.register(background_interrupt)
+    background_thread.start()
 
 app.wsgi_app = ProxyFix(app.wsgi_app)
