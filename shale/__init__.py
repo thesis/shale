@@ -43,9 +43,14 @@ SESSION_SET_KEY = '{}_session_set'.format(REDIS_KEY_PREFIX)
 SESSION_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}'
 SESSION_TAGS_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}_tags'
 
-pool = ConnectionPool(host=app.config['REDIS_HOST'],
-                      port=app.config['REDIS_PORT'],
-                      db=app.config['REDIS_DB'])
+pool = None
+
+@app.before_first_request
+def connect_to_redis():
+    global pool
+    pool = ConnectionPool(host=app.config['REDIS_HOST'],
+                          port=app.config['REDIS_PORT'],
+                          db=app.config['REDIS_DB'])
 
 
 def returns_json(func):
