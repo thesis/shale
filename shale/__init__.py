@@ -49,7 +49,6 @@ SESSION_TAGS_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}_tags'
 
 pool = None
 
-@app.before_first_request
 def connect_to_redis():
     global pool
     pool = ConnectionPool(host=app.config['REDIS_HOST'],
@@ -334,10 +333,13 @@ app.add_url_rule('/sessions/refresh', view_func=session_refresh_api,
 app.add_url_rule('/sessions/<session_id>/refresh', view_func=session_refresh_api,
                  methods=['POST'])
 
-# background session-refreshing thread
 
 @app.before_first_request
-def run_background():
+def before_first_request():
+    global pool
+    if pool is None:
+        connect_to_redis()
+    # background session-refreshing thread
     background_thread = threading.Timer(
             app.config['REFRESH_TIME'], refresh_sessions, (Redis(pool),))
     def background_interrupt():
