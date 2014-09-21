@@ -36,4 +36,4 @@ class DefaultHubPool(HubPool):
     Simply returns localhost when asksed for a hub.
     """
     def get_hub(self, **kwargs):
-        return 'localhost:4444'
+        return 'http://localhost:4444/wd/hub'

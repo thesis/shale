@@ -56,7 +56,7 @@ curl
     {
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": false,
-      "hub": "localhost:4444",
+      "hub": "http://localhost:4444/wd/hub",
       "browser_name": "phantomjs",
       "tags": []
     }
@@ -69,7 +69,7 @@ List all the active sessions
     [{
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": "False",
-      "hub": "localhost:4444",
+      "hub": "http://localhost:4444/wd/hub",
       "browser_name": "phantomjs",
       "tags": []
     }]
@@ -84,7 +84,7 @@ Get or create a new session with tags
     {
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": false,
-      "hub": "localhost:4444",
+      "hub": "http://localhost:4444/wd/hub",
       "browser_name": "phantomjs",
       "tags": ["walmart"],
       "reserved": false
@@ -100,7 +100,7 @@ Get or create a new reserved session with tags
     {
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": false,
-      "hub": "localhost:4444",
+      "hub": "http://localhost:4444/wd/hub",
       "browser_name": "phantomjs",
       "tags": ["walmart"],
       "reserved": true
@@ -116,7 +116,7 @@ Unreserve a session and add a tag
     {
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": "True",
-      "hub": "localhost:4444",
+      "hub": "http://localhost:4444/wd/hub",
       "browser_name": "phantomjs",
       "tags": ["walmart", "logged-in"]
     }
@@ -146,7 +146,7 @@ List all running webdrivers.
 
     >>> client.running_browsers()
     ({u'browser_name': u'phantomjs',
-      u'hub': u'localhost:4444',
+      u'hub': u'http://localhost:4444/wd/hub',
       u'id': u'31027408-3e45-4d27-9770-ba1a26953dfc',
       u'reserved': True,
       u'tags': [u'target', u'linux']},)

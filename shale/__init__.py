@@ -136,7 +136,7 @@ class SessionAPI(RedisView, MethodView):
 def create_session(redis, requirements):
     defaults = {
         'browser_name': 'firefox',
-        'hub': 'localhost:4444',
+        'hub': 'http://localhost:4444/wd/hub',
         'tags': [],
         'reserved': False,
         'extra_desired_capabilities':{}
@@ -157,8 +157,7 @@ def create_session(redis, requirements):
         cap = merge(cap, settings.get('extra_desired_capabilities', {}))
 
         wd = ResumableRemote(
-            command_executor='http://{}/wd/hub'.format(settings['hub']),
-            desired_capabilities=cap)
+                command_executor=settings['hub'], desired_capabilities=cap)
         settings['hub'] = wd.command_executor._url
         if 'current_url' in settings:
             # we do this in JS to prevent a blocking call
@@ -216,8 +215,10 @@ def get_or_create_session(redis, requirements):
 
 
 def delete_session(redis, session_id):
+    model = view_model(redis, session_id)
     try:
-        wd = ResumableRemote(session_id=session_id)
+        wd = ResumableRemote(
+                session_id=session_id, command_executor=model['hub'])
         wd.quit()
     except (WebDriverException, URLError):
         pass
@@ -291,10 +292,8 @@ def refresh_session(redis, session_id):
             pipe.watch(session_key)
 
             hub = pipe.hget(session_key, 'hub') \
-                    or '127.0.0.1:4444'
-            wd = ResumableRemote(
-                command_executor='http://{host}/wd/hub'.format(host=hub),
-                session_id=session_id)
+                    or 'http://127.0.0.1:4444/wd/hub'
+            wd = ResumableRemote(command_executor=hub, session_id=session_id)
             pipe.hset(session_key, 'current_url', wd.current_url)
 
             pipe.execute()
