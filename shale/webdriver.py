@@ -8,10 +8,13 @@ from selenium.webdriver.remote.remote_connection import RemoteConnection
 class ResumableRemote(webdriver.Remote):
     def __init__(self, command_executor='http://127.0.0.1:4444/wd/hub',
                  session_id=None, **kwargs):
-        #desired_capabilities=None, browser_profile=None, proxy=None, keep_alive=False):
         if session_id is not None:
             self.command_executor = command_executor
-            if type(self.command_executor) is bytes or isinstance(self.command_executor, str):
+            try:
+                string_type = basestring
+            except:
+                string_type = str
+            if isinstance(self.command_executor, (string_type, bytes)):
                 self.command_executor = RemoteConnection(
                         command_executor, keep_alive=kwargs.get('keep_alive', False))
             self.command_executor._commands['get_session'] = ('GET', '/session/$sessionId')
