@@ -71,7 +71,7 @@ class Client(object):
         resp_data = json.loads(resp.content.decode('UTF-8'))
         if reserve:
             return ClientResumableRemote(client=self,
-                    session_id=resp_data['id'], hub=resp_data['hub'])
+                    session_id=resp_data['id'], command_executor=resp_data['hub'])
         return resp_data
 
     def create_browser(self, browser_name='phantomjs', tags=None,
@@ -86,7 +86,7 @@ class Client(object):
                 data=json.dumps({'reserved': True}), headers=self.headers)
         resp_data = json.loads(resp.content.decode('UTF-8'))
         return ClientResumableRemote(client=self, session_id = resp_data['id'],
-                hub=resp_data['hub'])
+                command_executor=resp_data['hub'])
 
     def release_browser(self, browser):
         requests.put('{}/sessions/{}'.format(self.url_root, browser.session_id),
