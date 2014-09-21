@@ -48,7 +48,7 @@ class ClientResumableRemote(ResumableRemote):
 class Client(object):
     def __init__(self, url_root='http://localhost:5000'):
         self.url_root = url_root
-        self.headers = {'Content-type': 'application/json'}
+        self.headers = {'Content-Type': 'application/json'}
 
     def get_or_create_browser(self, browser_name='phantomjs', tags=None,
                               hub=None, reserve=False, force_create=False,

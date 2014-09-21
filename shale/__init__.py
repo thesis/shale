@@ -122,9 +122,9 @@ class SessionAPI(RedisView, MethodView):
                 pipe.delete(tags_key)
                 for tag in cleaned['tags']:
                     pipe.sadd(tags_key, tag)
-                if 'reserved' in cleaned:
-                    pipe.hset(SESSION_KEY_TEMPLATE.format(session_id),
-                              'reserved', cleaned['reserved'])
+            if 'reserved' in cleaned:
+                pipe.hset(SESSION_KEY_TEMPLATE.format(session_id),
+                          'reserved', cleaned['reserved'])
             pipe.execute()
             return view_model(self.redis, session_id)
 
