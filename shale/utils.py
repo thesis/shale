@@ -1,6 +1,34 @@
 from itertools import chain
+import inspect
+import signal
+import decorator
+
+from .exceptions import TimeoutException
 
 __all__ = ['permit', 'merge']
+
+
+def all_args(f, args, kwargs):
+    return dict(kwargs.items() + zip(inspect.getargspec(f).args, args))
+
+
+def with_timeout(seconds, message=None):
+    """
+    A signal-based timeout decorator. Since this uses signals, it works best
+    with multiprocessing- eg by wrapping a function for a `Process` target.
+    Using it with threading is not a good idea.
+    """
+    def exit(*args):
+        raise TimeoutException(message=message)
+
+    @decorator.decorator
+    def decorate(f, *args, **kwargs):
+        a = all_args(f, args, kwargs)
+        signal.signal(signal.SIGALRM, exit)
+        signal.alarm(seconds)
+        return f(*args, **kwargs)
+
+    return decorate
 
 
 def permit(d, permitted_keys):

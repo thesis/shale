@@ -8,8 +8,11 @@ except:
 import os
 import json
 from decorator import decorator
-import threading
+from functools import partial
 import atexit
+import threading
+import multiprocessing
+import multiprocessing.pool
 
 from redis import ConnectionPool, Redis, WatchError, RedisError
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
@@ -22,7 +25,8 @@ from werkzeug.exceptions import NotFound
 
 from .webdriver import ResumableRemote
 from .hubs import DefaultHubPool
-from .utils import permit, merge, retry, str_bool
+from .exceptions import TimeoutException
+from .utils import permit, merge, retry, str_bool, with_timeout
 
 app = Flask(__name__)
 
@@ -35,7 +39,7 @@ app.config.update(
     REDIS_HOST='localhost',
     REDIS_PORT=6379,
     REDIS_DB=0,
-    REFRESH_TIME=15, # seconds
+    REFRESH_TIME=5, # seconds
 )
 
 if 'SHALE_SETTINGS' in os.environ:
@@ -47,6 +51,10 @@ SESSION_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}'
 SESSION_TAGS_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}_tags'
 
 pool = None
+
+thread_pool = None
+
+process_pool = None
 
 def connect_to_redis():
     global pool
@@ -60,10 +68,17 @@ def returns_json(func):
         status=200
         data = {}
         try:
-            data = json.dumps(func(*args, **kwargs))
+            data = func(*args, **kwargs)
         except NotFound:
             status = 404
-        return Response(data, content_type="application/json", status=status)
+        except multiprocessing.TimeoutError:
+            status = 500
+            data = {'error':"Process timed out."}
+        except TimeoutException as e:
+            status = 500
+            data = {'error':e.message}
+        return Response(json.dumps(data), content_type="application/json",
+                        status=status)
     return inner
 
 
@@ -133,6 +148,17 @@ class SessionAPI(RedisView, MethodView):
         return delete_session(self.redis, session_id)
 
 
+@with_timeout(15, "Timed out getting a new webdriver.")
+def get_resumable_remote(*args, **kwargs):
+    return ResumableRemote(*args, **kwargs)
+
+
+@with_timeout(10, "Timed out pinging a webdriver.")
+def ping_remote_for_url(*args, **kwargs):
+    wd = ResumableRemote(*args, **kwargs)
+    return wd.current_url
+
+
 def create_session(redis, requirements):
     defaults = {
         'browser_name': 'firefox',
@@ -156,8 +182,11 @@ def create_session(redis, requirements):
         }.get(settings['browser_name'])
         cap = merge(cap, settings.get('extra_desired_capabilities', {}))
 
-        wd = ResumableRemote(
-                command_executor=settings['hub'], desired_capabilities=cap)
+        async_wd = process_pool.apply_async(
+                get_resumable_remote, [],
+                dict(command_executor=settings['hub'], desired_capabilities=cap))
+        wd = async_wd.get(20)
+
         settings['hub'] = wd.command_executor._url
         if 'current_url' in settings:
             # we do this in JS to prevent a blocking call
@@ -284,6 +313,8 @@ class SessionRefreshAPI(RedisView, MethodView):
 
 
 def refresh_session(redis, session_id):
+    if redis is None:
+        redis = Redis(connection_pool=pool)
     try:
         with redis.pipeline() as pipe:
             pipe.watch(SESSION_SET_KEY)
@@ -293,14 +324,16 @@ def refresh_session(redis, session_id):
 
             hub = pipe.hget(session_key, 'hub') \
                     or 'http://127.0.0.1:4444/wd/hub'
-            wd = ResumableRemote(command_executor=hub, session_id=session_id)
-            pipe.hset(session_key, 'current_url', wd.current_url)
+            async_url = process_pool.apply_async(
+                    ping_remote_for_url, [],
+                    dict(command_executor=hub, session_id=session_id))
+            pipe.hset(session_key, 'current_url', async_url.get(15))
 
             pipe.execute()
     except RedisError:
         # TODO ?? not sure how to handle this
         pass
-    except (WebDriverException, URLError):
+    except (WebDriverException, URLError, TimeoutException):
         # delete the session
         delete_session(redis, session_id)
         return False
@@ -310,8 +343,7 @@ def refresh_sessions(redis, session_ids=None):
     with redis.pipeline() as pipe:
         pipe.watch(SESSION_SET_KEY)
         session_ids = session_ids or list(pipe.smembers(SESSION_SET_KEY))
-        for session_id in session_ids:
-            refresh_session(redis, session_id)
+        thread_pool.map(partial(refresh_session, None), session_ids)
         pipe.execute()
 
 # routing
@@ -332,11 +364,21 @@ app.add_url_rule('/sessions/<session_id>/refresh', view_func=session_refresh_api
 @app.before_first_request
 def before_first_request():
     global pool
+    global thread_pool
+    global process_pool
     if pool is None:
         connect_to_redis()
+    if process_pool is None:
+        process_pool = multiprocessing.Pool()
+    if thread_pool is None:
+        thread_pool = multiprocessing.pool.ThreadPool()
     # background session-refreshing thread
+    def background():
+        global pool
+        redis = Redis(connection_pool=pool)
+        return refresh_sessions(redis)
     background_thread = threading.Timer(
-            app.config['REFRESH_TIME'], refresh_sessions, (Redis(pool),))
+            app.config['REFRESH_TIME'], background, [])
     def background_interrupt():
         background_thread.cancel()
     atexit.register(background_interrupt)
