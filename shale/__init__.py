@@ -50,17 +50,17 @@ SESSION_SET_KEY = '{}_session_set'.format(REDIS_KEY_PREFIX)
 SESSION_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}'
 SESSION_TAGS_KEY_TEMPLATE = REDIS_KEY_PREFIX + '_session_{}_tags'
 
-pool = None
+redis_pool = None
 
 thread_pool = None
 
 process_pool = None
 
 def connect_to_redis():
-    global pool
-    pool = ConnectionPool(host=app.config['REDIS_HOST'],
-                          port=app.config['REDIS_PORT'],
-                          db=app.config['REDIS_DB'])
+    global redis_pool
+    redis_pool = ConnectionPool(host=app.config['REDIS_HOST'],
+                                port=app.config['REDIS_PORT'],
+                                db=app.config['REDIS_DB'])
 
 
 def returns_json(func):
@@ -84,7 +84,7 @@ def returns_json(func):
 
 class RedisView(object):
     def dispatch_request(self, *args, **kwargs):
-        self.redis = Redis(connection_pool=pool)
+        self.redis = Redis(connection_pool=redis_pool)
         return super(RedisView, self).dispatch_request(*args, **kwargs)
 
 
@@ -314,7 +314,7 @@ class SessionRefreshAPI(RedisView, MethodView):
 
 def refresh_session(redis, session_id):
     if redis is None:
-        redis = Redis(connection_pool=pool)
+        redis = Redis(connection_pool=redis_pool)
     try:
         with redis.pipeline() as pipe:
             pipe.watch(SESSION_SET_KEY)
@@ -363,10 +363,10 @@ app.add_url_rule('/sessions/<session_id>/refresh', view_func=session_refresh_api
 
 @app.before_first_request
 def before_first_request():
-    global pool
+    global redis_pool
     global thread_pool
     global process_pool
-    if pool is None:
+    if redis_pool is None:
         connect_to_redis()
     if process_pool is None:
         process_pool = multiprocessing.Pool()
@@ -374,8 +374,8 @@ def before_first_request():
         thread_pool = multiprocessing.pool.ThreadPool()
     # background session-refreshing thread
     def background():
-        global pool
-        redis = Redis(connection_pool=pool)
+        global redis_pool
+        redis = Redis(connection_pool=redis_pool)
         return refresh_sessions(redis)
     background_thread = threading.Timer(
             app.config['REFRESH_TIME'], background, [])
