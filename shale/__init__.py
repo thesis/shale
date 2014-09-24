@@ -24,7 +24,7 @@ from werkzeug.contrib.fixers import ProxyFix
 from werkzeug.exceptions import NotFound
 
 from .webdriver import ResumableRemote
-from .hubs import DefaultHubPool
+from .nodes import DefaultNodePool
 from .exceptions import TimeoutException
 from .utils import permit, merge, retry, str_bool, with_timeout
 
@@ -35,7 +35,7 @@ __all__ = ['app']
 app.debug = True
 app.config.update(
     DEBUG=True,
-    HUB_POOL=DefaultHubPool(),
+    NODE_POOL=DefaultNodePool(),
     REDIS_HOST='localhost',
     REDIS_PORT=6379,
     REDIS_DB=0,
@@ -110,7 +110,7 @@ class SessionAPI(RedisView, MethodView):
         force_create = str_bool(request.args.get('force_create', False))
         reserve = str_bool(request.args.get('reserve', False))
 
-        permitted_keys = ['browser_name', 'hub', 'tags', 'reserved',
+        permitted_keys = ['browser_name', 'node', 'tags', 'reserved',
                           'current_url', 'extra_desired_capabilities']
         permitted = permit(
                 dict((k, v) for k, v in data.items() if v is not None),
@@ -162,16 +162,16 @@ def ping_remote_for_url(*args, **kwargs):
 def create_session(redis, requirements):
     defaults = {
         'browser_name': 'firefox',
-        'hub': 'http://localhost:4444/wd/hub',
+        'node': 'http://localhost:5555/wd/hub',
         'tags': [],
         'reserved': False,
         'extra_desired_capabilities':{}
     }
     with redis.pipeline() as pipe:
-        # if hub was set to None, choose one
+        # if node was set to None, choose one
         settings = dict(requirements)
-        settings['hub'] = settings.get('hub') or \
-                app.config['HUB_POOL'].get_hub(**requirements)
+        settings['node'] = settings.get('node') or \
+                app.config['NODE_POOL'].get_node(**requirements)
         settings = merge(settings, defaults)
         settings.setdefault('browser_name', 'phantomjs')
 
@@ -184,10 +184,10 @@ def create_session(redis, requirements):
 
         async_wd = process_pool.apply_async(
                 get_resumable_remote, [],
-                dict(command_executor=settings['hub'], desired_capabilities=cap))
+                dict(command_executor=settings['node'], desired_capabilities=cap))
         wd = async_wd.get(20)
 
-        settings['hub'] = wd.command_executor._url
+        settings['node'] = wd.command_executor._url
         if 'current_url' in settings:
             # we do this in JS to prevent a blocking call
             wd.execute_script(
@@ -197,7 +197,7 @@ def create_session(redis, requirements):
         pipe.sadd(SESSION_SET_KEY, session_id)
         session_key = SESSION_KEY_TEMPLATE.format(wd.session_id)
         permitted = permit(
-            settings, ['browser_name', 'hub', 'reserved', 'current_url'])
+            settings, ['browser_name', 'node', 'reserved', 'current_url'])
         for key, value in permitted.items():
             pipe.hset(session_key, key, value)
         tags_key = SESSION_TAGS_KEY_TEMPLATE.format(wd.session_id)
@@ -226,7 +226,7 @@ def get_or_create_session(redis, requirements):
     requirements.setdefault('reserved', False)
 
     def match(candidate, reqs):
-        keys_for_match = ['browser_name', 'hub', 'reserved', 'current_url']
+        keys_for_match = ['browser_name', 'node', 'reserved', 'current_url']
         cand_tags = set(candidate.get('tags', []))
         req_tags = set(reqs.get('tags', []))
         return (set(permit(candidate, keys_for_match).items()) >=
@@ -247,7 +247,7 @@ def delete_session(redis, session_id):
     model = view_model(redis, session_id)
     try:
         wd = ResumableRemote(
-                session_id=session_id, command_executor=model['hub'])
+                session_id=session_id, command_executor=model['node'])
         wd.quit()
     except (WebDriverException, URLError):
         pass
@@ -322,11 +322,11 @@ def refresh_session(redis, session_id):
             # TODO handle if the key isn't there
             pipe.watch(session_key)
 
-            hub = pipe.hget(session_key, 'hub') \
-                    or 'http://127.0.0.1:4444/wd/hub'
+            node = pipe.hget(session_key, 'node') \
+                    or 'http://127.0.0.1:5555/wd/hub'
             async_url = process_pool.apply_async(
                     ping_remote_for_url, [],
-                    dict(command_executor=hub, session_id=session_id))
+                    dict(command_executor=node, session_id=session_id))
             pipe.hset(session_key, 'current_url', async_url.get(15))
 
             pipe.execute()

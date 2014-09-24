@@ -9,9 +9,14 @@ A Flask-backed REST API to manage Selenium sessions.
 Progress
 --------
 
-Right now, all the service does is manage metadata on Selenium usage.
-Integrating with AWS to auto-scale hubs and nodes, as well as keep-alive pings
-and other supervision, are being developed.
+Right now, the service is basically a replacement for a Selenium hub. We've
+found hubs to be more trouble than they're worth operationally, but we still
+need some of the management features.
+
+Currently shale let's you get, create, and delete webdriver sessions, as well as
+managing which sessions are currently reserved or tagged. Keep-alive pings have
+have been implemented, and it's easy to integrate with a cloud provider (eg,
+AWS) to auto-scale nodes by implementing a custom `NodePool`.
 
 Running
 -------
@@ -56,7 +61,7 @@ curl
     {
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": false,
-      "hub": "http://localhost:4444/wd/hub",
+      "node": "http://localhost:5555/wd/hub",
       "browser_name": "phantomjs",
       "tags": []
     }
@@ -69,7 +74,7 @@ List all the active sessions
     [{
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": "False",
-      "hub": "http://localhost:4444/wd/hub",
+      "node": "http://localhost:5555/wd/hub",
       "browser_name": "phantomjs",
       "tags": []
     }]
@@ -84,7 +89,7 @@ Get or create a new session with tags
     {
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": false,
-      "hub": "http://localhost:4444/wd/hub",
+      "node": "http://localhost:5555/wd/hub",
       "browser_name": "phantomjs",
       "tags": ["walmart"],
       "reserved": false
@@ -100,7 +105,7 @@ Get or create a new reserved session with tags
     {
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": false,
-      "hub": "http://localhost:4444/wd/hub",
+      "node": "http://localhost:5555/wd/hub",
       "browser_name": "phantomjs",
       "tags": ["walmart"],
       "reserved": true
@@ -116,7 +121,7 @@ Unreserve a session and add a tag
     {
       "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
       "reserved": "True",
-      "hub": "http://localhost:4444/wd/hub",
+      "node": "http://localhost:5555/wd/hub",
       "browser_name": "phantomjs",
       "tags": ["walmart", "logged-in"]
     }
@@ -146,7 +151,7 @@ List all running webdrivers.
 
     >>> client.running_browsers()
     ({u'browser_name': u'phantomjs',
-      u'hub': u'http://localhost:4444/wd/hub',
+      u'node': u'http://localhost:5555/wd/hub',
       u'id': u'31027408-3e45-4d27-9770-ba1a26953dfc',
       u'reserved': True,
       u'tags': [u'target', u'linux']},)
