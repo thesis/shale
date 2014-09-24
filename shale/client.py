@@ -51,7 +51,7 @@ class Client(object):
         self.headers = {'Content-Type': 'application/json'}
 
     def get_or_create_browser(self, browser_name='phantomjs', tags=None,
-                              hub=None, reserve=False, force_create=False,
+                              node=None, reserve=False, force_create=False,
                               extra_desired_capabilities=None):
 
         tags = tags or []
@@ -61,8 +61,8 @@ class Client(object):
             'browser_name': browser_name,
             'extra_desired_capabilities': extra_desired_capabilities,
         }
-        if hub is not None:
-            data['hub'] = hub
+        if node is not None:
+            data['node'] = node
         resp = requests.post('{}/sessions/'.format(self.url_root),
                              data=json.dumps(data),
                              params={'force_create':force_create,
@@ -71,14 +71,14 @@ class Client(object):
         resp_data = json.loads(resp.content.decode('UTF-8'))
         if reserve:
             return ClientResumableRemote(client=self,
-                    session_id=resp_data['id'], command_executor=resp_data['hub'])
+                    session_id=resp_data['id'], command_executor=resp_data['node'])
         return resp_data
 
     def create_browser(self, browser_name='phantomjs', tags=None,
-                       hub=None, extra_desired_capabilities=None,
+                       node=None, extra_desired_capabilities=None,
                        reserve=False):
         return self.get_or_create_browser(browser_name=browser_name, tags=tags,
-                                          hub=hub, reserve=reserve,
+                                          node=node, reserve=reserve,
                                           force_create=True)
 
     def reserve_browser(self, session_id):
@@ -86,7 +86,7 @@ class Client(object):
                 data=json.dumps({'reserved': True}), headers=self.headers)
         resp_data = json.loads(resp.content.decode('UTF-8'))
         return ClientResumableRemote(client=self, session_id = resp_data['id'],
-                command_executor=resp_data['hub'])
+                command_executor=resp_data['node'])
 
     def release_browser(self, browser):
         requests.put('{}/sessions/{}'.format(self.url_root, browser.session_id),
@@ -138,13 +138,13 @@ class Client(object):
             requests.post(url)
 
     @contextmanager
-    def browser(self, session_id=None, browser_name=None, tags=None, hub=None,
+    def browser(self, session_id=None, browser_name=None, tags=None, node=None,
                 extra_desired_capabilities=None):
         if session_id:
             browser = self.reserve_browser(session_id)
         else:
             browser = self.get_or_create_browser(
-                    browser_name=browser_name, tags=tags, hub=hub,
+                    browser_name=browser_name, tags=tags, node=node,
                     extra_desired_capabilities=extra_desired_capabilities,
                     reserve=True)
         try:
