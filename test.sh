@@ -12,13 +12,15 @@ trap "cleanup" EXIT
 
 PATH="$PATH:$PWD/phantomjs/bin/"
 
-java -jar selenium -role hub &
-
 sleep 1
 
 java -jar selenium -role node \
-  -hub http://localhost:4444/register/grid \
-  -nodeConfig nodeConfig.json &
+  -nodeConfig nodeConfig.json \
+  -port 5555 &
+
+java -jar selenium -role node \
+  -nodeConfig nodeConfig.json \
+  -port 5554 &
 
 python wsgi.py &
 

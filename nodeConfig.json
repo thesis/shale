@@ -5,5 +5,7 @@
             "maxInstances": 4
         }
     ],
-    "configuration": {}
+    "configuration": {
+        'reserve':false
+    }
 }
