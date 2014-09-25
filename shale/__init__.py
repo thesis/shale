@@ -228,12 +228,13 @@ def get_or_create_session(redis, requirements):
             if requirements.get('node', None) else None
 
     def match(candidate, reqs):
-        keys_for_match = ['browser_name', 'node', 'reserved', 'current_url']
+        keys_for_match = ['browser_name', 'reserved', 'current_url']
         cand_tags = set(candidate.get('tags', []))
         req_tags = set(reqs.get('tags', []))
         return (set(permit(candidate, keys_for_match).items()) >=
                     set(permit(reqs, keys_for_match).items())
-                and reqs['node'] and candidate['node'] == reqs['node']
+                and (reqs.get('node') is None or
+                     candidate['node'] == reqs['node'])
                 and cand_tags >= req_tags)
 
     with redis.pipeline() as pipe:
