@@ -1,4 +1,5 @@
 import re
+import os
 import inspect
 import socket
 import signal
@@ -32,14 +33,18 @@ def all_args(f, args, kwargs):
     return dict(kwargs.items() + zip(inspect.getargspec(f).args, args))
 
 
-def with_timeout(seconds, message=None):
+def with_timeout(seconds, message=None, return_none=False):
     """
     A signal-based timeout decorator. Since this uses signals, it works best
     with multiprocessing- eg by wrapping a function for a `Process` target.
     Using it with threading is not a good idea.
     """
     def exit(*args):
-        raise TimeoutException(message=message)
+        if return_none:
+            pid = os.getpid()
+            os.kill(pid, 1)
+        else:
+            raise TimeoutException(message=message)
 
     @decorator.decorator
     def decorate(f, *args, **kwargs):

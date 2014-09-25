@@ -41,6 +41,9 @@ app.config.update(
     REDIS_PORT=6379,
     REDIS_DB=0,
     REFRESH_TIME=5, # seconds
+    SESSION_CREATION_TIMEOUT=20, #seconds
+    HEADLESS_SESSION_CREATION_TIMEOUT=10, #seconds
+    SESSION_PING_TIMEOUT=5, #sessions
 )
 
 if 'SHALE_SETTINGS' in os.environ:
@@ -157,17 +160,20 @@ def get_resumable_remote(*args, **kwargs):
     return get_real_resumable_remote(*args, **kwargs)
 
 
-@with_timeout(15, "Timed out getting a new headless webdriver.")
+@with_timeout(app.config['HEADLESS_SESSION_CREATION_TIMEOUT'],
+              "Timed out getting a new headless webdriver.", return_none=True)
 def get_headless_resumable_remote():
     return ResumableRemote(*args, **kwargs)
 
 
-@with_timeout(40, "Timed out getting a new webdriver.")
+@with_timeout(app.config['SESSION_CREATION_TIMEOUT'],
+              "Timed out getting a new webdriver.", return_none=True)
 def get_real_resumable_remote(*args, **kwargs):
     return ResumableRemote(*args, **kwargs)
 
 
-@with_timeout(5, "Timed out pinging a webdriver.")
+@with_timeout(app.config['SESSION_PING_TIMEOUT'],
+              "Timed out pinging a webdriver.", return_none=True)
 def ping_remote_for_url(*args, **kwargs):
     wd = ResumableRemote(*args, **kwargs)
     return wd.current_url
@@ -199,7 +205,7 @@ def create_session(redis, requirements):
         async_wd = process_pool.apply_async(
                 get_resumable_remote, [],
                 dict(command_executor=settings['node'], desired_capabilities=cap))
-        wd = async_wd.get(60)
+        wd = async_wd.get(app.config['SESSION_CREATION_TIMEOUT'])
 
         settings['node'] = wd.command_executor._url
         if 'current_url' in settings:
@@ -366,6 +372,7 @@ def refresh_sessions(redis, session_ids=None):
         pipe.watch(SESSION_SET_KEY)
         session_ids = session_ids or list(pipe.smembers(SESSION_SET_KEY))
         thread_pool.map(partial(refresh_session, None), session_ids)
+        thread_pool.join()
         pipe.execute()
 
 # routing
