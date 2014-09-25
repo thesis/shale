@@ -372,7 +372,6 @@ def refresh_sessions(redis, session_ids=None):
         pipe.watch(SESSION_SET_KEY)
         session_ids = session_ids or list(pipe.smembers(SESSION_SET_KEY))
         thread_pool.map(partial(refresh_session, None), session_ids)
-        thread_pool.join()
         pipe.execute()
 
 # routing
