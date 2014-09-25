@@ -224,6 +224,8 @@ def reserve_session(redis, session_id):
 def get_or_create_session(redis, requirements):
     requirements = dict(requirements)
     requirements.setdefault('reserved', False)
+    requirements['node'] = resolve_url(requirements['node']) \
+            if requirements.get('node', None) else None
 
     def match(candidate, reqs):
         keys_for_match = ['browser_name', 'node', 'reserved', 'current_url']
@@ -231,6 +233,7 @@ def get_or_create_session(redis, requirements):
         req_tags = set(reqs.get('tags', []))
         return (set(permit(candidate, keys_for_match).items()) >=
                     set(permit(reqs, keys_for_match).items())
+                and reqs['node'] and candidate['node'] == reqs['node']
                 and cand_tags >= req_tags)
 
     with redis.pipeline() as pipe:

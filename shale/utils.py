@@ -1,11 +1,27 @@
-from itertools import chain
+import re
 import inspect
+import socket
 import signal
+from itertools import chain
+from urlparse import urlparse
+
 import decorator
 
 from .exceptions import TimeoutException
 
 __all__ = ['permit', 'merge']
+
+
+def resolve_url(url):
+    """
+    Return the URL with the domain replaced by the resolved IP address.
+    """
+    url_parts = urlparse(url)
+    domain_or_ip = url_parts.netloc
+
+    ip = (domain_or_ip if re.match(r'(?:\d+\.){3}\d+', domain_or_ip)
+          else (socket.gethostbyname_ex(domain_or_ip)[-1][0]))
+    return url_parts._replace(netloc=ip).geturl()
 
 
 def all_args(f, args, kwargs):
