@@ -58,8 +58,6 @@ redis_pool = None
 
 thread_pool = None
 
-process_pool = None
-
 def connect_to_redis():
     global redis_pool
     redis_pool = ConnectionPool(host=app.config['REDIS_HOST'],
@@ -153,29 +151,42 @@ class SessionAPI(RedisView, MethodView):
 
 
 def get_resumable_remote(*args, **kwargs):
-    if 'browser_name' in kwargs:
-        browser_name = kwargs['browser_name']
-        if browser_name == 'phantomjs':
-            return get_headless_resumable_remote(*args, **kwargs)
-    return get_real_resumable_remote(*args, **kwargs)
+    headless = kwargs.get('browser_name',None) == 'phantomjs'
+    if 'custom_timeout' in kwargs:
+        timeout = kwargs.get('custom_timeout')
+    else:
+        timeout = app.config['HEADLESS_SESSION_CREATION_TIMEOUT'] if headless \
+                else app.config['SESSION_CREATION_TIMEOUT']
+    message = "Timed out getting a headless webdriver." if headless \
+            else "Timed out getting a webdriver."
 
-
-@with_timeout(app.config['HEADLESS_SESSION_CREATION_TIMEOUT'],
-              "Timed out getting a new headless webdriver.", return_none=True)
-def get_headless_resumable_remote():
+    @with_timeout(timeout, message)
+    def process(q):
+        try:
+            wd = None
+            if 'browser_name' in kwargs:
+                browser_name = kwargs['browser_name']
+                if browser_name == 'phantomjs':
+                    wd = ResumableRemote(*args, **kwargs)
+            if wd is None:
+                wd =  ResumableRemote(*args, **kwargs)
+            q.put((wd.session_id, wd.command_executor._url))
+        except Exception as e:
+            print e
+            q.put(None)
+    queue = multiprocessing.Queue()
+    p = multiprocessing.Process(target=process, args=[queue])
+    p.start()
+    ret = queue.get()
+    p.join()
+    if ret is None:
+        raise TimeoutException(message)
     return ResumableRemote(*args, **kwargs)
 
 
-@with_timeout(app.config['SESSION_CREATION_TIMEOUT'],
-              "Timed out getting a new webdriver.", return_none=True)
-def get_real_resumable_remote(*args, **kwargs):
-    return ResumableRemote(*args, **kwargs)
-
-
-@with_timeout(app.config['SESSION_PING_TIMEOUT'],
-              "Timed out pinging a webdriver.", return_none=True)
 def ping_remote_for_url(*args, **kwargs):
-    wd = ResumableRemote(*args, **kwargs)
+    kwargs['custom_timeout'] = app.config['SESSION_PING_TIMEOUT']
+    wd = get_resumable_remote(*args, **kwargs)
     return wd.current_url
 
 
@@ -202,10 +213,10 @@ def create_session(redis, requirements):
         }.get(settings['browser_name'])
         cap = merge(cap, settings.get('extra_desired_capabilities', {}))
 
-        async_wd = process_pool.apply_async(
-                get_resumable_remote, [],
-                dict(command_executor=settings['node'], desired_capabilities=cap))
-        wd = async_wd.get(app.config['SESSION_CREATION_TIMEOUT'])
+        # TODO TODO
+
+        wd = get_resumable_remote(command_executor=settings['node'],
+                                  desired_capabilities=cap)
 
         settings['node'] = wd.command_executor._url
         if 'current_url' in settings:
@@ -352,10 +363,9 @@ def refresh_session(redis, session_id):
 
             node = pipe.hget(session_key, 'node') \
                     or 'http://127.0.0.1:5555/wd/hub'
-            async_url = process_pool.apply_async(
-                    ping_remote_for_url, [],
-                    dict(command_executor=node, session_id=session_id))
-            pipe.hset(session_key, 'current_url', async_url.get(15))
+            url = ping_remote_for_url(command_executor=node,
+                                      session_id=session_id)
+            pipe.hset(session_key, 'current_url', url)
 
             pipe.execute()
     except RedisError:
@@ -393,11 +403,8 @@ app.add_url_rule('/sessions/<session_id>/refresh', view_func=session_refresh_api
 def before_first_request():
     global redis_pool
     global thread_pool
-    global process_pool
     if redis_pool is None:
         connect_to_redis()
-    if process_pool is None:
-        process_pool = multiprocessing.Pool()
     if thread_pool is None:
         thread_pool = multiprocessing.pool.ThreadPool()
     # background session-refreshing thread
