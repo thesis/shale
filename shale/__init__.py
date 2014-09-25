@@ -25,8 +25,9 @@ from werkzeug.exceptions import NotFound
 
 from .webdriver import ResumableRemote
 from .nodes import DefaultNodePool
-from .exceptions import TimeoutException
-from .utils import permit, merge, retry, str_bool, with_timeout
+from .exceptions import (ShaleException, TimeoutException, UnresolvedHost,
+                         NodeNotFound)
+from .utils import permit, merge, retry, str_bool, with_timeout, resolve_url
 
 app = Flask(__name__)
 
@@ -74,7 +75,7 @@ def returns_json(func):
         except multiprocessing.TimeoutError:
             status = 500
             data = {'error':"Process timed out."}
-        except TimeoutException as e:
+        except ShaleException as e:
             status = 500
             data = {'error':e.message}
         return Response(json.dumps(data), content_type="application/json",
@@ -224,8 +225,12 @@ def reserve_session(redis, session_id):
 def get_or_create_session(redis, requirements):
     requirements = dict(requirements)
     requirements.setdefault('reserved', False)
-    requirements['node'] = resolve_url(requirements['node']) \
-            if requirements.get('node', None) else None
+
+    try:
+        requirements['node'] = resolve_url(requirements['node']) \
+                if requirements.get('node', None) else None
+    except UnresolvedHost:
+        raise NodeNotFound(requirements['node'])
 
     def match(candidate, reqs):
         keys_for_match = ['browser_name', 'reserved', 'current_url']

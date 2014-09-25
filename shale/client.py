@@ -3,10 +3,16 @@ import requests
 from contextlib import contextmanager
 
 from .webdriver import ResumableRemote
+from .exceptions import ShaleException
 
 __all__ = ['Client', 'default_client ', 'reserve_browser ', 'release_browser ',
            'destroy_browser ', 'running_browsers ', 'browser_metadata ',
-           'set_browser_tags ', 'refresh_browser ', 'browser ']
+           'set_browser_tags ', 'refresh_browser ', 'browser',
+           'ShaleClientException']
+
+
+class ShaleClientException(ShaleException):
+    pass
 
 
 class ClientResumableRemote(ResumableRemote):
@@ -68,7 +74,8 @@ class Client(object):
                              params={'force_create':force_create,
                                      'reserve':reserve},
                              headers=self.headers)
-        resp_data = json.loads(resp.content.decode('UTF-8'))
+        resp_data = self._process_json_data(resp)
+
         if reserve:
             return ClientResumableRemote(client=self,
                     session_id=resp_data['id'], command_executor=resp_data['node'])
@@ -84,7 +91,7 @@ class Client(object):
     def reserve_browser(self, session_id):
         resp = requests.put('{}/sessions/{}'.format(self.url_root, session_id),
                 data=json.dumps({'reserved': True}), headers=self.headers)
-        resp_data = json.loads(resp.content.decode('UTF-8'))
+        resp_data = self._process_json_data(resp)
         return ClientResumableRemote(client=self, session_id = resp_data['id'],
                 command_executor=resp_data['node'])
 
@@ -151,6 +158,15 @@ class Client(object):
             yield browser
         finally:
             browser.release()
+
+    def _process_json_data(self, resp):
+        """
+        Process JSON data from a response.
+        """
+        resp_data = json.loads(resp.content.decode('UTF-8'))
+        if 'error' in resp_data:
+            raise ShaleClientException(resp_data['error'])
+        return resp_data
 
 
 default_client = Client()

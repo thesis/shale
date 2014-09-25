@@ -87,3 +87,23 @@ def test_running_browsers():
             for b1 in browser_specs
             for b2 in browsers))
     eq_(1, len(list(b for b in browsers if b['reserved'])))
+
+
+@with_setup(setup=setup_logged_in_clients, teardown=teardown)
+def test_multi_node_creation():
+    # test that force-creating with a new node actually attempts that, and
+    # raises an error when the other node isn't found
+    try:
+        browser = client.get_or_create_browser(
+                tags=['logged-in'], node='http://unknownhost:5555/wd/hub')
+    except shale.client.ShaleClientException:
+        pass
+    else:
+        raise AssertionError('Creating a browser with an unknown node should '
+                             'have raised an error!')
+    eq_(len(client.running_browsers()), 2)
+
+    # test creating with a new node
+    browser = client.get_or_create_browser(node='http://localhost:5554/wd/hub')
+    eq_(len(client.running_browsers()), 3)
+

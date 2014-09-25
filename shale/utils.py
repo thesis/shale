@@ -7,7 +7,7 @@ from urlparse import urlparse
 
 import decorator
 
-from .exceptions import TimeoutException
+from .exceptions import TimeoutException, UnresolvedHost
 
 __all__ = ['permit', 'merge']
 
@@ -17,11 +17,15 @@ def resolve_url(url):
     Return the URL with the domain replaced by the resolved IP address.
     """
     url_parts = urlparse(url)
-    domain_or_ip = url_parts.netloc
-
-    ip = (domain_or_ip if re.match(r'(?:\d+\.){3}\d+', domain_or_ip)
-          else (socket.gethostbyname_ex(domain_or_ip)[-1][0]))
-    return url_parts._replace(netloc=ip).geturl()
+    netloc_parts = url_parts.netloc.split(':')
+    domain_or_ip = netloc_parts[0]
+    try:
+        ip = (domain_or_ip if re.match(r'(?:\d+\.){3}\d+', domain_or_ip)
+              else (socket.gethostbyname_ex(domain_or_ip)[-1][0]))
+    except socket.gaierror:
+        raise UnresolvedHost(url_parts.netloc)
+    new_netloc = ':'.join([ip] + netloc_parts[1:])
+    return url_parts._replace(netloc=new_netloc).geturl()
 
 
 def all_args(f, args, kwargs):
