@@ -149,12 +149,25 @@ class SessionAPI(RedisView, MethodView):
         return delete_session(self.redis, session_id)
 
 
-@with_timeout(15, "Timed out getting a new webdriver.")
 def get_resumable_remote(*args, **kwargs):
+    if 'browser_name' in kwargs:
+        browser_name = kwargs['browser_name']
+        if browser_name == 'phantomjs':
+            return get_headless_resumable_remote(*args, **kwargs)
+    return get_real_resumable_remote(*args, **kwargs)
+
+
+@with_timeout(15, "Timed out getting a new headless webdriver.")
+def get_headless_resumable_remote():
     return ResumableRemote(*args, **kwargs)
 
 
-@with_timeout(10, "Timed out pinging a webdriver.")
+@with_timeout(40, "Timed out getting a new webdriver.")
+def get_real_resumable_remote(*args, **kwargs):
+    return ResumableRemote(*args, **kwargs)
+
+
+@with_timeout(5, "Timed out pinging a webdriver.")
 def ping_remote_for_url(*args, **kwargs):
     wd = ResumableRemote(*args, **kwargs)
     return wd.current_url
@@ -186,7 +199,7 @@ def create_session(redis, requirements):
         async_wd = process_pool.apply_async(
                 get_resumable_remote, [],
                 dict(command_executor=settings['node'], desired_capabilities=cap))
-        wd = async_wd.get(20)
+        wd = async_wd.get(60)
 
         settings['node'] = wd.command_executor._url
         if 'current_url' in settings:
