@@ -1,12 +1,22 @@
 (ns shale.resources
-  (:require [liberator.dev :as dev])
+  (:require [liberator.dev :as dev]
+            shale.sessions
+            clojure.walk)
   (:use [liberator.core :only  [defresource]]
         [compojure.core :only  [context ANY routes]]
         [hiccup.page :only [html5]]))
 
+(defn json-keys [m]
+  (let [f (fn [[k v]]
+        (if (keyword? k)
+            [(clojure.string/replace (name k) "-" "_") v]
+            [k v]))]
+    (clojure.walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m)))
+
 (defresource sessions
-  :handle-ok "[]"
-  :available-media-types  ["application/json"])
+  :handle-ok (fn [context] (json-keys (shale.sessions/view-models nil)))
+  :available-media-types  ["application/json"]
+  :allowed-methods  [:get :post])
 
 (defresource index
   :available-media-types ["text/html" "application/json"]
@@ -24,7 +34,6 @@
   (->
    (routes
     (ANY "/" [] index)
-    (ANY "/hello-world" [] hello-world)
     (ANY "/sessions" [] sessions))
 
    (dev/wrap-trace :ui :header)))

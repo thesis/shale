@@ -2,7 +2,8 @@
   (:require [clj-webdriver.remote.driver :as remote-webdriver]
             [taoensso.carmine :as car :refer (wcar)])
   (:use [shale.webdriver :only [new-webdriver resume-webdriver to-async]]
-        clojure.walk))
+        clojure.walk
+        [clj-webdriver.taxi :only [current-url]]))
 
 (def redis-conn  {:pool {} :spec {}})
 (defmacro with-car*  [& body] `(car/wcar redis-conn ~@body))
@@ -66,17 +67,17 @@
         (subvec
           (with-car*
             (let [session-key (format session-key-template session-id)
-                  session-tags-key (format session-tags-key session-id)]
+                  session-tags-key (format session-tags-key-template session-id)]
               (car/watch session-key)
               (car/watch session-tags-key)
               (if (car/exists session-key)
                 (do
                   (car/hgetall session-key)
                   (car/smembers session-tags-key))
-                nil))) 3 5)]
-    (assoc (keywordize-keys (apply hash-map contents)) :tags tags)))
+                nil)))
+          3
+          5)]
+    (assoc (keywordize-keys (apply hash-map contents)) :tags tags :id session-id)))
 
 (defn view-models [session-ids]
-  (with-car*
-    (let [session-ids (or session-ids (car/smembers session-set-key))]
-      (map view-model session-ids))))
+  (map view-model (with-car* (or session-ids (car/smembers session-set-key)))))
