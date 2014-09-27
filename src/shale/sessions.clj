@@ -3,7 +3,8 @@
             [taoensso.carmine :as car :refer (wcar)])
   (:use [shale.webdriver :only [new-webdriver resume-webdriver to-async]]
         clojure.walk
-        [clj-webdriver.taxi :only [current-url]]))
+        [clj-webdriver.taxi :only [current-url quit]])
+  (:import org.openqa.selenium.WebDriverException))
 
 (def redis-conn  {:pool {} :spec {}})
 (defmacro with-car*  [& body] `(car/wcar redis-conn ~@body))
@@ -15,6 +16,14 @@
   (apply str (interpose "/" [redis-key-prefix "sessions" "%s"])))
 (def session-tags-key-template
   (apply str (interpose "/" [redis-key-prefix "session" "%s" "tags"])))
+(defn session-key [session-id]
+  (format session-key-template session-id))
+(defn session-tags-key [session-id]
+  (format session-tags-key-template session-id))
+
+(defn prn-tee [obj]
+  (prn obj)
+  obj)
 
 (defn get-node []
   "http://localhost:5555/wd/hub")
@@ -33,51 +42,76 @@
                             node nil
                             reserved false
                             tags []
-                            extra-desired-capabilities nil
-                            reserve-after-create nil
+                            extra-desired-capabilities nil reserve-after-create nil
                             force-create nil
                             current-url nil}
                        :as requirements}]
+  (let [defaulted-reqs
+          (assoc
+            (select-keys requirements [:browser-name :reserved :tags :current-url])
+            :node
+            (or node (get-node)))
+          capabilities
+          (merge {"browserName" browser-name}
+                 extra-desired-capabilities)
+          wd
+          (new-webdriver (defaulted-reqs :node) capabilities)
+          session-id
+          (remote-webdriver/session-id wd)]
+    (with-car*
+      (if current-url (to-async wd current-url) nil)
+        (car/sadd session-set-key session-id)
+        (let [sess-key (session-key session-id)
+              sess-tags-key (session-tags-key session-id)]
+          (doall
+            (map #(car/hset sess-key (key %1) (val %1))
+                 (select-keys defaulted-reqs
+                              [:browser-name :node :reserved :current-url])))
+          (car/del sess-tags-key)
+          (doall (map #(car/sadd sess-tags-key %) (or tags [])))))
+      (view-model session-id)))
+
+(defn resume-webdriver-from-id [session-id]
+  (apply resume-webdriver
+         (map-indexed (fn [index e] (if (= index 2) {"browserName" e} e))
+             (map (view-model session-id) [:id :node :browser-name]))))
+
+(defn destroy-session [session-id]
   (with-car*
-    (def defaulted-reqs
-      (assoc
-        (select-keys requirements [:browser-name :reserved :tags])
-        :node
-        (or node (get-node))))
-    (def capabilities (merge {"browserName" browser-name}
-                             extra-desired-capabilities))
-    (def wd (new-webdriver (get-node) capabilities))
-    (def session-id (remote-webdriver/session-id wd))
-    (if current-url (to-async wd current-url) nil)
-    (car/sadd session-set-key session-id)
+    (car/watch session-set-key)
+    (let [sess-key (session-key session-id)
+          sess-tags-key (session-tags-key session-id)]
+      (try
+        (let [wd (resume-webdriver-from-id session-id)]
+          (quit wd))
+        (catch WebDriverException e))
+      (car/srem session-set-key session-id)
+      (car/del sess-key)
+      (car/del sess-tags-key)))
+  true)
 
-    (def session-key (format session-key-template session-id))
-    (def session-tags-key (format session-tags-key-template session-id))
 
-    (doall
-      (map #(car/hset session-key (key %1) (val %1))
-           (select-keys defaulted-reqs
-                        [:browser-name :node :reserved :current-url])))
-    (car/del session-tags-key)
-    (doall (map #(car/sadd session-tags-key %) (or tags []))))
-  (view-model session-id))
 
 (defn view-model [session-id]
   (let [[contents tags]
         (subvec
           (with-car*
-            (let [session-key (format session-key-template session-id)
-                  session-tags-key (format session-tags-key-template session-id)]
-              (car/watch session-key)
-              (car/watch session-tags-key)
-              (if (car/exists session-key)
+            (let [sess-key (session-key session-id)
+                  sess-tags-key (session-tags-key session-id)]
+              (car/watch sess-key)
+              (car/watch sess-tags-key)
+              (if (with-car* (car/exists session-key))
                 (do
-                  (car/hgetall session-key)
-                  (car/smembers session-tags-key))
-                nil)))
-          3
-          5)]
-    (assoc (keywordize-keys (apply hash-map contents)) :tags tags :id session-id)))
+                  (car/hgetall sess-key)
+                  (car/smembers sess-tags-key))
+                [nil nil])))
+          2
+          4)]
+    (if (= (count contents) 0)
+      nil
+      (assoc
+        (keywordize-keys
+          (apply hash-map contents)) :tags tags :id session-id))))
 
 (defn view-models [session-ids]
   (map view-model (with-car* (or session-ids (car/smembers session-set-key)))))

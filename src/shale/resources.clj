@@ -1,10 +1,12 @@
 (ns shale.resources
   (:require [liberator.dev :as dev]
             shale.sessions
-            clojure.walk)
+            clojure.walk
+            (clj-json  [core :as json]))
   (:use [liberator.core :only  [defresource]]
         [compojure.core :only  [context ANY routes]]
-        [hiccup.page :only [html5]]))
+        [hiccup.page :only [html5]])
+  (:import [java.net URL]))
 
 (defn json-keys [m]
   (let [f (fn [[k v]]
@@ -13,10 +15,40 @@
             [k v]))]
     (clojure.walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m)))
 
-(defresource sessions
-  :handle-ok (fn [context] (json-keys (shale.sessions/view-models nil)))
+(defn build-session-url [request id]
+  (URL. (format "%s://%s:%s%s/%s"
+                (name (:scheme request))
+                (:server-name request)
+                (:server-port request)
+                (:uri request)
+                (str id))))
+
+(defn a-href-text [text]
+  [:a {:href text} text])
+
+(defresource sessions-resource
+  :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
-  :allowed-methods  [:get :post])
+  :handle-ok (fn [context]
+               (json/generate-string
+                 (json-keys (shale.sessions/view-models nil))))
+  :post! (fn [context] )
+  :post-redirect true
+  :location #(build-session-url (get % :request) (get % ::id)))
+
+(defresource session-resource [id]
+  :allowed-methods [:get :put :delete]
+  :available-media-types ["application/json"]
+  :handle-ok (fn [context]
+               (json/generate-string
+                 (json-keys (::session context))))
+  :delete! (fn [context]
+             (shale.sessions/destroy-session id))
+  :exists? (fn [context]
+             (let [session (shale.sessions/view-model id)]
+               (if-not (nil? session)
+                 {::session session}))))
+
 
 (defresource index
   :available-media-types ["text/html" "application/json"]
@@ -28,12 +60,14 @@
                      [:body
                        [:h1 "Shale - Selenium Manager / Hub Replacement"]
                        [:ul
-                       [:li [:a {:href "/sessions"} "Active Selenium sessions."]]]])))))
+                       [:li (a-href-text "/sessions") "Active Selenium sessions."]
+                       [:li (a-href-text "/sessions/:id")
+                        "A session identified by id. Accepts GET, PUT, & DELETE."]]])))))
 
 (defn assemble-routes []
   (->
    (routes
     (ANY "/" [] index)
-    (ANY "/sessions" [] sessions))
-
+    (ANY "/sessions" [] sessions-resource)
+    (ANY "/sessions/:id" [id] (session-resource id)))
    (dev/wrap-trace :ui :header)))

@@ -2,10 +2,9 @@
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [compojure "1.1.8"]
+                 [compojure "1.1.9"]
                  [liberator "0.12.2"]
                  [clj-json "0.5.3"]
-                 [ring/ring-json "0.3.1"]
                  [clj-webdriver "0.6.0"]
                  [clj-wallhack "1.0.1"]
                  [hiccup "1.0.5"]

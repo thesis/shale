@@ -3,14 +3,12 @@
   (:use
     [shale.resources :only  [assemble-routes]]
     [ring.middleware.multipart-params :only  [wrap-multipart-params]]
-    [compojure.handler :only  [api]]
-    [ring.middleware.json :only  [wrap-json-response]]))
+    [compojure.handler :only  [api]]))
 
 (def app
   (-> (assemble-routes)
       api
-      wrap-multipart-params
-      wrap-json-response))
+      wrap-multipart-params))
 
 (defn start  [options]
   (jetty/run-jetty #'app  (assoc options :join? false)))
