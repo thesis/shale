@@ -21,6 +21,7 @@ selenium
 
 # Vim
 *.swp
+*.swo
 
 # IntelliJ
 *.iml
