@@ -90,7 +90,24 @@
       (car/del sess-tags-key)))
   true)
 
+(defn refresh-session [session-id]
+   (with-car*
+     (car/watch session-set-key)
+     (let [sess-key (format session-key-template session-id)]
+       (car/watch sess-key)
+       (let [wd (resume-webdriver-from-id session-id)]
+         (try
+           (car/hset sess-key :current-url (current-url wd))
+           (catch WebDriverException e
+             (destroy-session session-id))))))
+   true)
 
+(defn refresh-sessions [session-ids]
+  (with-car*
+    (car/watch session-set-key)
+    (doseq [session-id (or session-ids (with-car* (car/smembers session-set-key)))]
+      (refresh-session session-id)))
+  true)
 
 (defn view-model [session-id]
   (let [[contents tags]
