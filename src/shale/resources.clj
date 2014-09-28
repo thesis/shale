@@ -49,6 +49,11 @@
                (if-not (nil? session)
                  {::session session}))))
 
+(defresource sessions-refresh-resource [id]
+  :allowed-methods [:post]
+  :available-media-types ["application/json"]
+  :post! (fn [context]
+           (shale.sessions/refresh-sessions (if (nil? id) id [id]))))
 
 (defresource index
   :available-media-types ["text/html" "application/json"]
@@ -69,5 +74,12 @@
    (routes
     (ANY "/" [] index)
     (ANY "/sessions" [] sessions-resource)
-    (ANY "/sessions/:id" [id] (session-resource id)))
+    (ANY "/sessions/refresh" [] (sessions-refresh-resource nil))
+    (ANY ["/sessions/:id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
+         [id]
+         (session-resource id))
+    (ANY ["/sessions/:id/refresh", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
+         [id]
+         (sessions-refresh-resource id))
+    )
    (dev/wrap-trace :ui :header)))
