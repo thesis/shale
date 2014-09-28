@@ -2,22 +2,58 @@
   (:require [liberator.dev :as dev]
             shale.sessions
             clojure.walk
-            (clj-json  [core :as json]))
+            (clj-json [core :as json])
+            [clojure.java.io :as io])
   (:use [liberator.core :only  [defresource]]
         [compojure.core :only  [context ANY routes]]
         [hiccup.page :only [html5]])
   (:import [java.net URL]))
 
+(defn map-walk [f m]
+  (clojure.walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m))
+
 (defn json-keys [m]
-  (let [f (fn [[k v]]
-        (if (keyword? k)
-            [(clojure.string/replace (name k) "-" "_") v]
-            [k v]))]
-    (clojure.walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m)))
+  (map-walk (fn [[k v]]
+               (if (keyword? k)
+                 [(clojure.string/replace (name k) "-" "_") v]
+                 [k v]))
+            m))
+
+(defn clojure-keys [m]
+  (map-walk (fn [[k v]]
+               (if (keyword? k)
+                 [k v]
+                 [(keyword (clojure.string/replace k "_" "-"))  v]))
+            m))
 
 (defn jsonify [m]
   (json/generate-string
     (json-keys m)))
+
+(defn is-json-content? [context]
+  (if (#{:put :post} (get-in context [:request :request-method]))
+    (or
+     (= (get-in context [:request :headers "content-type"]) "application/json")
+     [false {:message "Unsupported Content-Type"}])
+    true))
+
+(defn body-as-string [context]
+  (if-let [body (get-in context [:request :body])]
+    (condp instance? body
+      java.lang.String body
+      (slurp (io/reader body)))))
+
+(defn parse-json [context key]
+  (when (#{:put :post} (get-in context [:request :request-method]))
+    (try
+      (if-let [body (body-as-string context)]
+        (let [data (json/parse-string body)]
+          [false {key data}])
+        {:message "Empty body."})
+      (catch Exception e
+        (.printStackTrace e)
+        {:message (format "Malformed JSON.")}))))
+
 
 (defn build-session-url [request id]
   (URL. (format "%s://%s:%s%s/%s"
@@ -33,19 +69,29 @@
 (defresource sessions-resource
   :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
+  :known-content-type? is-json-content?
+  :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
                (jsonify (shale.sessions/view-models nil)))
-  :post! (fn [context] )
-  :post-redirect true
-  :location #(build-session-url (get % :request) (get % ::id)))
+  :post! (fn [context]
+             {::session (shale.sessions/get-or-create-session
+                        (clojure-keys (get context ::data)))})
+  :handle-created (fn [context]
+                    (jsonify (get context ::session))))
 
 (defresource session-resource [id]
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
+  :known-content-type? is-json-content?
+  :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
-               (jsonify (::session context)))
+               (jsonify (get context ::session)))
   :delete! (fn [context]
              (shale.sessions/destroy-session id))
+  :put! (fn [context]
+          {::session
+           (shale.sessions/modify-session (clojure-keys (get context ::data))
+                                          id)})
   :exists? (fn [context]
              (let [session (shale.sessions/view-model id)]
                (if-not (nil? session)
@@ -69,7 +115,10 @@
                        [:ul
                        [:li (a-href-text "/sessions") "Active Selenium sessions."]
                        [:li (a-href-text "/sessions/:id")
-                        "A session identified by id. Accepts GET, PUT, & DELETE."]]])))))
+                        "A session identified by id. Accepts GET, PUT, & DELETE."]
+                       [:li (a-href-text "/sessions/refresh")
+                        "POST to refresh all sessions."]
+                       ]])))))
 
 (defn assemble-routes []
   (->
@@ -82,6 +131,5 @@
          (session-resource id))
     (ANY ["/sessions/:id/refresh", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
          [id]
-         (sessions-refresh-resource id))
-    )
+         (sessions-refresh-resource id)))
    (dev/wrap-trace :ui :header)))
