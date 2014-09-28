@@ -15,6 +15,10 @@
             [k v]))]
     (clojure.walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m)))
 
+(defn jsonify [m]
+  (json/generate-string
+    (json-keys m)))
+
 (defn build-session-url [request id]
   (URL. (format "%s://%s:%s%s/%s"
                 (name (:scheme request))
@@ -30,8 +34,7 @@
   :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
   :handle-ok (fn [context]
-               (json/generate-string
-                 (json-keys (shale.sessions/view-models nil))))
+               (jsonify (shale.sessions/view-models nil)))
   :post! (fn [context] )
   :post-redirect true
   :location #(build-session-url (get % :request) (get % ::id)))
@@ -40,8 +43,7 @@
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
   :handle-ok (fn [context]
-               (json/generate-string
-                 (json-keys (::session context))))
+               (jsonify (::session context)))
   :delete! (fn [context]
              (shale.sessions/destroy-session id))
   :exists? (fn [context]
