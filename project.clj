@@ -9,7 +9,8 @@
                  [clj-wallhack "1.0.1"]
                  [hiccup "1.0.5"]
                  [sonian/carica "1.1.0" :exclusions  [[cheshire]]]
-                 [com.taoensso/carmine "2.7.0" :exclusions [org.clojure/clojure]]]
+                 [com.taoensso/carmine "2.7.0" :exclusions [org.clojure/clojure]]
+                 [com.brweber2/clj-dns "0.0.2"]]
 
   :plugins [[lein-ring "0.8.11"]]
   :ring {:handler shale.handler/app}
