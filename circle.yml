@@ -14,7 +14,5 @@ dependencies:
     - "target/"
 
 test:
-  pre:
-    - lein ring uberjar
   override:
-    - env PATH="$HOME/bin:$PATH" tox
+    - cd clients/shale-python && env PATH="$HOME/bin:$PATH" tox
