@@ -27,11 +27,11 @@ java -jar selenium -role node \
 
 lein uberjar
 JAR_FILE=$(ls target | grep -i shale | grep standalone | head -1)
-java -jar ./target/$JAR_FILE
+java -jar ./target/$JAR_FILE &
 
 cd clients/shale-python
 
-sleep 10
+sleep 6
 nosetests
 STATUS=$?
 
