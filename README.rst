@@ -21,24 +21,23 @@ AWS) to auto-scale nodes by implementing a custom `NodePool`.
 Running
 -------
 
-Clone the repo and install the requirements
+Clone the repo
 
 .. code:: sh
 
     git clone git@github.com:cardforcoin/shale.git
-    pip install -r requirements.txt
 
-In development, you can run the Flask dev server.
-
-.. code:: sh
-
-    python wsgi.py
-
-In production, use gunicorn.
+Something
 
 .. code:: sh
 
-    gunicorn -b 127.0.0.1:5000 wsgi:app -t 120 --log-file -
+    lein run
+
+Something else
+
+.. code:: sh
+
+    lein ring server
 
 Configuration
 -------------
