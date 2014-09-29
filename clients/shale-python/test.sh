@@ -31,7 +31,11 @@ java -jar ./target/$JAR_FILE &
 
 cd clients/shale-python
 
-sleep 6
+until $(curl --output /dev/null --silent --head --fail http://localhost:5000); do
+    printf '.'
+    sleep 1
+done
+
 nosetests
 STATUS=$?
 
