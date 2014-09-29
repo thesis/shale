@@ -6,7 +6,9 @@
             [clojure.java.io :as io])
   (:use [liberator.core :only  [defresource]]
         [compojure.core :only  [context ANY routes]]
-        [hiccup.page :only [html5]])
+        [hiccup.page :only [html5]]
+        [clojure.set :only [rename-keys]]
+        shale.utils)
   (:import [java.net URL]))
 
 (defn map-walk [f m]
@@ -24,6 +26,16 @@
                (if (keyword? k)
                  [k v]
                  [(keyword (clojure.string/replace k "_" "-"))  v]))
+            m))
+
+(defn name-keys [m]
+  (map-walk (fn [[k v]]
+              [(name k) v])
+            m))
+
+(defn truth-from-str-vals [m]
+  (map-walk (fn [[k v]]
+              [k (if (#{"True" "1" 1 "true" true} v) true false)])
             m))
 
 (defn jsonify [m]
@@ -66,7 +78,7 @@
 (defn a-href-text [text]
   [:a {:href text} text])
 
-(defresource sessions-resource
+(defresource sessions-resource [params]
   :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-content?
@@ -74,8 +86,14 @@
   :handle-ok (fn [context]
                (jsonify (shale.sessions/view-models nil)))
   :post! (fn [context]
-             {::session (shale.sessions/get-or-create-session
-                        (clojure-keys (get context ::data)))})
+           {::session
+            (shale.sessions/get-or-create-session
+              (rename-keys (clojure-keys
+                             (merge (get context ::data)
+                                    (name-keys
+                                      (truth-from-str-vals
+                                        (params :params)))))
+                                    {:reserve :reserve-after-create}))})
   :handle-created (fn [context]
                     (jsonify (get context ::session))))
 
@@ -124,7 +142,7 @@
   (->
    (routes
     (ANY "/" [] index)
-    (ANY "/sessions" [] sessions-resource)
+    (ANY "/sessions" {params :params} sessions-resource)
     (ANY "/sessions/refresh" [] (sessions-refresh-resource nil))
     (ANY ["/sessions/:id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
          [id]

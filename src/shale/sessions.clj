@@ -1,11 +1,14 @@
 (ns shale.sessions
   (:require [clj-webdriver.remote.driver :as remote-webdriver]
             [taoensso.carmine :as car :refer (wcar)]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [org.bovinegenius  [exploding-fish :as uri]])
   (:use [shale.webdriver :only [new-webdriver resume-webdriver to-async]]
+        shale.utils
         clojure.walk
         [clj-webdriver.taxi :only [current-url quit]]
-        [clj-dns.core :only [dns-lookup]])
+        [clj-dns.core :only [dns-lookup]]
+        [clojure.set :only [rename-keys]])
   (:import org.openqa.selenium.WebDriverException
            org.xbill.DNS.Type))
 
@@ -24,34 +27,38 @@
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
 
-(defn prn-tee [obj]
-  (prn obj)
-  obj)
-
 (defn get-node []
   "http://localhost:5555/wd/hub")
-
-(defn ^:private resolve-host [host]
-  (let [resolved (.getAddress
-                     (first
-                       ((dns-lookup "www.google.com" Type/A) :answers)))]
-    (string/replace (str resolved) "/" "")))
 
 (defn ^:private is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
 
+(defn resolve-host [host]
+  (if (is-ip? host)
+    host
+    (let [resolved (first ((dns-lookup host Type/A) :answers))]
+      (if resolved
+        (string/replace (str (.getAddress resolved)) "/" "")
+        (throw
+          (ex-info (format "Unable to resolve host %s." host)
+                   {:user-visible true :status 500}))))))
+
+(defn host-resolved-url [url]
+  (let [u (if (string? url) (uri/uri url) url)]
+    (assoc u :host (resolve-host (uri/host u)))))
+
 (defn ^:private matches-requirements [session-model requirements]
   (let [exact-match-keys [:browser-name :reserved]]
     (and
-      (apply = (map #(map % exact-match-keys)
-                    [session-model requirements])))
-      (apply clojure.set/subset?
-             (map #(hash-set (% :tags))
-                  [session-model requirements]))
-      (apply = (map #(if (is-ip? %) % (resolve-host %))
+      (every? #(apply clojure.set/subset? %)
+              [(map #(hash-set (% :tags))
+                       [requirements session-model])
+               (map #(into #{} (select-keys % exact-match-keys))
+                    [requirements session-model])])
+      (apply = (map host-resolved-url
                     (filter identity
                             (map #(get % :node)
-                                 [session-model requirements]))))))
+                                 [session-model requirements])))))))
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
@@ -112,12 +119,18 @@
                             reserve-after-create nil
                             current-url nil}
                        :as requirements}]
-  (let [defaulted-reqs
-        (merge {:node (get-node)
-                :tags tags
-                :reserved reserved}
-               (select-keys requirements
-                            [:browser-name :reserved :tags :current-url]))
+  (let [resolved-node-reqs
+        (assoc-fn (merge {:node (get-node)
+                       :tags tags
+                       :reserved reserved}
+                      (select-keys requirements
+                                   [:browser-name :reserved :tags :current-url]))
+               :node
+               (comp str host-resolved-url))
+        defaulted-reqs
+        (assoc-fn resolved-node-reqs
+                  :reserved
+                  (fn [v] (or v (resolved-node-reqs :reserve-after-create) false)))
         capabilities
         (merge {"browserName" browser-name}
                extra-desired-capabilities)
@@ -150,13 +163,19 @@
   (with-car*
     (car/return
       (or
-        (and force-create (create-session requirements))
+        (and force-create (create-session
+                            (rename-keys requirements
+                                         {:reserve-after-create :reserved})))
         (if-let [candidate (first (filter #(matches-requirements % requirements)
                                           (view-models nil)))]
           (if (or reserve-after-create current-url)
             (modify-session (get candidate :id)
-                            (select-keys requirements
-                                         [:reserve-after-create :current-url]))
+                            (rename-keys
+                              (select-keys requirements
+                                           [:reserve-after-create
+                                            :current-url
+                                            :tags])
+                              {:reserve-after-create :reserved}))
             candidate))
         (create-session requirements)))))
 

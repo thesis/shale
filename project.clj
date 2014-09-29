@@ -10,10 +10,12 @@
                  [hiccup "1.0.5"]
                  [sonian/carica "1.1.0" :exclusions  [[cheshire]]]
                  [com.taoensso/carmine "2.7.0" :exclusions [org.clojure/clojure]]
-                 [com.brweber2/clj-dns "0.0.2"]]
+                 [com.brweber2/clj-dns "0.0.2"]
+                 [org.bovinegenius/exploding-fish "0.3.4"]]
 
   :plugins [[lein-ring "0.8.11"]]
   :ring {:handler shale.handler/app}
   :profiles
   {:dev {:dependencies [[javax.servlet/servlet-api "2.5"]
-                        [ring-mock "0.1.5"]]}})
+                        [ring-mock "0.1.5"]
+                        [org.clojure/tools.trace "0.7.8"]]}})

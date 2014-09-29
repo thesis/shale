@@ -3,9 +3,8 @@ import requests
 from nose.tools import with_setup, ok_, eq_
 
 import shale
-import shale.client
 
-client = shale.client.default_client
+client = shale.default_client
 
 def teardown():
     # kill all open sessions
@@ -96,7 +95,7 @@ def test_multi_node_creation():
     try:
         browser = client.get_or_create_browser(
                 tags=['logged-in'], node='http://unknownhost:5555/wd/hub')
-    except shale.client.ShaleClientException:
+    except shale.ShaleClientException:
         pass
     else:
         raise AssertionError('Creating a browser with an unknown node should '
