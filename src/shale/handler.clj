@@ -4,7 +4,8 @@
   (:use
     [shale.resources :only  [assemble-routes]]
     [ring.middleware.multipart-params :only  [wrap-multipart-params]]
-    [compojure.handler :only  [api]]))
+    [compojure.handler :only  [api]])
+  (:gen-class))
 
 (defn ignore-trailing-slash
   "From https://gist.github.com/dannypurcell/8215411"
@@ -40,9 +41,5 @@
       api
       wrap-multipart-params))
 
-(defn start  [options]
-  (jetty/run-jetty #'app  (assoc options :join? false)))
-
-(defn -main
-  ([port] (start  {:port  (Integer/parseInt port)}))
-  ([] (-main "5000")))
+(defn -main [& args]
+  (jetty/run-jetty app {:port 5000}))

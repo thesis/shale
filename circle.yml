@@ -11,7 +11,10 @@ dependencies:
     - bash ./get_selenium.sh
   cache_directories:
     - "libs/"
+    - "target/"
 
 test:
+  pre:
+    - lein ring uberjar
   override:
     - env PATH="$HOME/bin:$PATH" tox

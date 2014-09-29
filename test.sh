@@ -22,10 +22,12 @@ java -jar selenium -role node \
   -nodeConfig nodeConfig.json \
   -port 5554 &
 
-python wsgi.py &
+JAR_FILE=`ls target | grep shale | grep standalone | head -1`
+
+lein ring server
 
 sleep 2
-nosetests shale
+nosetests
 STATUS=$?
 
 exit $STATUS
