@@ -16,6 +16,7 @@ PATH="$PATH:$PWD/phantomjs/bin/"
 
 sleep 1
 
+
 java -jar selenium -role node \
   -nodeConfig nodeConfig.json \
   -port 5555 &
@@ -24,8 +25,9 @@ java -jar selenium -role node \
   -nodeConfig nodeConfig.json \
   -port 5554 &
 
-lein deps
-lein run &
+lein uberjar
+JAR_FILE=$(ls target | grep -i shale | grep standalone | head -1)
+java -jar ./target/$JAR_FILE
 
 cd clients/shale-python
 
