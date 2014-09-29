@@ -16,3 +16,5 @@ dependencies:
 test:
   override:
     - cd clients/shale-python && env PATH="$HOME/bin:$PATH" tox
+  post:
+    - cp target/`ls target | grep -i shale | grep standalone | head -1` $CIRCLE_ARTIFACTS/
