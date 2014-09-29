@@ -24,11 +24,12 @@ java -jar selenium -role node \
   -nodeConfig nodeConfig.json \
   -port 5554 &
 
+lein deps
 lein run &
 
 cd clients/shale-python
 
-sleep 2
+sleep 10
 nosetests
 STATUS=$?
 
