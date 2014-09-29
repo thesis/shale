@@ -10,6 +10,8 @@ cleanup() {
 
 trap "cleanup" EXIT
 
+cd ../..
+
 PATH="$PATH:$PWD/phantomjs/bin/"
 
 sleep 1
@@ -22,9 +24,9 @@ java -jar selenium -role node \
   -nodeConfig nodeConfig.json \
   -port 5554 &
 
-JAR_FILE=`ls target | grep shale | grep standalone | head -1`
+lein run &
 
-lein ring server
+cd clients/shale-python
 
 sleep 2
 nosetests

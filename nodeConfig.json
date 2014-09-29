@@ -6,6 +6,6 @@
         }
     ],
     "configuration": {
-        'reserve':false
+        'register':false
     }
 }
