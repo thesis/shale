@@ -1,5 +1,12 @@
-python
-------
+shale-python
+============
+
+A Python client for Shale, the Selenium hub replacement.
+
+.. pypi - Everything below this line goes into the description for PyPI.
+
+Examples
+--------
 
 Get a client
 
