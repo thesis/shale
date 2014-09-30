@@ -127,4 +127,4 @@ Delete a session. Note that this will de-allocate the Selenium driver.
 
 There is also a Python client with its `own examples and documentation`__.
 
-__ https://github.com/cardforcoin/shale/tree/master/clients/shale-python/README.rst
+__ https://github.com/cardforcoin/shale-python
