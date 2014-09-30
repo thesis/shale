@@ -32,7 +32,8 @@
 
 (deftype ConfigNodePool [])
 (def node-pool (if (nil? (config :node-pool-config))
-                 (DefaultNodePool. ["http://localhost:5555/wd/hub"])
+                 (DefaultNodePool. (or (config :node-list)
+                                       ["http://localhost:5555/wd/hub"]))
                  (do
                    (extend ConfigNodePool
                      INodePool
