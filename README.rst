@@ -134,7 +134,7 @@ The Clojure client returns functional web drivers using `clj-webdriver`,
 and includes a macro to make working with drivers easier.
 
 Here's an example of how to get-or-create, reserve, use, and release a driver
-using the `with-driver` macro, inspired by the `clj-webdriver` examples.
+using the `with-webdriver*` macro, inspired by the `clj-webdriver` examples.
 
 .. code:: clojure
 
@@ -142,7 +142,7 @@ using the `with-driver` macro, inspired by the `clj-webdriver` examples.
     ;;
     (use '[shale.client :only [with-driver])
     (use 'clj-webdriver.taxi)
-    (with-driver {:browser-name :firefox :tags [\"github\"]}
+    (with-webdriver* {:browser-name :firefox :tags [\"github\"]}
       (to \"https://github.com\")
       (click \"a[href*='login']\")
       (input-text \"#login_field\" \"your_username\")

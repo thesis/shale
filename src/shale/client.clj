@@ -1,6 +1,6 @@
 (ns shale.client
   (:require [clj-http.client :as client]
-            (clj-json  [core :as json])
+            (clj-json [core :as json])
             [clj-webdriver.taxi :as taxi]
             [shale.webdriver :as webdriver])
   (:use [clj-webdriver.remote.driver :only[session-id]]))
@@ -19,7 +19,7 @@
   (json/parse-string
     (get (client/get (session-url id)))))
 
-(defn get-or-create-session [{:keys [browser-name
+(defn get-or-create-session! [{:keys [browser-name
                                      node
                                      reserved
                                      tags
@@ -44,7 +44,7 @@
                                           :query-params params})
                             :body))))
 
-(defn modify-session [id {:keys [reserved tags]
+(defn modify-session! [id {:keys [reserved tags]
                           :or {reserved nil
                                tags nil}}]
   (def body (into {} [(if (nil? reserved) {} {:reserved reserved})
@@ -56,21 +56,21 @@
                  :accept :json}))
   (json/parse-string (get response :body)))
 
-(defn reserve-session [id]
-  (modify-session id {:reserved true}))
+(defn reserve-session! [id]
+  (modify-session! id {:reserved true}))
 
-(defn release-session [id]
-  (modify-session id {:reserved false}))
+(defn release-session! [id]
+  (modify-session! id {:reserved false}))
 
-(defn destroy-session [id]
+(defn destroy-session! [id]
   (client/delete (session-url id))
   nil)
 
-(defn refresh-sessions []
+(defn refresh-sessions! []
   (json/parse-string
     (get (client/post (str (sessions-url) "refresh") {}) :body)))
 
-(defn get-or-create-webdriver [{:keys [browser-name
+(defn get-or-create-webdriver! [{:keys [browser-name
                                        node
                                        reserved
                                        tags
@@ -82,7 +82,7 @@
                                      reserve-after-create nil
                                      force-create nil
                                      tags []}}]
-  (let [session (get-or-create-session {:browser-name browser-name
+  (let [session (get-or-create-session! {:browser-name browser-name
                             :node node
                             :reserved reserved
                             :tags tags
@@ -94,21 +94,21 @@
       {"platform" "ANY"
        "browserName" (get session "browser_name")})))
 
-(defn release-webdriver [driver]
-  (release-session (session-id driver)))
+(defn release-webdriver! [driver]
+  (release-session! (session-id driver)))
 
-(defmacro with-webdriver
+(defmacro with-webdriver*
     "Given tags and a browser name to get or create a new webdriver session,
      execute the forms in `body`, then unreserve the webdriver session.
 
-       Example:
+       Example :
        ========
 
        ;;
        ;; Log into Github
        ;;
        (use 'clj-webdriver.taxi)
-       (with-driver {:browser-name :firefox :tags [\"github\"]}
+       (with-webdriver* {:browser-name :firefox :tags [\"github\"]}
          (to \"https://github.com\")
          (click \"a[href*='login']\")
          (input-text \"#login_field\" \"your_username\")
@@ -119,8 +119,8 @@
    (def options-with-defaults (merge {:reserved false
                                       :reserve-after-create true} options))
      `(binding [~'clj-webdriver.taxi/*driver*
-                (get-or-create-webdriver options-with-defaults)]
+                (get-or-create-webdriver! options-with-defaults)]
         (try
           ~@body
           (finally
-            (release-webdriver ~'clj-webdriver.taxi/*driver*)))))
+            (release-webdriver! ~'clj-webdriver.taxi/*driver*)))))
