@@ -1,11 +1,17 @@
+(ns shale.node-pool)
+
 (defprotocol NodePool
   "Basic interface for choosing and managing Selenium nodes per session.
    Implementing this allows dynamic node domains- eg, by retrieving them from
    a cloud provider's API."
 
-  (get-node [this requirements] "")
-  (add-node [this requirements] "")
-  (remove-node [this url] ""))
+  (get-node [this requirements]
+    "Get a node from the pool. Takes the same requirement map as
+     get-or-create-session.")
+  (add-node [this requirements]
+    "Add a node to the pool that fulfills the requirement map.")
+  (remove-node [this url]
+    "Remove a node from the pool specific by url."))
 
 (deftype DefaultNodePool [nodes] NodePool
   "A simple node pool the chooses randomly from an initial list."
@@ -18,5 +24,4 @@
 
   (remove-node [this requirements]
     (throw (ex-info "Unable to remove nodes with the default node pool."
-                    {:user-visible true :status 500})))
-  )
+                    {:user-visible true :status 500}))))
