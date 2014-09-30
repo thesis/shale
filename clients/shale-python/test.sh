@@ -31,9 +31,11 @@ java -jar ./target/$JAR_FILE &
 
 cd clients/shale-python
 
-until $(curl --output /dev/null --silent --head --fail http://localhost:5000); do
+COUNTER=0
+until $(curl --output /dev/null --silent --head --fail http://localhost:5000) || [[ $COUNTER -gt 30 ]]; do
     printf '.'
     sleep 1
+    let COUNTER+=1
 done
 
 nosetests
