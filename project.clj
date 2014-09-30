@@ -13,12 +13,15 @@
                  [sonian/carica "1.1.0" :exclusions  [[cheshire]]]
                  [com.taoensso/carmine "2.7.0" :exclusions [org.clojure/clojure]]
                  [com.brweber2/clj-dns "0.0.2"]
-                 [org.bovinegenius/exploding-fish "0.3.4"]]
+                 [org.bovinegenius/exploding-fish "0.3.4"]
+                 [overtone/at-at "1.2.0"]]
   :auto-clean false
   :main shale.handler
   :plugins [[lein-ring "0.8.12"]]
   :ring {:handler shale.handler/app
+         :init shale.handler/init
+         :destrooy shale.handler/destroy
          :port 5000}
   :profiles {:dev
-             {:dependencies [[org.clojure/tools.trace "0.7.8"]]}
+              {:dependencies [[org.clojure/tools.trace "0.7.8"]]}
              :uberjar {:aot :all}})

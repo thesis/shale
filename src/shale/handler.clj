@@ -1,6 +1,7 @@
 (ns shale.handler
   (:require [ring.adapter.jetty :as jetty]
-            (clj-json [core :as json]))
+            [clj-json [core :as json]]
+            [shale.periodic :as periodic])
   (:use
     [shale.resources :only  [assemble-routes]]
     [ring.middleware.multipart-params :only  [wrap-multipart-params]]
@@ -40,6 +41,13 @@
       user-visible-json-exceptions
       api
       wrap-multipart-params))
+
+(defn init []
+  ;; schedule periodic tasks
+  (periodic/schedule!))
+
+(defn destroy []
+  (periodic/stop!))
 
 (defn -main [& args]
   (jetty/run-jetty app {:port 5000}))
