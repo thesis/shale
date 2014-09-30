@@ -11,7 +11,13 @@
   (add-node [this requirements]
     "Add a node to the pool that fulfills the requirement map.")
   (remove-node [this url]
-    "Remove a node from the pool specific by url."))
+    "Remove a node from the pool specific by url.")
+  (can-add-node [this]
+    "Whether this pool supports adding new nodes.")
+  (can-remove-node [this]
+    "Whether this pool supports remove nodes."))
+
+
 
 (deftype DefaultNodePool [nodes]
   INodePool
@@ -25,4 +31,9 @@
 
   (remove-node [this requirements]
     (throw (ex-info "Unable to remove nodes with the default node pool."
-                    {:user-visible true :status 500}))))
+                    {:user-visible true :status 500})))
+
+  (can-add-node [this] false)
+  (can-remove-node [this] false))
+
+

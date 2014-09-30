@@ -3,10 +3,11 @@
             [taoensso.carmine :as car :refer (wcar)]
             [clojure.string :as string]
             [org.bovinegenius  [exploding-fish :as uri]])
-  (:use [shale.webdriver :only [new-webdriver resume-webdriver to-async]]
-        shale.utils
-        clojure.walk
+  (:use shale.utils
         shale.nodes
+        carica.core
+        clojure.walk
+        [shale.webdriver :only [new-webdriver resume-webdriver to-async]]
         [clj-webdriver.taxi :only [current-url quit]]
         [clj-dns.core :only [dns-lookup]]
         [clojure.set :only [rename-keys]])
@@ -29,7 +30,14 @@
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
 
-(def node-pool (DefaultNodePool. ["http://localhost:5555/wd/hub"]))
+(deftype ConfigNodePool [])
+(def node-pool (if (nil? (config :node-pool-config))
+                 (DefaultNodePool. ["http://localhost:5555/wd/hub"])
+                 (do
+                   (extend ConfigNodePool
+                     INodePool
+                       (config :node-pool-config))
+                   (ConfigNodePool.))))
 
 (defn ^:private is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))

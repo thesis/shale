@@ -13,8 +13,9 @@ management features.
 
 Currently shale let's you get, create, and delete webdriver sessions, as well as
 managing which sessions are currently reserved or tagged. It manages and removes
-dead sessions, and we're working on an easy way to integrate with a cloud
-provider to auto-scale your Selenium nodes.
+dead sessions, and if you provide an `INodePool` implementation, it can be
+easily integrated with a cloud provider or other infrastructure for node
+discovery and provisioning.
 
 Running
 -------
