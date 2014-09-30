@@ -2,13 +2,15 @@
   (:require [clj-webdriver.remote.driver :as remote-webdriver]
             [taoensso.carmine :as car :refer (wcar)]
             [clojure.string :as string]
-            [org.bovinegenius  [exploding-fish :as uri]])
+            [org.bovinegenius  [exploding-fish :as uri]]
+            )
   (:use [shale.webdriver :only [new-webdriver resume-webdriver to-async]]
         shale.utils
         clojure.walk
         [clj-webdriver.taxi :only [current-url quit]]
         [clj-dns.core :only [dns-lookup]]
-        [clojure.set :only [rename-keys]])
+        [clojure.set :only [rename-keys]]
+        [shale.node-pool :only [DefaultNodePool NodePool]])
   (:import org.openqa.selenium.WebDriverException
            org.xbill.DNS.Type))
 
@@ -27,8 +29,7 @@
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
 
-(defn get-node []
-  "http://localhost:5555/wd/hub")
+(def node-pool (DefaultNodePool. ["http://localhost:5555/wd/hub"]))
 
 (defn ^:private is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
@@ -120,13 +121,13 @@
                             current-url nil}
                        :as requirements}]
   (let [resolved-node-reqs
-        (assoc-fn (merge {:node (get-node)
-                       :tags tags
-                       :reserved reserved}
-                      (select-keys requirements
-                                   [:browser-name :reserved :tags :current-url]))
-               :node
-               (comp str host-resolved-url))
+        (assoc-fn (merge {:node (get-node node-pool)
+                          :tags tags
+                          :reserved reserved}
+                         (select-keys requirements
+                                      [:browser-name :reserved :tags :current-url]))
+                  :node
+                  (comp str host-resolved-url))
         defaulted-reqs
         (assoc-fn resolved-node-reqs
                   :reserved
