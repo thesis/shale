@@ -23,5 +23,6 @@
          :destrooy shale.handler/destroy
          :port 5000}
   :profiles {:dev
-              {:dependencies [[org.clojure/tools.trace "0.7.8"]]}
+              {:dependencies [[org.clojure/tools.trace "0.7.8"]
+                              [ring-mock "0.1.5"]]}
              :uberjar {:aot :all}})
