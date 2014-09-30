@@ -6,8 +6,6 @@ cleanup() {
 
 trap "cleanup" EXIT
 
-cd ../..
-
 PATH="$PATH:$PWD/phantomjs/bin/"
 
 sleep 1
