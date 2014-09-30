@@ -32,7 +32,7 @@ In development, you can run the service with `lein`.
 
     lein ring server
 
-To deploy, make a jar and run that.
+To deploy the service, make a jar and run that.
 
 .. code:: sh
 
@@ -45,7 +45,9 @@ Examples
 curl
 ~~~~
 
-.. code::
+Get or create a new session.
+
+.. code:: sh
 
     $ curl -d '{"browser_name":"phantomjs"}' -XPOST \
            http://localhost:5000/sessions/ \
@@ -60,7 +62,7 @@ curl
 
 List all the active sessions
 
-.. code::
+.. code:: sh
 
     $ curl http://localhost:5000/sessions/
     [{
@@ -73,7 +75,7 @@ List all the active sessions
 
 Get or create a new session with tags
 
-.. code::
+.. code:: sh
 
     $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
            -XPOST http://localhost:5000/sessions/ \
@@ -89,7 +91,7 @@ Get or create a new session with tags
 
 Get or create a new reserved session with tags
 
-.. code::
+.. code:: sh
 
     $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
            -XPOST http://localhost:5000/sessions/?reserve=True \
@@ -105,7 +107,7 @@ Get or create a new reserved session with tags
 
 Unreserve a session and add a tag
 
-.. code::
+.. code:: sh
 
     $ curl -d '{"tags":["walmart", "logged-in"], "reserved":false}' \
            -XPUT http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db \
@@ -120,10 +122,40 @@ Unreserve a session and add a tag
 
 Delete a session. Note that this will de-allocate the Selenium driver.
 
-.. code::
+.. code:: sh
 
     $ curl -XDELETE http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db
     true
+
+Clojure
+~~~~~~~
+
+The Clojure client returns functional web drivers using `clj-webdriver`,
+and includes a macro to make working with drivers easier.
+
+Here's an example of how to get-or-create, reserve, use, and release a driver
+using the `with-driver` macro, inspired by the `clj-webdriver` examples.
+
+.. code:: clojure
+
+    ;; Log into Github
+    ;;
+    (use '[shale.client :only [with-driver])
+    (use 'clj-webdriver.taxi)
+    (with-driver {:browser-name :firefox :tags [\"github\"]}
+      (to \"https://github.com\")
+      (click \"a[href*='login']\")
+      (input-text \"#login_field\" \"your_username\")
+      (-> \"#password\"
+        (input-text \"your_password\")
+        submit))
+
+See the `clj-webdriver docs`__ and the client source for more details.
+
+__ http://semperos.github.io/clj-webdriver/
+
+Python
+~~~~~~
 
 There is also a Python client with its `own examples and documentation`__.
 
