@@ -2,17 +2,17 @@
   (:require [clj-webdriver.remote.driver :as remote-webdriver]
             [taoensso.carmine :as car :refer (wcar)]
             [clojure.string :as string]
-            [org.bovinegenius  [exploding-fish :as uri]]
-            )
+            [org.bovinegenius  [exploding-fish :as uri]])
   (:use [shale.webdriver :only [new-webdriver resume-webdriver to-async]]
         shale.utils
         clojure.walk
+        shale.nodes
         [clj-webdriver.taxi :only [current-url quit]]
         [clj-dns.core :only [dns-lookup]]
-        [clojure.set :only [rename-keys]]
-        [shale.node-pool :only [DefaultNodePool NodePool]])
+        [clojure.set :only [rename-keys]])
   (:import org.openqa.selenium.WebDriverException
-           org.xbill.DNS.Type))
+           org.xbill.DNS.Type
+           [shale.nodes DefaultNodePool]))
 
 (def redis-conn  {:pool {} :spec {}})
 (defmacro with-car*  [& body] `(car/wcar redis-conn ~@body))
@@ -121,7 +121,7 @@
                             current-url nil}
                        :as requirements}]
   (let [resolved-node-reqs
-        (assoc-fn (merge {:node (get-node node-pool)
+        (assoc-fn (merge {:node (get-node node-pool requirements)
                           :tags tags
                           :reserved reserved}
                          (select-keys requirements

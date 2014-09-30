@@ -1,6 +1,6 @@
-(ns shale.node-pool)
+(ns shale.nodes)
 
-(defprotocol NodePool
+(defprotocol INodePool
   "Basic interface for choosing and managing Selenium nodes per session.
    Implementing this allows dynamic node domains- eg, by retrieving them from
    a cloud provider's API."
@@ -13,8 +13,9 @@
   (remove-node [this url]
     "Remove a node from the pool specific by url."))
 
-(deftype DefaultNodePool [nodes] NodePool
-  "A simple node pool the chooses randomly from an initial list."
+(deftype DefaultNodePool [nodes]
+  INodePool
+  ;;"A simple node pool that chooses randomly from an initial list.
   (get-node [this requirements]
     (rand-nth nodes))
 
