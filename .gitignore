@@ -32,3 +32,5 @@ ghostdriver.log
 
 # Nose
 .noseids
+
+*.log
