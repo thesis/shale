@@ -3,7 +3,8 @@
             (clj-json [core :as json])
             [clj-webdriver.taxi :as taxi]
             [shale.webdriver :as webdriver])
-  (:use [clj-webdriver.remote.driver :only[session-id]]))
+  (:use [clj-webdriver.remote.driver :only [session-id]]
+        [clojure.set :only [rename-keys]]))
 
 (defn sessions-url []
   (str "http://localhost:5000/" "sessions/"))
@@ -30,13 +31,15 @@
                                    reserved nil
                                    reserve-after-create nil
                                    force-create nil
-                                   tags []}}]
-  (let [body (into {} [{:browser_name browser-name}
-                        (if (nil? reserved) {} {:reserved reserved})
-                        (if (nil? node) {} {:node node})
-                        (if (nil? tags) {} {:tags tags})])
-        params (into {} [(if reserve-after-create {:reserve reserve-after-create} {})
-                         (if force-create {:force_create force-create} {})])]
+                                   tags []}
+                              :as requirements}]
+  (let [body (rename-keys (select-keys requirements
+                                       [:browser-name :reserved :node :tags])
+                          {:browser-name :browser_name})
+        params (rename-keys (select-keys requirements
+                                         [:reserve-after-create :force-create])
+                            {:reserve-after-create :reserve
+                             :force-create :force_create})]
     (json/parse-string (get (client/post (sessions-url)
                                          {:body (json/generate-string body)
                                           :content-type :json
@@ -47,14 +50,13 @@
 (defn modify-session! [id {:keys [reserved tags]
                           :or {reserved nil
                                tags nil}}]
-  (def body (into {} [(if (nil? reserved) {} {:reserved reserved})
-                      (if (nil? tags) {} {:tags tags})]))
-  (def response
-    (client/put (session-url id)
-                {:body (json/generate-string body)
-                 :content-type :json
-                 :accept :json}))
-  (json/parse-string (get response :body)))
+  (let [body (into {} [(if (nil? reserved) {} {:reserved reserved})
+                      (if (nil? tags) {} {:tags tags})])
+        response (client/put (session-url id)
+                             {:body (json/generate-string body)
+                              :content-type :json
+                              :accept :json})]
+    (json/parse-string (get response :body))))
 
 (defn reserve-session! [id]
   (modify-session! id {:reserved true}))
@@ -81,13 +83,9 @@
                                      reserved nil
                                      reserve-after-create nil
                                      force-create nil
-                                     tags []}}]
-  (let [session (get-or-create-session! {:browser-name browser-name
-                            :node node
-                            :reserved reserved
-                            :tags tags
-                            :reserve-after-create reserve-after-create
-                            :force-create force-create})]
+                                     tags []}
+                                :as requirements}]
+  (let [session (get-or-create-session! requirements)]
     (webdriver/resume-webdriver
       (get session "id")
       (get session "node")
@@ -116,11 +114,11 @@
            (input-text \"your_password\")
            submit))"
   [options & body]
-   (def options-with-defaults (merge {:reserved false
-                                      :reserve-after-create true} options))
+   (let [options-with-defaults (merge {:reserved false
+                                       :reserve-after-create true} options)]
      `(binding [~'clj-webdriver.taxi/*driver*
-                (get-or-create-webdriver! options-with-defaults)]
+                (get-or-create-webdriver! ~options-with-defaults)]
         (try
           ~@body
           (finally
-            (release-webdriver! ~'clj-webdriver.taxi/*driver*)))))
+            (release-webdriver! ~'clj-webdriver.taxi/*driver*))))))

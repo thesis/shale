@@ -108,8 +108,8 @@
              (shale.sessions/destroy-session id))
   :put! (fn [context]
           {::session
-           (shale.sessions/modify-session (clojure-keys (get context ::data))
-                                          id)})
+           (shale.sessions/modify-session id (clojure-keys
+                                               (get context ::data)))})
   :exists? (fn [context]
              (let [session (shale.sessions/view-model id)]
                (if-not (nil? session)

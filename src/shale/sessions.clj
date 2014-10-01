@@ -61,10 +61,11 @@
   (let [exact-match-keys [:browser-name :reserved]]
     (and
       (every? #(apply clojure.set/subset? %)
-              [(map #(hash-set (% :tags))
+              [(map #(into #{} (% :tags))
                        [requirements session-model])
                (map #(into #{} (select-keys % exact-match-keys))
                     [requirements session-model])])
+
       (apply = (map host-resolved-url
                     (filter identity
                             (map #(get % :node)
@@ -103,11 +104,8 @@
                   sess-tags-key (session-tags-key session-id)]
               (doall
                 (map #(car/hset sess-key (key %1) (val %1))
-                     (select-keys modifications (for [[k v] modifications
-                                                      :when (and
-                                                              (not (= k :tags))
-                                                              (not (nil? v)))]
-                                                     k))))
+                     (select-keys modifications
+                                  [:reserved :current-url :browser-name :node])))
               (car/del sess-tags-key)
               (doall (map #(car/sadd sess-tags-key %) (or tags []))))
             nil)
@@ -116,7 +114,6 @@
 
 (defn create-session [{:keys [browser-name
                               node
-                              reserved
                               tags
                               extra-desired-capabilities
                               reserve-after-create
@@ -131,16 +128,24 @@
                        :as requirements}]
   (let [resolved-node-reqs
         (assoc-fn (merge {:node (get-node node-pool requirements)
-                          :tags tags
-                          :reserved reserved}
+                          :tags tags}
                          (select-keys requirements
-                                      [:browser-name :reserved :tags :current-url]))
+                                      [:browser-name
+                                       :tags
+                                       :current-url
+                                       :reserved
+                                       :reserve-after-create]))
                   :node
                   (comp str host-resolved-url))
         defaulted-reqs
         (assoc-fn resolved-node-reqs
                   :reserved
-                  (fn [v] (or v (resolved-node-reqs :reserve-after-create) false)))
+                  (fn [v]
+                    (or
+                      (first
+                        (filter #(not (nil? %))
+                                [(resolved-node-reqs :reserve-after-create) v]))
+                        false)))
         capabilities
         (merge {"browserName" browser-name}
                extra-desired-capabilities)
