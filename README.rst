@@ -11,7 +11,7 @@ Shale is a lightweight replacement for a Selenium hub. We've found hubs to be
 more trouble than they're worth operationally, but we still need some of the
 management features.
 
-Currently shale let's you get, create, and delete webdriver sessions, as well as
+Currently shale lets you get, create, and delete webdriver sessions, as well as
 managing which sessions are currently reserved or tagged. It manages and removes
 dead sessions, and if you provide an `INodePool` implementation, it can be
 easily integrated with a cloud provider or other infrastructure for node
