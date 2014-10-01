@@ -144,11 +144,11 @@ using the `with-webdriver*` macro, inspired by the `clj-webdriver` examples.
     submit))
 ```
 
-See the `clj-webdriver docs`[clj-webdriver] and the client source for more details.
+See the [clj-webdriver docs][clj-webdriver] and the client source for more details.
 
 ### Python
 
-There is also a Python client with its `own examples and documentation`[shale-python].
+There is also a Python client with its [own examples and documentation][shale-python].
 
 
 [clj-webdriver]: http://semperos.github.io/clj-webdriver/
