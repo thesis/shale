@@ -144,12 +144,13 @@ using the `with-webdriver*` macro, inspired by the `clj-webdriver` examples.
     submit))
 ```
 
-See the `clj-webdriver docs`__ and the client source for more details.
-
-__ http://semperos.github.io/clj-webdriver/
+See the `clj-webdriver docs`[clj-webdriver] and the client source for more details.
 
 ### Python
 
-There is also a Python client with its `own examples and documentation`__.
+There is also a Python client with its `own examples and documentation`[shale-python].
 
-__ https://github.com/cardforcoin/shale-python
+
+[clj-webdriver]: http://semperos.github.io/clj-webdriver/
+
+[shale-python]: https://github.com/cardforcoin/shale-python
