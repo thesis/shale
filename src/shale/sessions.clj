@@ -13,7 +13,7 @@
         [clojure.set :only [rename-keys]])
   (:import org.openqa.selenium.WebDriverException
            org.xbill.DNS.Type
-           [shale.nodes DefaultNodePool]))
+           [shale.nodes DefaultNodePool AWSNodePool]))
 
 (def redis-conn  {:pool {} :spec {}})
 (defmacro with-car*  [& body] `(car/wcar redis-conn ~@body))
@@ -31,13 +31,20 @@
   (format session-tags-key-template session-id))
 
 (deftype ConfigNodePool [])
-(def node-pool (if (nil? (config :node-pool-config))
-                 (DefaultNodePool. (or (config :node-list)
-                                       ["http://localhost:5555/wd/hub"]))
+(def node-pool (if (nil? (config :node-pool-impl))
+                 (if (nil? (config :node-pool-cloud-config))
+                   (DefaultNodePool. (or (config :node-list)
+                                         ["http://localhost:5555/wd/hub"]))
+                   (if (= ((config :node-pool-cloud-config) :provider) :aws)
+                     (AWSNodePool. (config :node-pool-cloud-config))
+                     (throw (ex-info (str "Issue with cloud config: AWS is "
+                                          "the only currently supported "
+                                          "provider.")
+                                     {:user-visible true :status 500}))))
                  (do
                    (extend ConfigNodePool
                      INodePool
-                       (config :node-pool-config))
+                       (config :node-pool-impl))
                    (ConfigNodePool.))))
 
 (defn ^:private is-ip? [s]

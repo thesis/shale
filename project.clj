@@ -21,7 +21,7 @@
   :plugins [[lein-ring "0.8.12"]]
   :ring {:handler shale.handler/app
          :init shale.handler/init
-         :destrooy shale.handler/destroy
+         :destroy shale.handler/destroy
          :port 5000}
   :profiles {:dev
               {:dependencies [[org.clojure/tools.trace "0.7.8"]
