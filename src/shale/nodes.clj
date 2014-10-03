@@ -10,6 +10,8 @@
    Implementing this allows dynamic node domains- eg, by retrieving them from
    a cloud provider's API."
 
+  (get-nodes [this])
+
   (get-node [this requirements]
     "Get a node from the pool. Takes the same requirement map as
      get-or-create-session.")
@@ -24,7 +26,9 @@
 
 (deftype DefaultNodePool [nodes]
   INodePool
-  ;;"A simple node pool that chooses randomly from an initial list.
+  ;;A simple node pool that chooses randomly from an initial list.
+  (get-nodes [this])
+
   (get-node [this requirements]
     (rand-nth nodes))
 
@@ -69,7 +73,7 @@
       (map instance->node-url (instances-running-shale)))
 
     (get-node [this requirements]
-      (instance->node-url (rand-nth running-shale)))
+      (instance->node-url (rand-nth instances-running-shale)))
 
     (add-node [this requirements]
       (throw (ex-info "Adding nodes is not yet implemented."
@@ -81,5 +85,4 @@
 
     (can-add-node [this] false)
     (can-remove-node [this] false))
-
 
