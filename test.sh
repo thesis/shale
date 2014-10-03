@@ -18,7 +18,7 @@ java -jar selenium -role node \
   -nodeConfig nodeConfig.json \
   -port 5554 &
 
-lein uberjar
+lein with-profile aws uberjar
 JAR_FILE=$(ls target | grep -i shale | grep standalone | head -1)
 java -jar ./target/$JAR_FILE &
 
