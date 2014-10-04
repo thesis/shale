@@ -9,6 +9,6 @@ test:
   override:
     - bash test.sh
   post:
-      - for jar in `find target | grep "\.jar$" | grep -i shale` do
+      - bash -c "for jar in `find target | grep \"\\.jar$\" | grep -i shale` do
           cp $jar $CIRCLE_ARTIFACTS/
-        done
+        done"
