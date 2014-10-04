@@ -9,4 +9,6 @@ test:
   override:
     - bash test.sh
   post:
-    - cp target/`ls target | grep -i shale | grep standalone | head -1` $CIRCLE_ARTIFACTS/
+      - for jar in `find target | grep "\.jar$" | grep -i shale` do
+          cp $jar $CIRCLE_ARTIFACTS/
+        done
