@@ -1,7 +1,9 @@
 (ns shale.handler
   (:require [ring.adapter.jetty :as jetty]
             [clj-json [core :as json]]
-            [shale.periodic :as periodic])
+            [shale.periodic :as periodic]
+            [shale.nodes :as nodes])
+
   (:use
     [shale.resources :only  [assemble-routes]]
     [ring.middleware.multipart-params :only  [wrap-multipart-params]]
@@ -44,7 +46,8 @@
 
 (defn init []
   ;; schedule periodic tasks
-  (periodic/schedule!))
+  (periodic/schedule!)
+  (nodes/refresh-nodes))
 
 (defn destroy []
   (periodic/stop!))
