@@ -126,6 +126,8 @@
                                (apply clojure.set/subset?
                                       (map #(select-keys % [:url :tags])
                                            [requirements model])))]
-    (rand-nth
+    (try
+      (rand-nth
       (filter matches-requirements
-              (view-models nil)))))
+              (view-models nil)))
+      (catch IndexOutOfBoundsException e))))
