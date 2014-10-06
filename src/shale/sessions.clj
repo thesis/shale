@@ -119,23 +119,22 @@
                             reserve-after-create nil
                             current-url nil}
                        :as requirements}]
-  (prn-tee "create requirements" requirements)
   (s/validate (s/maybe Node ) node)
   (let [merged-reqs
-        (prn-tee "create merged reqs" (merge {:node (select-keys (nodes/get-node {}) [:url :id])
+        (merge {:node (select-keys (nodes/get-node {}) [:url :id])
                 :tags tags}
                (select-keys requirements
                             [:browser-name
                              :tags
                              :current-url
                              :reserved
-                             :reserve-after-create])))
+                             :reserve-after-create]))
         resolved-node-reqs
-        (prn-tee "create resolved reqs" (if (get-in merged-reqs [:node :url])
+        (if (get-in merged-reqs [:node :url])
           (assoc-in-fn merged-reqs
                        [:node :url]
                        (comp str host-resolved-url))
-          merged-reqs))
+          merged-reqs)
         defaulted-reqs
         (assoc-fn resolved-node-reqs
                   :reserved
@@ -149,7 +148,7 @@
         (merge {"browserName" browser-name}
                extra-desired-capabilities)
         wd
-        (new-webdriver (prn-tee "new webdriver node url" (get-in defaulted-reqs [:node :url]))  capabilities)
+        (new-webdriver (get-in defaulted-reqs [:node :url]) capabilities)
         session-id
         (remote-webdriver/session-id wd)]
     (last
