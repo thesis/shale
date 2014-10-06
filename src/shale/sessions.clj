@@ -3,7 +3,8 @@
             [taoensso.carmine :as car]
             [clojure.string :as string]
             [org.bovinegenius  [exploding-fish :as uri]]
-            [shale.nodes :as nodes])
+            [shale.nodes :as nodes]
+            [schema.core :as s])
   (:use shale.utils
         shale.redis
         clojure.walk
@@ -27,6 +28,12 @@
 
 (defn ^:private is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
+
+(def ^:private Node
+  "A schema for a node spec."
+  {(s/optional-key :url) s/Str
+   (s/optional-key :id) s/Str
+   (s/optional-key :tags) [s/Str]})
 
 (defn resolve-host [host]
   (if (is-ip? host)
@@ -53,7 +60,7 @@
 
       (apply = (map host-resolved-url
                     (filter identity
-                            (map #(get % :node)
+                            (map #(get-in % [:node :url])
                                  [session-model requirements])))))))
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
@@ -72,6 +79,7 @@
                                        tags nil
                                        current-url nil}
                                   :as modifications}]
+  (s/validate (s/maybe Node ) node)
   (if (some #{session-id} (session-ids))
     (last
       (with-car*
@@ -111,17 +119,23 @@
                             reserve-after-create nil
                             current-url nil}
                        :as requirements}]
-  (let [resolved-node-reqs
-        (assoc-fn (merge {:node (nodes/get-node nodes/node-pool requirements)
-                          :tags tags}
-                         (select-keys requirements
-                                      [:browser-name
-                                       :tags
-                                       :current-url
-                                       :reserved
-                                       :reserve-after-create]))
-                  :node
-                  (comp str host-resolved-url))
+  (prn-tee "create requirements" requirements)
+  (s/validate (s/maybe Node ) node)
+  (let [merged-reqs
+        (prn-tee "create merged reqs" (merge {:node (select-keys (nodes/get-node {}) [:url :id])
+                :tags tags}
+               (select-keys requirements
+                            [:browser-name
+                             :tags
+                             :current-url
+                             :reserved
+                             :reserve-after-create])))
+        resolved-node-reqs
+        (prn-tee "create resolved reqs" (if (get-in merged-reqs [:node :url])
+          (assoc-in-fn merged-reqs
+                       [:node :url]
+                       (comp str host-resolved-url))
+          merged-reqs))
         defaulted-reqs
         (assoc-fn resolved-node-reqs
                   :reserved
@@ -135,7 +149,7 @@
         (merge {"browserName" browser-name}
                extra-desired-capabilities)
         wd
-        (new-webdriver (defaulted-reqs :node) capabilities)
+        (new-webdriver (prn-tee "new webdriver node url" (get-in defaulted-reqs [:node :url]))  capabilities)
         session-id
         (remote-webdriver/session-id wd)]
     (last
@@ -160,6 +174,7 @@
                                    force-create nil
                                    current-url nil}
                               :as requirements}]
+  (s/validate (s/maybe Node ) node)
   (with-car*
     (car/return
       (or
@@ -182,8 +197,11 @@
 (defn resume-webdriver-from-id [session-id]
   (if-let [model (view-model session-id)]
     (apply resume-webdriver
+
            (map-indexed (fn [index e] (if (= index 2) {"browserName" e} e))
-               (map model [:id :node :browser-name])))))
+                        [(model :id)
+                         (get-in model [:node :url])
+                         :browser-name]))))
 
 (defn destroy-session [session-id]
   (with-car*

@@ -4,6 +4,7 @@
   (:use carica.core
         shale.redis
         shale.utils
+        clojure.walk
         [clojure.set :only  [difference]])
   (:import java.util.UUID
            [shale.node_pools DefaultNodePool AWSNodePool]))
@@ -55,7 +56,8 @@
         [contents tags] (with-car*
                           (car/hgetall node-key)
                           (car/smembers node-tags-key))]
-    (assoc (apply hash-map contents) :tags (or tags []) :id id)))
+    (keywordize-keys
+      (assoc (apply hash-map contents) :tags (or tags []) :id id))))
 
 (defn view-models [ids]
   (let [ids (or ids (node-ids) )]
@@ -90,7 +92,9 @@
   (with-car*
     (car/watch node-set-key)
     (try
-      (node-pools/remove-node node-pool (get (view-model id) :url))
+      (let [url (get (view-model id) :url)]
+        (if (some #{url} (node-pools/get-nodes node-pool))
+          (node-pools/remove-node node-pool url)))
       (finally
         (car/srem node-set-key id)
         (car/del (node-key id))
@@ -122,6 +126,6 @@
                                (apply clojure.set/subset?
                                       (map #(select-keys % [:url :tags])
                                            [requirements model])))]
-    (first
+    (rand-nth
       (filter matches-requirements
               (view-models nil)))))

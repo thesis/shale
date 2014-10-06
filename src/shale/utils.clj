@@ -7,3 +7,5 @@
 (defn assoc-fn [m k f]
   (assoc m k (f (get m k))))
 
+(defn assoc-in-fn [m ks f]
+  (assoc-in m ks (f (get-in m ks))))

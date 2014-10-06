@@ -12,11 +12,14 @@ sleep 1
 
 java -jar selenium -role node \
   -nodeConfig nodeConfig.json \
-  -port 5555 &
+  -port 4444 &
 
 java -jar selenium -role node \
   -nodeConfig nodeConfig.json \
-  -port 5554 &
+  -port 4443 &
+
+mkdir resources
+cp test-config.clj resources/config.clj
 
 lein with-profile aws uberjar
 JAR_FILE=$(find target | grep "\.jar$" | grep -i shale | grep aws | head -1)

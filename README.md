@@ -49,7 +49,7 @@ $ curl -d '{"browser_name":"phantomjs"}' -XPOST \
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": false,
-  "node": "http://localhost:5555/wd/hub",
+  "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
   "tags": []
 }
@@ -62,7 +62,7 @@ $ curl http://localhost:5000/sessions/
 [{
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": "False",
-  "node": "http://localhost:5555/wd/hub",
+  "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
   "tags": []
 }]
@@ -77,7 +77,7 @@ $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": false,
-  "node": "http://localhost:5555/wd/hub",
+  "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
   "tags": ["walmart"],
   "reserved": false
@@ -93,7 +93,7 @@ $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": false,
-  "node": "http://localhost:5555/wd/hub",
+  "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
   "tags": ["walmart"],
   "reserved": true
@@ -109,7 +109,7 @@ $ curl -d '{"tags":["walmart", "logged-in"], "reserved":false}' \
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": "True",
-  "node": "http://localhost:5555/wd/hub",
+  "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
   "tags": ["walmart", "logged-in"]
 }

@@ -15,7 +15,8 @@
                  [com.taoensso/carmine "2.7.0" :exclusions [org.clojure/clojure]]
                  [com.brweber2/clj-dns "0.0.2"]
                  [org.bovinegenius/exploding-fish "0.3.4"]
-                 [overtone/at-at "1.2.0"]]
+                 [overtone/at-at "1.2.0"]
+                 [prismatic/schema "0.3.0"]]
   :auto-clean false
   :main shale.handler
   :plugins [[lein-ring "0.8.12"]]

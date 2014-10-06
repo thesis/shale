@@ -4,7 +4,8 @@
             [clj-webdriver.taxi :as taxi]
             [shale.webdriver :as webdriver])
   (:use [clj-webdriver.remote.driver :only [session-id]]
-        [clojure.set :only [rename-keys]]))
+        [clojure.set :only [rename-keys]]
+        shale.utils))
 
 (defn sessions-url []
   (str "http://localhost:5000/" "sessions/"))
@@ -88,7 +89,7 @@
   (let [session (get-or-create-session! requirements)]
     (webdriver/resume-webdriver
       (get session "id")
-      (get session "node")
+      (get-in session ["node" "url"])
       {"platform" "ANY"
        "browserName" (get session "browser_name")})))
 
