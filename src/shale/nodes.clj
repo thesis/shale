@@ -1,88 +1,127 @@
 (ns shale.nodes
-  (:import java.io.FileNotFoundException))
+  (:require [shale.node-pools :as node-pools]
+            [taoensso.carmine :as car :refer (wcar)])
+  (:use carica.core
+        shale.redis
+        shale.utils
+        [clojure.set :only  [difference]])
+  (:import java.util.UUID
+           [shale.node_pools DefaultNodePool AWSNodePool]))
 
-(try
-  (require '[amazonica.aws.ec2])
-  (catch FileNotFoundException e))
+(deftype ConfigNodePool [])
 
-(defprotocol INodePool
-  "Basic interface for choosing and managing Selenium nodes per session.
-   Implementing this allows dynamic node domains- eg, by retrieving them from
-   a cloud provider's API."
+(def node-pool (if (nil? (config :node-pool-impl))
+                 (if (nil? (config :node-pool-cloud-config))
+                   (node-pools/DefaultNodePool. (or (config :node-list)
+                                               ["http://localhost:5555/wd/hub"]))
+                   (if (= ((config :node-pool-cloud-config) :provider) :aws)
+                     (node-pools/AWSNodePool. (config :node-pool-cloud-config))
+                     (throw (ex-info (str "Issue with cloud config: AWS is "
+                                          "the only currently supported "
+                                          "provider.")
+                                     {:user-visible true :status 500}))))
+                 (do
+                   (extend ConfigNodePool
+                     node-pools/INodePool
+                       (config :node-pool-impl))
+                   (ConfigNodePool.))))
 
-  (get-nodes [this])
+(def node-set-key
+  (apply str (interpose "/" [redis-key-prefix "nodes"])))
 
-  (get-node [this requirements]
-    "Get a node from the pool. Takes the same requirement map as
-     get-or-create-session.")
-  (add-node [this requirements]
-    "Add a node to the pool that fulfills the requirement map.")
-  (remove-node [this url]
-    "Remove a node from the pool specific by url.")
-  (can-add-node [this]
-    "Whether this pool supports adding new nodes.")
-  (can-remove-node [this]
-    "Whether this pool supports remove nodes."))
+(def node-key-template
+  (apply str (interpose "/" [redis-key-prefix "nodes" "%s"])))
 
-(deftype DefaultNodePool [nodes]
-  INodePool
-  ;;A simple node pool that chooses randomly from an initial list.
-  (get-nodes [this])
+(def node-tags-key-template
+  (apply str (interpose "/" [redis-key-prefix "nodes" "%s" "tags"])))
 
-  (get-node [this requirements]
-    (rand-nth nodes))
+(defn node-key [id]
+  (format node-key-template id))
 
-  (add-node [this requirements]
-    (throw (ex-info "Unable to add new nodes to the default node pool."
-                    {:user-visible true :status 500})))
+(defn node-tags-key [id]
+  (format node-tags-key-template id))
 
-  (remove-node [this requirements]
-    (throw (ex-info "Unable to remove nodes with the default node pool."
-                    {:user-visible true :status 500})))
+(defn node-ids []
+  (with-car* (car/smembers node-set-key)))
 
-  (can-add-node [this] false)
-  (can-remove-node [this] false))
+(defn uuid [] (str (java.util.UUID/randomUUID)))
 
-(defn describe-instances-or-throw []
-  (let [describe-instances
-            (ns-resolve 'amazonica.aws.ec2 'describe-instances)]
-        (if describe-instances
-          (mapcat #(get % :instances) (get (describe-instances) :reservations))
-          (throw
-            (ex-info
-              (str "Unable to configure connect to the AWS API- make sure "
-                   "amazonica is listed in your dependencies.")
-              {:user-visible true :status 500})))))
+(defn node-ids []
+  (with-car* (car/smembers node-set-key)))
 
-(defn instances-running-shale []
-  (filter #(and
-             (= (get-in % [:state :name]) "running")
-             (some (fn [i] (= (get i :key) "shale"))
-                   (get % :tags)))
-          (describe-instances-or-throw)))
+(defn view-model [id]
+  (let [node-key (node-key id)
+        node-tags-key (node-tags-key id)
+        [contents tags] (with-car*
+                          (car/hgetall node-key)
+                          (car/smembers node-tags-key))]
+    (assoc (apply hash-map contents) :tags (or tags []) :id id)))
 
-(defn instance->node-url [instance use-private-dns]
-  (format "http://%s:5555/wd/hub"
-          (get instance
-               (if use-private-dns :private-dns-name :public-dns-name))))
+(defn view-models [ids]
+  (let [ids (or ids (node-ids) )]
+    (map view-model ids)))
 
-(deftype AWSNodePool [options]
-    INodePool
+(defn view-model-from-url [url]
+  (first (filter #(= (% :url) url) (view-models nil))))
 
-    (get-nodes [this]
-      (map instance->node-url (instances-running-shale)))
+(defn modify-node [id {:keys [url tags]
+                       :or {:url nil
+                            :tags nil}}]
+  (last
+    (with-car*
+      (let [node-key (node-key id)
+            node-tags-key (node-tags-key id)]
+        (if url (car/hset node-key :url url))
+        (if tags (sset-all node-tags-key tags))
+        (car/return (view-model id))))))
 
-    (get-node [this requirements]
-      (instance->node-url (rand-nth instances-running-shale)))
+(defn create-node [{:keys [url
+                           tags]
+                    :or {:tags []}}]
+  (last
+    (with-car*
+      (let [id (uuid)
+            node-key (node-key id)]
+        (car/sadd node-set-key id)
+        (modify-node id {:url url :tags tags})
+        (car/return (view-model id))))))
 
-    (add-node [this requirements]
-      (throw (ex-info "Adding nodes is not yet implemented."
-                      {:user-visible true :status 500})))
+(defn destroy-node [id]
+  (with-car*
+    (car/watch node-set-key)
+    (try
+      (node-pools/remove-node node-pool (get (view-model id) :url))
+      (finally
+        (car/srem node-set-key id)
+        (car/del (node-key id))
+        (car/del (node-tags-key id)))))
+  true)
 
-    (remove-node [this requirements]
-      (throw (ex-info "Removing nodes is not yet implemented."
-                      {:user-visible true :status 500})))
+(defn ^:private to-set [s]
+  (into #{} s))
 
-    (can-add-node [this] false)
-    (can-remove-node [this] false))
+(defn refresh-nodes
+  "Syncs the node list with the backing node pool."
+  []
+  (let [nodes (to-set (node-pools/get-nodes node-pool))
+        registered-nodes (to-set (map #(get % :url) (view-models nil)))]
+    (doall
+      (concat
+        (map #(create-node {:url %})
+             (difference nodes registered-nodes))
+        (map #(destroy-node ((view-model-from-url %) :id))
+             (difference registered-nodes nodes)))))
+  true)
 
+(defn get-node [{:keys [url
+                        tags]
+                 :or {:url nil
+                      :tags []}
+                 :as requirements}]
+  (let [matches-requirements (fn [model]
+                               (apply clojure.set/subset?
+                                      (map #(select-keys % [:url :tags])
+                                           [requirements model])))]
+    (first
+      (filter matches-requirements
+              (view-models nil)))))

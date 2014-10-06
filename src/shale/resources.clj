@@ -121,6 +121,38 @@
   :post! (fn [context]
            (shale.sessions/refresh-sessions (if (nil? id) id [id]))))
 
+(defresource nodes-resource [params]
+  :allowed-methods  [:get]
+  :available-media-types  ["application/json"]
+  :known-content-type? is-json-content?
+  :malformed? #(parse-json % ::data)
+  :handle-ok (fn [context]
+               (jsonify (shale.nodes/view-models nil))))
+
+(defresource nodes-refresh-resource []
+  :allowed-methods [:post]
+  :available-media-types ["application/json"]
+  :post! (fn [context]
+           (shale.nodes/refresh-nodes)))
+
+(defresource node-resource [id]
+  :allowed-methods [:get :put :delete]
+  :available-media-types ["application/json"]
+  :known-content-type? is-json-content?
+  :malformed? #(parse-json % ::data)
+  :handle-ok (fn [context]
+               (jsonify (get context ::node)))
+  :delete! (fn [context]
+             (shale.nodes/destroy-node id))
+  :put! (fn [context]
+          {::node
+           (shale.nodes/modify-node id (clojure-keys
+                                         (get context ::data)))})
+  :exists? (fn [context]
+             (let [node (shale.nodes/view-model id)]
+               (if-not (nil? node)
+                 {::node node}))))
+
 (defresource index
   :available-media-types ["text/html" "application/json"]
   :handle-ok (fn [context]
@@ -149,5 +181,10 @@
          (session-resource id))
     (ANY ["/sessions/:id/refresh", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
          [id]
-         (sessions-refresh-resource id)))
+         (sessions-refresh-resource id))
+    (ANY "/nodes" {params :params} nodes-resource)
+    (ANY "/nodes/refresh" [] (nodes-refresh-resource))
+    (ANY ["/nodes/:id", :id #"(?:[a-zA-Z0-9\-])+"]
+         [id]
+         (node-resource id)))
    (dev/wrap-trace :ui :header)))

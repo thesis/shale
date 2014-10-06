@@ -1,51 +1,29 @@
 (ns shale.sessions
   (:require [clj-webdriver.remote.driver :as remote-webdriver]
-            [taoensso.carmine :as car :refer (wcar)]
+            [taoensso.carmine :as car]
             [clojure.string :as string]
-            [org.bovinegenius  [exploding-fish :as uri]])
+            [org.bovinegenius  [exploding-fish :as uri]]
+            [shale.nodes :as nodes])
   (:use shale.utils
-        shale.nodes
-        carica.core
+        shale.redis
         clojure.walk
         [shale.webdriver :only [new-webdriver resume-webdriver to-async]]
         [clj-webdriver.taxi :only [current-url quit]]
         [clj-dns.core :only [dns-lookup]]
         [clojure.set :only [rename-keys]])
   (:import org.openqa.selenium.WebDriverException
-           org.xbill.DNS.Type
-           [shale.nodes DefaultNodePool AWSNodePool]))
+           org.xbill.DNS.Type))
 
-(def redis-conn  {:pool {} :spec {}})
-(defmacro with-car*  [& body] `(car/wcar redis-conn ~@body))
-
-(def redis-key-prefix "_shale")
 (def session-set-key
   (apply str (interpose "/" [redis-key-prefix "sessions"])))
 (def session-key-template
   (apply str (interpose "/" [redis-key-prefix "sessions" "%s"])))
 (def session-tags-key-template
-  (apply str (interpose "/" [redis-key-prefix "session" "%s" "tags"])))
+  (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "tags"])))
 (defn session-key [session-id]
   (format session-key-template session-id))
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
-
-(deftype ConfigNodePool [])
-(def node-pool (if (nil? (config :node-pool-impl))
-                 (if (nil? (config :node-pool-cloud-config))
-                   (DefaultNodePool. (or (config :node-list)
-                                         ["http://localhost:5555/wd/hub"]))
-                   (if (= ((config :node-pool-cloud-config) :provider) :aws)
-                     (AWSNodePool. (config :node-pool-cloud-config))
-                     (throw (ex-info (str "Issue with cloud config: AWS is "
-                                          "the only currently supported "
-                                          "provider.")
-                                     {:user-visible true :status 500}))))
-                 (do
-                   (extend ConfigNodePool
-                     INodePool
-                       (config :node-pool-impl))
-                   (ConfigNodePool.))))
 
 (defn ^:private is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
@@ -134,7 +112,7 @@
                             current-url nil}
                        :as requirements}]
   (let [resolved-node-reqs
-        (assoc-fn (merge {:node (get-node node-pool requirements)
+        (assoc-fn (merge {:node (nodes/get-node nodes/node-pool requirements)
                           :tags tags}
                          (select-keys requirements
                                       [:browser-name
