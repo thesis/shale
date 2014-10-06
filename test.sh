@@ -33,6 +33,8 @@ until $(curl --output /dev/null --silent --head --fail http://localhost:5000) ||
     let COUNTER+=1
 done
 
+curl -XPOST http://localhost:5000/nodes/refresh
+
 lein test
 STATUS=$?
 
