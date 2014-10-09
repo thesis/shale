@@ -4,8 +4,8 @@
   (:use shale.redis
         shale.utils
         clojure.walk
-        [clojure.set :only  [difference]]
-        [shale.configurer :only config])
+        [clojure.set :only [difference]]
+        [shale.configurer :only [config]])
   (:import java.util.UUID
            [shale.node_pools DefaultNodePool AWSNodePool]))
 

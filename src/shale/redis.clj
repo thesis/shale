@@ -1,6 +1,6 @@
 (ns shale.redis
   (:require [taoensso.carmine :as car :refer (wcar)])
-  (:use [shale.configurer :only config]))
+  (:use [shale.configurer :only [config]]))
 
 (def redis-conn  {:pool {} :spec (config :redis)})
 (defmacro with-car*  [& body] `(car/wcar redis-conn ~@body))
