@@ -19,4 +19,10 @@
                           :tags {:service :shale}
                           :use-private-dns true}
  ;; if you just need a static list of nodes, provide that instead
- :node-list ["http://localhost:5555/wd/hub" "http://anotherhost:5555/wd/hub"] }
+ :node-list ["http://localhost:5555/wd/hub" "http://anotherhost:5555/wd/hub"]
+ ;; optionally provide redis connection details suitable for use by carmine
+ ;; eg http://ptaoussanis.github.io/carmine/taoensso.carmine.html#var-wcar
+ ;; if not provided, the defaults will be used
+ :redis {:host "localhost"
+         :port 6379
+         :db 0}}

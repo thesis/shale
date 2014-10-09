@@ -36,6 +36,16 @@ lein uberjar
 java -jar target/shale-0.1.0-SNAPSHOT-standalone.jar
 ```
 
+## Configuration
+
+By default, a config file- `config.clj`- is expected on the classpath.
+`example-config.clj` shows the various options. If you'd like to provide a full
+path to an alternative config file, set an environment variable `CONFIG_FILE`
+with the path, or include the option using another method supported by
+[environ][environ].
+
+[environ]: https://github.com/weavejester/environ
+
 ## Examples
 
 ### curl
