@@ -2,6 +2,7 @@
 
 Shale, a Clojure-backed Selenium hub replacement
 
+[![Circle CI](https://circleci.com/gh/cardforcoin/shale/tree/master.png?style=badge)](https://circleci.com/gh/cardforcoin/shale/tree/master)
 
 ## Progress
 
@@ -9,11 +10,12 @@ Shale is a lightweight replacement for a Selenium hub. We've found hubs to be
 more trouble than they're worth operationally, but we still need some of the
 management features.
 
-Currently shale lets you get, create, and delete webdriver sessions, as well as
-managing which sessions are currently reserved or tagged. It manages and removes
-dead sessions, and if you provide an `INodePool` implementation, it can be
-easily integrated with a cloud provider or other infrastructure for node
-discovery and provisioning.
+Currently shale lets you get, create, and delete webdriver sessions, and
+maintains "reservation" and "tag" metadata to make querying against sessions
+easy.
+
+Nodes can be discovered via the AWS API, a list of URLs, or through a custom
+`INodePool` implementation. See the example config for details.
 
 ## Running
 
@@ -35,6 +37,9 @@ To deploy the service, make a jar and run that.
 lein uberjar
 java -jar target/shale-0.1.0-SNAPSHOT-standalone.jar
 ```
+
+All grid nodes should be configured so that they don't attempt to register with
+a hub (`register:false` in the node config).
 
 ## Configuration
 
