@@ -18,6 +18,8 @@
                  [org.bovinegenius/exploding-fish "0.3.4"]
                  [overtone/at-at "1.2.0"]
                  [prismatic/schema "0.3.0"]]
+  :scm {:name "git"
+        :url "http://github.com/cardforcoin/shale"}
   :auto-clean false
   :main shale.handler
   :plugins [[lein-ring "0.8.12"]
