@@ -38,9 +38,6 @@ lein uberjar
 java -jar target/shale-0.1.0-SNAPSHOT-standalone.jar
 ```
 
-All grid nodes should be configured so that they don't attempt to register with
-a hub (`register:false` in the node config).
-
 ## Configuration
 
 By default, a config file- `config.clj`- is expected on the classpath.
@@ -48,6 +45,10 @@ By default, a config file- `config.clj`- is expected on the classpath.
 path to an alternative config file, set an environment variable `CONFIG_FILE`
 with the path, or include the option using another method supported by
 [environ][environ].
+
+All grid nodes should be configured so that they don't attempt to register with
+a hub (`register:false` in the node config), and should be accessible via the
+machine running shale.
 
 [environ]: https://github.com/weavejester/environ
 
