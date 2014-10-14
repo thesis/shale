@@ -4,6 +4,8 @@ Shale, a Clojure-backed Selenium hub replacement
 
 [![Circle CI](https://circleci.com/gh/cardforcoin/shale/tree/master.png?style=badge)](https://circleci.com/gh/cardforcoin/shale/tree/master)
 
+[![Clojars Project](http://clojars.org/shale/latest-version.svg)](http://clojars.org/shale)
+
 ## Progress
 
 Shale is a lightweight replacement for a Selenium hub. We've found hubs to be
