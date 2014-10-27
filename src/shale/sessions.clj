@@ -38,12 +38,16 @@
 (defn resolve-host [host]
   (if (is-ip? host)
     host
-    (let [resolved (first ((dns-lookup host Type/A) :answers))]
-      (if resolved
+    (if-let [resolved (first ((dns-lookup host Type/A) :answers))]
         (string/replace (str (.getAddress resolved)) "/" "")
-        (throw
-          (ex-info (format "Unable to resolve host %s." host)
-                   {:user-visible true :status 500}))))))
+        (if-let [resolved
+                 (try
+                   (java.net.InetAddress/getByName host)
+                   (catch java.net.UnknownHostException e nil))]
+          (.getHostAddress resolved)
+          (throw
+            (ex-info (format "Unable to resolve host %s." host)
+                     {:user-visible true :status 500}))))))
 
 (defn host-resolved-url [url]
   (let [u (if (string? url) (uri/uri url) url)]
