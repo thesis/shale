@@ -24,7 +24,7 @@ cp test-config.clj resources/config.clj
 lein with-profile aws uberjar
 JAR_FILE=$(find target | grep "\.jar$" | grep -i shale | grep aws | head -1)
 OTHER_JAR_FILES=$(find target | grep "\.jar$" | grep -i shale | head -1)
-java -jar ${JAR_FILE-OTHER_JAR_FILES} &
+java -jar ${JAR_FILE:-$OTHER_JAR_FILES} &
 
 COUNTER=0
 until $(curl --output /dev/null --silent --head --fail http://localhost:5000) || [[ $COUNTER -gt 30 ]]; do
