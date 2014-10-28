@@ -62,7 +62,7 @@
                (map #(into #{} (select-keys % exact-match-keys))
                     [requirements session-model])])
 
-      (apply = (map host-resolved-url
+      (apply = (map (comp str host-resolved-url)
                     (filter identity
                             (map #(get-in % [:node :url])
                                  [session-model requirements])))))))
