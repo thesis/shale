@@ -3,7 +3,9 @@
             shale.sessions
             clojure.walk
             (clj-json [core :as json])
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [camel-snake-kebab.core :refer :all]
+            [camel-snake-kebab.extras :refer  [transform-keys]])
   (:use [liberator.core :only  [defresource]]
         [compojure.core :only  [context ANY routes]]
         [hiccup.page :only [html5]]
@@ -11,27 +13,14 @@
         shale.utils)
   (:import [java.net URL]))
 
-(defn map-walk [f m]
-  (clojure.walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m))
-
 (defn json-keys [m]
-  (map-walk (fn [[k v]]
-               (if (keyword? k)
-                 [(clojure.string/replace (name k) "-" "_") v]
-                 [k v]))
-            m))
+  (transform-keys ->snake_case_string m))
 
 (defn clojure-keys [m]
-  (map-walk (fn [[k v]]
-               (if (keyword? k)
-                 [k v]
-                 [(keyword (clojure.string/replace k "_" "-"))  v]))
-            m))
+  (transform-keys ->kebab-case-keyword m))
 
 (defn name-keys [m]
-  (map-walk (fn [[k v]]
-              [(name k) v])
-            m))
+  (transform-keys name m))
 
 (defn truth-from-str-vals [m]
   (map-walk (fn [[k v]]

@@ -4,7 +4,8 @@
             [clojure.string :as string]
             [org.bovinegenius  [exploding-fish :as uri]]
             [shale.nodes :as nodes]
-            [schema.core :as s])
+            [schema.core :as s]
+            [camel-snake-kebab.core :refer :all])
   (:use shale.utils
         shale.redis
         clojure.walk
@@ -149,8 +150,10 @@
                                 [(resolved-node-reqs :reserve-after-create) v]))
                         false)))
         capabilities
-        (merge {"browserName" browser-name}
-               extra-desired-capabilities)
+        (into {}
+              (map (fn [[k v]] [(->camelCaseString k) v])
+                   (merge {:browser-name browser-name}
+                          extra-desired-capabilities)))
         wd
         (new-webdriver (get-in defaulted-reqs [:node :url]) capabilities)
         session-id

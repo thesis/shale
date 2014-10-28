@@ -9,3 +9,6 @@
 
 (defn assoc-in-fn [m ks f]
   (assoc-in m ks (f (get-in m ks))))
+
+(defn map-walk [f m]
+  (clojure.walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m))
