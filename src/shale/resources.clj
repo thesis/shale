@@ -34,7 +34,7 @@
 (defn is-json-content? [context]
   (if (#{:put :post} (get-in context [:request :request-method]))
     (or
-     (= (get-in context [:request :headers "content-type"]) "application/json")
+     (re-matches #"application/json(?:;.*)?" (get-in context [:request :headers "content-type"]))
      [false {:message "Unsupported Content-Type"}])
     true))
 
