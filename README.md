@@ -151,7 +151,7 @@ using the `with-webdriver*` macro, inspired by the `clj-webdriver` examples.
 ```clojure
 ;; Log into Github
 ;;
-(use '[shale.client :only [with-driver])
+(use '[shale.client :only [with-driver]])
 (use 'clj-webdriver.taxi)
 (with-webdriver* {:browser-name :firefox :tags [\"github\"]}
   (to \"https://github.com\")
