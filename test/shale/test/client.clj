@@ -1,7 +1,8 @@
 (ns shale.test.client
   (:require [clojure.test :refer :all]
             [shale.client :refer :all]
-            [shale.sessions :refer :all]))
+            [shale.sessions :refer :all])
+  (:use [clj-webdriver.taxi :only [execute-script]]))
 
 (defn logged-in-sessions-fixture [f]
   (let [reqs {:browser-name "phantomjs" :tags []}]
@@ -85,3 +86,8 @@
       (is (= 1 (session-count))))
     (is (= 1 (session-count)))
     (is (not (get (first (shale.client/sessions)) "reserved")))))
+
+(deftest test-webdriver-js
+  (testing "that the wrapped webdriver can execute javascript"
+    (shale.client/with-webdriver* {:browser-name "phantomjs"}
+      (is (= 1 (execute-script "return 1;"))))))
