@@ -33,6 +33,5 @@
               {:dependencies [[org.clojure/tools.trace "0.7.8"]
                               [ring-mock "0.1.5"]]}
              :aws {:dependencies [[amazonica "0.2.26" :exclusions [joda-time]]]
-                   :uberjar-name "shale-aws.jar"}
-             :uberjar {:aot :all}}
-  :aot ^:displace [#"shale\.ext\.*"])
+                   :uberjar-name "shale-aws.jar"}}
+  :aot [#"shale\.ext\.*" #"shale\.handler"])
