@@ -35,4 +35,4 @@
              :aws {:dependencies [[amazonica "0.2.26" :exclusions [joda-time]]]
                    :uberjar-name "shale-aws.jar"}
              :uberjar {:aot :all}}
-  :aot  [#"shale\.ext\.*"])
+  :aot ^:displace [#"shale\.ext\.*"])
