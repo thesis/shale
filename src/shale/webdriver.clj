@@ -5,10 +5,9 @@
   (:import [org.openqa.selenium.remote
             CommandExecutor
             HttpCommandExecutor
-            DesiredCapabilities
-            RemoteWebDriver]
-           org.openqa.selenium.Capabilities
+            DesiredCapabilities]
            clj_webdriver.ext.remote.RemoteWebDriverExt
+           shale.ext.ResumableRemoteWebDriver
            java.net.URL)
   (:use [clj-webdriver.remote.driver :only [session-id]]
         clj-webdriver.taxi))
@@ -19,27 +18,10 @@
                          (DesiredCapabilities. capabilities))))
 
 (defn resume-webdriver [session-id node capabilities]
-  ;; this is pretty dirty- refactor with a protocol?
-  (doall
-    (map #(.setAccessible % true)
-         (.getDeclaredConstructors RemoteWebDriverExt)))
-  (let [wd (RemoteWebDriverExt.)
+  (let [command-exec (HttpCommandExecutor. (URL. node))
         capabilities (DesiredCapabilities. capabilities)
-        cap-field (.getDeclaredField RemoteWebDriver "capabilities")]
-    (wall.hack/method RemoteWebDriverExt
-                      :setCommandExecutor
-                      [CommandExecutor]
-                      wd
-                      (HttpCommandExecutor. (URL. node)))
-    (wall.hack/method RemoteWebDriver
-                      :init
-                      [Capabilities Capabilities]
-                      wd
-                      capabilities
-                      nil)
-    (wall.hack/method (.getClass wd) :setSessionId [String] wd session-id)
-    (.setAccessible cap-field true)
-    (.set cap-field wd capabilities)
+        wd (ResumableRemoteWebDriver. command-exec capabilities nil)]
+    (.setSessionId wd session-id)
     (clj-webdriver.driver/init-driver wd)))
 
 (defn to-async [wd url]

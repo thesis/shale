@@ -34,4 +34,5 @@
                               [ring-mock "0.1.5"]]}
              :aws {:dependencies [[amazonica "0.2.26" :exclusions [joda-time]]]
                    :uberjar-name "shale-aws.jar"}
-             :uberjar {:aot :all}})
+             :uberjar {:aot :all}}
+  :aot  [#"shale\.ext\.*"])
