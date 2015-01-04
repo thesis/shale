@@ -1,7 +1,7 @@
 (ns shale.configurer
     (:use shale.utils)
-    (:require [carica.core :refer  [configurer resources]]
-              [environ.core :refer  [env]]
+    (:require [carica.core :refer [configurer resources]]
+              [environ.core :refer [env]]
               [clojure.java.io :as io]))
 
 (def config

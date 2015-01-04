@@ -34,9 +34,14 @@
 (defn is-json-content? [context]
   (if (#{:put :post} (get-in context [:request :request-method]))
     (or
-     (re-matches #"application/json(?:;.*)?" (get-in context [:request :headers "content-type"]))
+     (re-matches #"application/json(?:;.*)?"
+                 (or (get-in context [:request :headers "content-type"]) ""))
      [false {:message "Unsupported Content-Type"}])
     true))
+
+(defn is-json-or-unspecified? [context]
+  (or (nil? (get-in context [:request :headers "content-type"]))
+      (is-json-content? context)))
 
 (defn body-as-string [context]
   (if-let [body (get-in context [:request :body])]
@@ -70,7 +75,7 @@
 (defresource sessions-resource [params]
   :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
-  :known-content-type? is-json-content?
+  :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
                (jsonify (shale.sessions/view-models nil)))
@@ -89,7 +94,7 @@
 (defresource session-resource [id]
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
-  :known-content-type? is-json-content?
+  :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
                (jsonify (get context ::session)))
@@ -113,7 +118,7 @@
 (defresource nodes-resource [params]
   :allowed-methods  [:get]
   :available-media-types  ["application/json"]
-  :known-content-type? is-json-content?
+  :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
                (jsonify (shale.nodes/view-models nil))))
@@ -127,7 +132,7 @@
 (defresource node-resource [id]
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
-  :known-content-type? is-json-content?
+  :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
                (jsonify (get context ::node)))
