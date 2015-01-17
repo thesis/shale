@@ -55,18 +55,24 @@
     (assoc u :host (resolve-host (uri/host u)))))
 
 (defn ^:private matches-requirements [session-model requirements]
-  (let [exact-match-keys [:browser-name :reserved]]
+  (let [exact-match-keys [:browser-name :reserved]
+        resolved-nodes (map (comp str host-resolved-url)
+                            (filter identity
+                                    (map #(get-in % [:node :url])
+                                         [session-model requirements])))]
+    (prn "Checking session requirements..."
+         session-model
+         requirements)
+    (prn "Resolved node hosts..." resolved-nodes)
     (and
       (every? #(apply clojure.set/subset? %)
               [(map #(into #{} (% :tags))
                        [requirements session-model])
                (map #(into #{} (select-keys % exact-match-keys))
                     [requirements session-model])])
-
-      (apply = (map (comp str host-resolved-url)
-                    (filter identity
-                            (map #(get-in % [:node :url])
-                                 [session-model requirements])))))))
+      (if (> (count resolved-nodes) 0)
+        (apply = resolved-nodes)
+        true))))
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
@@ -181,24 +187,27 @@
                                    current-url nil}
                               :as requirements}]
   (s/validate (s/maybe Node ) node)
-  (with-car*
-    (car/return
-      (or
-        (and force-create (create-session
-                            (rename-keys requirements
-                                         {:reserve-after-create :reserved})))
-        (if-let [candidate (first (filter #(matches-requirements % requirements)
-                                          (view-models nil)))]
-          (if (or reserve-after-create current-url)
-            (modify-session (get candidate :id)
-                            (rename-keys
-                              (select-keys requirements
-                                           [:reserve-after-create
-                                            :current-url
-                                            :tags])
-                              {:reserve-after-create :reserved}))
-            candidate))
-        (create-session requirements)))))
+  (let [requirements (update-in requirements [:reserved] #(or % false))]
+
+    (with-car*
+      (car/return
+        (or
+          (and force-create (create-session
+                              (rename-keys requirements
+                                           {:reserve-after-create :reserved})))
+          (if-let [candidate (-> #(matches-requirements % requirements)
+                                 (filter (view-models nil))
+                                 first)]
+            (if (or reserve-after-create current-url)
+              (modify-session (get candidate :id)
+                              (rename-keys
+                                (select-keys requirements
+                                             [:reserve-after-create
+                                              :current-url
+                                              :tags])
+                                {:reserve-after-create :reserved}))
+              candidate))
+          (create-session requirements))))))
 
 (defn resume-webdriver-from-id [session-id]
   (if-let [model (view-model session-id)]
