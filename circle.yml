@@ -7,7 +7,6 @@ dependencies:
     - "target/"
 
 test:
-  override:
-    - bash test.sh
+  override: []
   post:
     - bash cp_artifacts.sh $CIRCLE_ARTIFACTS/
