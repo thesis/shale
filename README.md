@@ -79,7 +79,7 @@ List all the active sessions
 $ curl http://localhost:5000/sessions/
 [{
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
-  "reserved": "False",
+  "reserved": false,
   "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
   "tags": []
@@ -97,8 +97,7 @@ $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
   "reserved": false,
   "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
-  "tags": ["walmart"],
-  "reserved": false
+  "tags": ["walmart"]
 }
 ```
 
@@ -110,11 +109,10 @@ $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
        --header "Content-Type:application/json"
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
-  "reserved": false,
+  "reserved": true,
   "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
-  "tags": ["walmart"],
-  "reserved": true
+  "tags": ["walmart"]
 }
 ```
 
@@ -126,7 +124,7 @@ $ curl -d '{"tags":["walmart", "logged-in"], "reserved":false}' \
        --header "Content-Type:application/json"
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
-  "reserved": "True",
+  "reserved": false,
   "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
   "tags": ["walmart", "logged-in"]
@@ -153,12 +151,12 @@ using the `with-webdriver*` macro, inspired by the `clj-webdriver` examples.
 ;;
 (use '[shale.client :only [with-driver]])
 (use 'clj-webdriver.taxi)
-(with-webdriver* {:browser-name :firefox :tags [\"github\"]}
-  (to \"https://github.com\")
-  (click \"a[href*='login']\")
-  (input-text \"#login_field\" \"your_username\")
-  (-> \"#password\"
-    (input-text \"your_password\")
+(with-webdriver* {:browser-name :firefox :tags ["github"]}
+  (to "https://github.com")
+  (click "a[href*='login']")
+  (input-text "#login_field" "your_username")
+  (-> "#password"
+    (input-text "your_password")
     submit))
 ```
 
@@ -167,7 +165,6 @@ See the [clj-webdriver docs][clj-webdriver] and the client source for more detai
 ### Python
 
 There is also a Python client with its [own examples and documentation][shale-python].
-
 
 [clj-webdriver]: http://semperos.github.io/clj-webdriver/
 
