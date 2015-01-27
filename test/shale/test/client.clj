@@ -1,25 +1,24 @@
 (ns shale.test.client
   (:require [clojure.test :refer :all]
-            [shale.client :refer :all]
-            [shale.sessions :refer :all])
+            [shale.client :refer :all])
   (:use [clj-webdriver.taxi :only [execute-script]]))
 
 (defn logged-in-sessions-fixture [f]
   (let [reqs {:browser-name "phantomjs" :tags []}]
     (doseq [tag-config [["logged-in"] ["logged-out"]]]
-      (shale.sessions/get-or-create-session
+      (shale.client/get-or-create-session!
         (assoc reqs :tags tag-config :force-create true))))
   (f))
 
 (defn reserved-session-fixture [f]
-  (shale.sessions/get-or-create-session {:browser-name "phantomjs"
-                                         :reserve-after-create true})
+  (shale.client/get-or-create-session! {:browser-name "phantomjs"
+                                        :reserve-after-create true})
   (f))
 
 (defn delete-sessions-fixture [f]
   (let [test-value (f)]
-    (doseq [session-id (map #(% :id) (shale.sessions/view-models nil))]
-      (shale.sessions/destroy-session session-id))
+    (doseq [session-id (map #(get % "id") (shale.client/sessions))]
+      (shale.client/destroy-session! session-id))
     test-value))
 
 (use-fixtures :each delete-sessions-fixture)
