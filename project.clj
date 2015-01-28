@@ -14,6 +14,7 @@
                  [sonian/carica "1.1.0" :exclusions  [[cheshire]]]
                  [environ "1.0.0"]
                  [com.taoensso/carmine "2.7.0" :exclusions [org.clojure/clojure]]
+                 [com.taoensso/timbre "3.3.1"]
                  [com.brweber2/clj-dns "0.0.2"]
                  [org.bovinegenius/exploding-fish "0.3.4"]
                  [overtone/at-at "1.2.0"]

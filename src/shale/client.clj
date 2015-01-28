@@ -74,18 +74,18 @@
     (get (client/post (str (sessions-url) "refresh") {}) :body)))
 
 (defn get-or-create-webdriver! [{:keys [browser-name
-                                       node
-                                       reserved
-                                       tags
-                                       reserve-after-create
-                                       force-create]
-                                :or {browser-name "phantomjs"
-                                     node nil
-                                     reserved nil
-                                     reserve-after-create nil
-                                     force-create nil
-                                     tags []}
-                                :as requirements}]
+                                        node
+                                        reserved
+                                        tags
+                                        reserve-after-create
+                                        force-create]
+                                 :or {browser-name "phantomjs"
+                                      node nil
+                                      reserved nil
+                                      reserve-after-create nil
+                                      force-create nil
+                                      tags []}
+                                 :as requirements}]
   (let [session (get-or-create-session! requirements)]
     (webdriver/resume-webdriver
       (get session "id")

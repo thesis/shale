@@ -5,7 +5,8 @@
             [org.bovinegenius  [exploding-fish :as uri]]
             [shale.nodes :as nodes]
             [schema.core :as s]
-            [camel-snake-kebab.core :refer :all])
+            [camel-snake-kebab.core :refer :all]
+            [taoensso.timbre :as timblre :refer [info warn error]])
   (:use shale.utils
         shale.redis
         clojure.walk
@@ -37,6 +38,7 @@
    (s/optional-key :tags) [s/Str]})
 
 (defn resolve-host [host]
+  (info (format "Resolving host %s..." host))
   (if (is-ip? host)
     host
     (if-let [resolved (first ((dns-lookup host Type/A) :answers))]
@@ -46,9 +48,12 @@
                    (java.net.InetAddress/getByName host)
                    (catch java.net.UnknownHostException e nil))]
           (.getHostAddress resolved)
-          (throw
-            (ex-info (format "Unable to resolve host %s." host)
-                     {:user-visible true :status 500}))))))
+          (do
+            (let [message (format "Unable to resolve host %s" host)]
+              (warn message)
+              (throw
+                (ex-info message
+                         {:user-visible true :status 500}))))))))
 
 (defn host-resolved-url [url]
   (let [u (if (string? url) (uri/uri url) url)]
@@ -60,10 +65,10 @@
                             (filter identity
                                     (map #(get-in % [:node :url])
                                          [session-model requirements])))]
-    (prn "Checking session requirements..."
+    (info "Checking session requirements..."
          session-model
          requirements)
-    (prn "Resolved node hosts..." resolved-nodes)
+    (info "Resolved node hosts..." resolved-nodes)
     (and
       (every? #(apply clojure.set/subset? %)
               [(map #(into #{} (% :tags))
@@ -91,6 +96,7 @@
                                        current-url nil}
                                   :as modifications}]
   (s/validate (s/maybe Node ) node)
+  (info (format "Modifing session %s, %s" session-id (str modifications)))
   (if (some #{session-id} (session-ids))
     (last
       (with-car*
@@ -131,6 +137,8 @@
                             current-url nil}
                        :as requirements}]
   (s/validate (s/maybe Node ) node)
+  (info (format "Creating a new session.\nRequirements: %s"
+                (str requirements)))
   (let [merged-reqs
         (merge {:node (select-keys (nodes/get-node {}) [:url :id])
                 :tags tags}
@@ -220,6 +228,7 @@
 
 (defn destroy-session [session-id]
   (with-car*
+    (info (format "Destroying sessions %s..." session-id))
     (car/watch session-set-key)
     (let [sess-key (session-key session-id)
           sess-tags-key (session-tags-key session-id)]
@@ -235,6 +244,7 @@
 
 (defn refresh-session [session-id]
    (with-car*
+     (info (format "Refreshing session %s..." session-id))
      (car/watch session-set-key)
      (let [sess-key (format session-key-template session-id)]
        (car/watch sess-key)
@@ -249,6 +259,7 @@
 
 (defn refresh-sessions [ids]
   (with-car*
+    (info "Refreshing sessions...")
     (car/watch session-set-key)
     (doseq [session-id (or ids (session-ids))]
       (refresh-session session-id)))
