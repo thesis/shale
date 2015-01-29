@@ -11,7 +11,7 @@ PATH="$PATH:$PWD/phantomjs/bin/"
 sleep 1
 
 lein version
-lein deps
+lein compile
 lein with-profile aws uberjar
 
 java -jar selenium -role node \
