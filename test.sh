@@ -10,6 +10,10 @@ PATH="$PATH:$PWD/phantomjs/bin/"
 
 sleep 1
 
+lein version
+lein deps
+lein with-profile aws uberjar
+
 java -jar selenium -role node \
   -nodeConfig nodeConfig.json \
   -port 4444 &
@@ -21,8 +25,6 @@ java -jar selenium -role node \
 mkdir resources
 cp test-config.clj resources/config.clj
 
-lein deps
-lein with-profile aws uberjar
 JAR_FILE=$(find target | grep "\.jar$" | grep -i shale | grep aws | head -1)
 OTHER_JAR_FILES=$(find target | grep "\.jar$" | grep -i shale | tail -1)
 java -jar ${JAR_FILE:-$OTHER_JAR_FILES} &
