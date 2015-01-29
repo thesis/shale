@@ -8,7 +8,7 @@
                  [liberator "0.12.2"]
                  [clj-http "1.0.0"]
                  [clj-json "0.5.3"]
-                 [clj-webdriver "0.6.0"]
+                 [clj-webdriver "0.6.1"]
                  [clj-wallhack "1.0.1"]
                  [hiccup "1.0.5"]
                  [sonian/carica "1.1.0" :exclusions  [[cheshire]]]

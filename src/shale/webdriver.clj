@@ -3,8 +3,6 @@
             [clj-webdriver.core :as core]
             wall.hack)
   (:import [org.openqa.selenium.remote
-            CommandExecutor
-            HttpCommandExecutor
             DesiredCapabilities]
            clj_webdriver.ext.remote.RemoteWebDriverExt
            shale.ext.ResumableRemoteWebDriver
@@ -18,10 +16,7 @@
                          (DesiredCapabilities. capabilities))))
 
 (defn resume-webdriver [session-id node capabilities]
-  (let [command-exec (HttpCommandExecutor. (URL. node))
-        capabilities (DesiredCapabilities. capabilities)
-        wd (ResumableRemoteWebDriver. command-exec capabilities nil)]
-    (.setSessionId wd session-id)
+  (let [wd (ResumableRemoteWebDriver. (URL. node) session-id)]
     (clj-webdriver.driver/init-driver wd)))
 
 (defn to-async [wd url]
