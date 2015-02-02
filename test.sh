@@ -27,6 +27,7 @@ cp test-config.clj resources/config.clj
 
 JAR_FILE=$(find target | grep "\.jar$" | grep -i shale | grep aws | head -1)
 OTHER_JAR_FILES=$(find target | grep "\.jar$" | grep -i shale | tail -1)
+export CONFIG_FILE="./resources/config.clj"
 java -jar ${JAR_FILE:-$OTHER_JAR_FILES} &
 
 COUNTER=0
