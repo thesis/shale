@@ -168,8 +168,13 @@
               (map (fn [[k v]] [(->camelCaseString k) v])
                    (merge {:browser-name browser-name}
                           extra-desired-capabilities)))
+        node-url (get-in defaulted-reqs [:node :url])
+        _ (if (nil? node-url)
+            (throw
+              (ex-info "No suitable node found!"
+                       {:user-visible true :status 500})))
         wd
-        (new-webdriver (get-in defaulted-reqs [:node :url]) capabilities)
+        (new-webdriver node-url capabilities)
         session-id
         (remote-webdriver/session-id wd)]
     (last
