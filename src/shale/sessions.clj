@@ -208,12 +208,13 @@
     (with-car*
       (car/return
         (or
-          (and force-create (create-session
-                              (rename-keys requirements
-                                           {:reserve-after-create :reserved})))
-          (if-let [candidate (-> #(matches-requirements % requirements)
-                                 (filter (view-models nil))
-                                 first)]
+          (if force-create
+            (create-session
+              (rename-keys requirements
+                           {:reserve-after-create :reserved})))
+          (if-let [candidate (->> (view-models nil)
+                                  (filter #(matches-requirements % requirements))
+                                  first)]
             (if (or reserve-after-create current-url)
               (modify-session (get candidate :id)
                               (rename-keys
