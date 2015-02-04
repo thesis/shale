@@ -2,7 +2,8 @@
   (:require [liberator.dev :as dev]
             shale.sessions
             clojure.walk
-            (clj-json [core :as json])
+            [taoensso.timbre :as timblre :refer [error]]
+            [clj-json [core :as json]]
             [clojure.java.io :as io]
             [camel-snake-kebab.core :refer :all]
             [camel-snake-kebab.extras :refer  [transform-keys]])
@@ -60,7 +61,6 @@
         (.printStackTrace e)
         {:message (format "Malformed JSON.")}))))
 
-
 (defn build-session-url [request id]
   (URL. (format "%s://%s:%s%s/%s"
                 (name (:scheme request))
@@ -72,6 +72,15 @@
 (defn a-href-text [text]
   [:a {:href text} text])
 
+(defn handle-exception [context]
+  (let [exc (:exception context)
+        _ (error exc)
+        info (ex-data exc)
+        message (if (:user-visible info)
+                  (.getMessage exc)
+                  "Internal server error.")]
+    (jsonify {:error message})))
+
 (defresource sessions-resource [params]
   :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
@@ -79,6 +88,7 @@
   :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
                (jsonify (shale.sessions/view-models nil)))
+  :handle-exception handle-exception
   :post! (fn [context]
            {::session
             (shale.sessions/get-or-create-session
@@ -98,6 +108,7 @@
   :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
                (jsonify (get context ::session)))
+  :handle-exception handle-exception
   :delete! (fn [context]
              (shale.sessions/destroy-session id))
   :put! (fn [context]
@@ -112,6 +123,7 @@
 (defresource sessions-refresh-resource [id]
   :allowed-methods [:post]
   :available-media-types ["application/json"]
+  :handle-exception handle-exception
   :post! (fn [context]
            (shale.sessions/refresh-sessions (if (nil? id) id [id]))))
 
@@ -121,11 +133,13 @@
   :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
-               (jsonify (shale.nodes/view-models nil))))
+               (jsonify (shale.nodes/view-models nil)))
+  :handle-exception handle-exception)
 
 (defresource nodes-refresh-resource []
   :allowed-methods [:post]
   :available-media-types ["application/json"]
+  :handle-exception handle-exception
   :post! (fn [context]
            (shale.nodes/refresh-nodes)))
 
@@ -136,6 +150,7 @@
   :malformed? #(parse-json % ::data)
   :handle-ok (fn [context]
                (jsonify (get context ::node)))
+  :handle-exception handle-exception
   :delete! (fn [context]
              (shale.nodes/destroy-node id))
   :put! (fn [context]

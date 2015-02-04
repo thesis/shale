@@ -5,7 +5,7 @@
                  [ring "1.3.1"]
                  [javax.servlet/servlet-api "2.5"]
                  [compojure "1.1.9"]
-                 [liberator "0.12.2"]
+                 [liberator "0.12.0"]
                  [clj-http "1.0.0"]
                  [clj-json "0.5.3"]
                  [clj-webdriver "0.6.1"]
