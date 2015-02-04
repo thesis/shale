@@ -2,12 +2,11 @@
   (:require [ring.adapter.jetty :as jetty]
             [clj-json [core :as json]]
             [shale.periodic :as periodic]
-            [shale.nodes :as nodes])
+            [shale.nodes :as nodes]
+            [shale.resources :refer [assemble-routes]]
+            [ring.middleware.multipart-params :refer [wrap-multipart-params]]
+            [compojure.handler :refer [api]])
 
-  (:use
-    [shale.resources :only  [assemble-routes]]
-    [ring.middleware.multipart-params :only  [wrap-multipart-params]]
-    [compojure.handler :only  [api]])
   (:gen-class))
 
 (defn ignore-trailing-slash
