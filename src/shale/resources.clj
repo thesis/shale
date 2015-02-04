@@ -1,6 +1,5 @@
 (ns shale.resources
-  (:require [liberator.dev :as dev]
-            shale.sessions
+  (:require shale.sessions
             clojure.walk
             [taoensso.timbre :as timblre :refer [error]]
             [clj-json [core :as json]]
@@ -180,20 +179,18 @@
                        ]])))))
 
 (defn assemble-routes []
-  (->
-    (routes
-      (ANY "/" [] index)
-      (ANY "/sessions" {params :params} sessions-resource)
-      (ANY "/sessions/refresh" [] (sessions-refresh-resource nil))
-      (ANY ["/sessions/:id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
-        [id]
-        (session-resource id))
-      (ANY ["/sessions/:id/refresh", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
-        [id]
-        (sessions-refresh-resource id))
-      (ANY "/nodes" {params :params} nodes-resource)
-      (ANY "/nodes/refresh" [] (nodes-refresh-resource))
-      (ANY ["/nodes/:id", :id #"(?:[a-zA-Z0-9\-])+"]
-        [id]
-        (node-resource id)))
-    (dev/wrap-trace :ui :header)))
+  (routes
+    (ANY "/" [] index)
+    (ANY "/sessions" {params :params} sessions-resource)
+    (ANY "/sessions/refresh" [] (sessions-refresh-resource nil))
+    (ANY ["/sessions/:id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
+      [id]
+      (session-resource id))
+    (ANY ["/sessions/:id/refresh", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
+      [id]
+      (sessions-refresh-resource id))
+    (ANY "/nodes" {params :params} nodes-resource)
+    (ANY "/nodes/refresh" [] (nodes-refresh-resource))
+    (ANY ["/nodes/:id", :id #"(?:[a-zA-Z0-9\-])+"]
+      [id]
+      (node-resource id))))

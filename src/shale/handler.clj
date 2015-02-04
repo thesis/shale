@@ -5,7 +5,8 @@
             [shale.nodes :as nodes]
             [shale.resources :refer [assemble-routes]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
-            [compojure.handler :refer [api]])
+            [compojure.handler :refer [api]]
+            [liberator.dev :as dev])
 
   (:gen-class))
 
@@ -42,6 +43,7 @@
 
 (def app
   (-> (assemble-routes)
+      (dev/wrap-trace :ui :header)
       ignore-trailing-slash
       user-visible-json-exceptions
       api
