@@ -22,7 +22,11 @@
                           (subs uri 0 (dec (count uri)))
                            uri))))))
 
-(defn user-visible-json-exceptions [handler]
+(defn user-visible-json-exceptions
+  "If you throw an ExceptionInfo, this catches it and sets the response body
+  to a JSON object containing the error. In production, this only happens if
+  :user-visible is true."
+  [handler]
   (fn [request]
     (try
       (handler request)
