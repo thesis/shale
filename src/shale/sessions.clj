@@ -84,17 +84,18 @@
 (defn session-ids []
   (with-car* (car/smembers session-set-key)))
 
-(defn modify-session [session-id {:keys [browser-name
-                                         node
-                                         reserved
-                                         tags
-                                         current-url]
-                                  :or {browser-name nil
-                                       node nil
-                                       reserved nil
-                                       tags nil
-                                       current-url nil}
-                                  :as modifications}]
+(defn modify-session
+  [session-id {:keys [browser-name
+                      node
+                      reserved
+                      tags
+                      current-url]
+               :or {browser-name nil
+                    node nil
+                    reserved nil
+                    tags nil
+                    current-url nil}
+               :as modifications}]
   (s/validate (s/maybe Node ) node)
   (info (format "Modifing session %s, %s" session-id (str modifications)))
   (if (some #{session-id} (session-ids))
@@ -122,20 +123,21 @@
         (car/return (view-model session-id))))
     nil))
 
-(defn create-session [{:keys [browser-name
-                              node
-                              tags
-                              extra-desired-capabilities
-                              reserve-after-create
-                              current-url]
-                       :or {browser-name "firefox"
-                            node nil
-                            reserved false
-                            tags []
-                            extra-desired-capabilities nil
-                            reserve-after-create nil
-                            current-url nil}
-                       :as requirements}]
+(defn create-session
+  [{:keys [browser-name
+           node
+           tags
+           extra-desired-capabilities
+           reserve-after-create
+           current-url]
+    :or {browser-name "firefox"
+         node nil
+         reserved false
+         tags []
+         extra-desired-capabilities nil
+         reserve-after-create nil
+         current-url nil}
+    :as requirements}]
   (s/validate (s/maybe Node ) node)
   (info (format "Creating a new session.\nRequirements: %s"
                 (str requirements)))
@@ -182,23 +184,24 @@
         (car/sadd session-set-key session-id)
         (car/return (modify-session session-id defaulted-reqs))))))
 
-(defn get-or-create-session [{:keys [browser-name
-                                     node
-                                     reserved
-                                     tags
-                                     extra-desired-capabilities
-                                     reserve-after-create
-                                     force-create
-                                     current-url]
-                              :or {browser-name "firefox"
-                                   node nil
-                                   reserved false
-                                   tags []
-                                   extra-desired-capabilities nil
-                                   reserve-after-create nil
-                                   force-create nil
-                                   current-url nil}
-                              :as requirements}]
+(defn get-or-create-session
+  [{:keys [browser-name
+           node
+           reserved
+           tags
+           extra-desired-capabilities
+           reserve-after-create
+           force-create
+           current-url]
+    :or {browser-name "firefox"
+         node nil
+         reserved false
+         tags []
+         extra-desired-capabilities nil
+         reserve-after-create nil
+         force-create nil
+         current-url nil}
+    :as requirements}]
   (s/validate (s/maybe Node ) node)
   (let [requirements (update-in requirements [:reserved] #(or % false))]
 
