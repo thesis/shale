@@ -6,7 +6,8 @@
             [shale.nodes :as nodes]
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
-            [taoensso.timbre :as timblre :refer [info warn error]])
+            [taoensso.timbre :as timblre :refer [info warn error]]
+            [clojure.core.match :refer [match]])
   (:use shale.utils
         shale.redis
         clojure.walk
@@ -33,9 +34,40 @@
 
 (def ^:private Node
   "A schema for a node spec."
-  {(s/optional-key :url) s/Str
-   (s/optional-key :id) s/Str
+  {(s/optional-key :url)   s/Str
+   (s/optional-key :id)    s/Str
    (s/optional-key :tags) [s/Str]})
+
+(def ^:private Session
+  "A schema for a session spec."
+  {:id                            s/Str
+   (s/optional-key :tags)        [s/Str]
+   (s/optional-key :reserved)     s/Bool
+   (s/optional-key :current-url)  s/Str
+   (s/optional-key :browser-name) s/Str
+   (s/optional-key :node)         Node})
+
+(def ^:private Requirement
+  "A schema for a session requirement."
+  (s/either
+    (s/pair :session-tag  "type"  s/Str        "tag")
+    (s/pair :node-tag     "type"  s/Str        "tag")
+    (s/pair :browser-name "type"  s/Str        "browser")
+    (s/pair :not          "type"  Requirement  "requirement")
+    (s/pair :and          "type" [Requirement] "requirements")
+    (s/pair :or           "type" [Requirement] "requirements")))
+
+(defn ^:private maybe-bigdec [x]
+  (try (bigdec x) (catch NumberFormatException e nil)))
+
+(def ^:private DecString
+  "A schema for a string that is convertable to bigdec."
+  (s/pred #(boolean (maybe-bigdec %)) 'decimal-string))
+
+(def ^:private Score
+  "A schema for a session score rule."
+  {:weight  DecString
+   :require Requirement})
 
 (defn resolve-host [host]
   (info (format "Resolving host %s..." host))
@@ -78,6 +110,17 @@
       (if (> (count resolved-nodes) 0)
         (apply = resolved-nodes)
         true))))
+
+(defn matches-requirement [requirement session-model]
+  (let [arg (second requirement)]
+    (match (first requirement)
+      :session-tag  (some #{arg}  (session-model :tags))
+      :node-tag     (some #{arg} ((session-model :node) :tags))
+      :browser-name (=      arg   (session-model :browser-name))
+      :not          (not     (matches-requirement arg session-model))
+      :and          (every? #(matches-requirement % session-model) arg)
+      :or           (some   #(matches-requirement % session-model) arg)
+    )))
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
