@@ -57,7 +57,7 @@
           [false {key data}])
         {:message "Empty body."})
       (catch Exception e
-        (.printStackTrace e)
+        (error e)
         {:message (format "Malformed JSON.")}))))
 
 (defn build-session-url [request id]
