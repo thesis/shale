@@ -81,13 +81,15 @@
     (jsonify {:error message})))
 
 (defn ->sessions-request [context]
-  (rename-keys
-    (clojure-keys
-      (merge (get context ::data)
-        (name-keys
-          (truth-from-str-vals
-            (get-in context [:request :params])))))
-    {:reserve :reserve-after-create}))
+  (let [params (get-in context [:request :params])
+        data (get context ::data)]
+    ((comp
+       #(rename-keys % {:reserve :reserve-after-create})
+       clojure-keys
+       #(merge data %)
+       name-keys
+       truth-from-str-vals
+       ) params)))
 
 (defresource sessions-resource [params]
   :allowed-methods  [:get :post]
