@@ -80,6 +80,15 @@
                   "Internal server error.")]
     (jsonify {:error message})))
 
+(defn ->sessions-request [context]
+  (rename-keys
+    (clojure-keys
+      (merge (get context ::data)
+        (name-keys
+          (truth-from-str-vals
+            (get-in context [:request :params])))))
+    {:reserve :reserve-after-create}))
+
 (defresource sessions-resource [params]
   :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
@@ -89,14 +98,8 @@
                (jsonify (shale.sessions/view-models nil)))
   :handle-exception handle-exception
   :post! (fn [context]
-           {::session
-            (shale.sessions/get-or-create-session
-              (rename-keys (clojure-keys
-                             (merge (get context ::data)
-                                    (name-keys
-                                      (truth-from-str-vals
-                                        (params :params)))))
-                           {:reserve :reserve-after-create}))})
+           {::session (shale.sessions/get-or-create-session
+                        (->sessions-request context))})
   :handle-created (fn [context]
                     (jsonify (get context ::session))))
 
