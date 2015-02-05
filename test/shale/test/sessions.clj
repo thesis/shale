@@ -54,4 +54,14 @@
       (let [requirement [:browser-name "a"]
             session     {:browser-name "b"}]
         (is (not (matches-requirement requirement session)))))
+
+    (testing "current-url matches"
+      (let [requirement [:current-url "a"]
+            session     {:current-url "a"}]
+        (is (matches-requirement requirement session))))
+
+    (testing "current-url doesn't match"
+      (let [requirement [:current-url "a"]
+            session     {:current-url "b"}]
+        (is (not (matches-requirement requirement session)))))
 ))
