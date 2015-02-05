@@ -1,7 +1,7 @@
 (ns shale.resources
   (:require shale.sessions
             clojure.walk
-            [taoensso.timbre :as timblre :refer [error]]
+            [taoensso.timbre :as timbre :refer [error]]
             [clj-json [core :as json]]
             [clojure.java.io :as io]
             [camel-snake-kebab.core :refer :all]
