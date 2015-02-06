@@ -29,16 +29,16 @@
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
 
-(defn ^:private is-ip? [s]
+(defn is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
 
-(def ^:private Node
+(def Node
   "A schema for a node spec."
   {(s/optional-key :url)   s/Str
    (s/optional-key :id)    s/Str
    (s/optional-key :tags) [s/Str]})
 
-(def ^:private Session
+(def Session
   "A schema for a session spec."
   {:id                            s/Str
    (s/optional-key :tags)        [s/Str]
@@ -47,7 +47,7 @@
    (s/optional-key :browser-name) s/Str
    (s/optional-key :node)         Node})
 
-(def ^:private Requirement
+(def Requirement
   "A schema for a session requirement."
   (s/either
     (s/pair :session-tag  "type"  s/Str        "tag")
@@ -61,14 +61,14 @@
     (s/pair :and          "type" [Requirement] "requirements")
     (s/pair :or           "type" [Requirement] "requirements")))
 
-(defn ^:private maybe-bigdec [x]
+(defn maybe-bigdec [x]
   (try (bigdec x) (catch NumberFormatException e nil)))
 
-(def ^:private DecString
+(def DecString
   "A schema for a string that is convertable to bigdec."
   (s/pred #(boolean (maybe-bigdec %)) 'decimal-string))
 
-(def ^:private Score
+(def Score
   "A schema for a session score rule."
   {:weight  DecString
    :require Requirement})
@@ -95,7 +95,7 @@
   (let [u (if (string? url) (uri/uri url) url)]
     (assoc u :host (resolve-host (uri/host u)))))
 
-(defn ^:private matches-requirements [session-model requirements]
+(defn matches-requirements [session-model requirements]
   (let [exact-match-keys [:browser-name :reserved]
         resolved-nodes (map (comp str host-resolved-url)
                             (filter identity
