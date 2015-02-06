@@ -49,16 +49,15 @@
       java.lang.String body
       (slurp (io/reader body)))))
 
-(defn parse-json [context key]
+(defn parse-json [& {:keys [context key] :or {key ::data}}]
   (when (#{:put :post} (get-in context [:request :request-method]))
     (try
       (if-let [body (body-as-string context)]
         (let [data (json/parse-string body)]
           [false {key data}])
         {:message "Empty body."})
-      (catch Exception e
-        (error e)
-        {:message (format "Malformed JSON.")}))))
+      (catch org.codehaus.jackson.JsonParseException e
+        {:message "Malformed JSON."}))))
 
 (defn build-session-url [request id]
   (URL. (format "%s://%s:%s%s/%s"
@@ -95,7 +94,7 @@
   :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-json % ::data)
+  :malformed? #(parse-json :context %)
   :handle-ok (fn [context]
                (jsonify (shale.sessions/view-models nil)))
   :handle-exception handle-exception
@@ -109,7 +108,7 @@
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-json % ::data)
+  :malformed? #(parse-json :context %)
   :handle-ok (fn [context]
                (jsonify (get context ::session)))
   :handle-exception handle-exception
@@ -135,7 +134,7 @@
   :allowed-methods  [:get]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-json % ::data)
+  :malformed? #(parse-json :context %)
   :handle-ok (fn [context]
                (jsonify (shale.nodes/view-models nil)))
   :handle-exception handle-exception)
@@ -151,7 +150,7 @@
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-json % ::data)
+  :malformed? #(parse-json :context %)
   :handle-ok (fn [context]
                (jsonify (get context ::node)))
   :handle-exception handle-exception
