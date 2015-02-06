@@ -49,13 +49,18 @@
       java.lang.String body
       (slurp (io/reader body)))))
 
+(defn ->boolean-params-data [context]
+  (name-keys (truth-from-str-vals (get-in context [:request :params]))))
+
 (defn parse-request-data
-  [& {:keys [context key] :or {key ::data}}]
+  [& {:keys [context key include-boolean-params] :or {key ::data}}]
   (when (#{:put :post} (get-in context [:request :request-method]))
     (try
       (if-let [body (body-as-string context)]
-        (let [data (json/parse-string body)]
-          [false {key data}])
+        [false {key (merge
+                      (json/parse-string body)
+                      (if include-boolean-params
+                        (->boolean-params-data context)))}]
         {:message "Empty body."})
       (catch org.codehaus.jackson.JsonParseException e
         {:message "Malformed JSON."}))))
@@ -81,21 +86,17 @@
     (jsonify {:error message})))
 
 (defn ->sessions-request [context]
-  (let [params (get-in context [:request :params])
-        data (get context ::data)]
-    ((comp
-       #(rename-keys % {:reserve :reserve-after-create})
-       clojure-keys
-       #(merge data %)
-       name-keys
-       truth-from-str-vals
-       ) params)))
+  (rename-keys
+    (clojure-keys (get context ::data))
+    {:reserve :reserve-after-create}))
 
 (defresource sessions-resource [params]
   :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-request-data :context %)
+  :malformed? #(parse-request-data
+                 :context %
+                 :include-boolean-params true)
   :handle-ok (fn [context]
                (jsonify (shale.sessions/view-models nil)))
   :handle-exception handle-exception

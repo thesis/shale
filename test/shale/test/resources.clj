@@ -8,28 +8,35 @@
 
     (testing "ok"
       (let [context {:request {:request-method :post
-                               :body "{\"a\": 1}"}}]
+                               :body "{\"a\": 1}"
+                               :params {"b" "c"}}}]
         (is (=
           (parse-request-data :context context :key :xyz)
           [false {:xyz {"a" 1}}]))))
 
-    (testing "malformed json"
+    (testing "with boolean params"
       (let [context {:request {:request-method :post
-                               :body "q"}}]
+                               :body "{\"a\": 1}"
+                               :params {"b" "True" "c" "False"}}}]
+        (is (=
+          (parse-request-data :context context :key :xyz
+                              :include-boolean-params true)
+          [false {:xyz {"a" 1 "b" true "c" false}}]))))
+
+    (testing "malformed json"
+      (let [context {:request {:request-method :post :body "q"}}]
         (is (=
           (parse-request-data :context context :key :xyz)
           {:message "Malformed JSON."}))))
 
     (testing "empty body"
-      (let [context {:request {:request-method :post
-                               :body nil}}]
+      (let [context {:request {:request-method :post :body nil}}]
         (is (=
           (parse-request-data :context context :key :xyz)
           {:message "Empty body."}))))
 
     (testing "default key"
-      (let [context {:request {:request-method :post
-                               :body "{\"a\": 1}"}}]
+      (let [context {:request {:request-method :post :body "{\"a\": 1}"}}]
         (is (=
           (parse-request-data :context context)
           [false {:shale.resources/data {"a" 1}}]))))))
@@ -55,12 +62,5 @@
                                             "reserved" false}}
             sessions-request {:tags ["walmart" "logged-in"]
                               :reserved false}]
-        (is (->sessions-request context) sessions-request)))
-
-    (testing "4"
-      (let [context {:shale.resources/data {"tags" ["a"]}
-                     :request {:params {"reserve" "True"}}}
-            sessions-request {:tags ["a"]
-                              :reserve-after-create true}]
         (is (->sessions-request context) sessions-request)))
 ))
