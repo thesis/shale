@@ -52,6 +52,7 @@
   (s/either
     (s/pair :session-tag  "type"  s/Str        "tag")
     (s/pair :node-tag     "type"  s/Str        "tag")
+    (s/pair :reserved     "type"  s/Str        "reserved")
     (s/pair :browser-name "type"  s/Str        "browser")
     (s/pair :current-url  "type"  s/Str        "url")
     (s/pair :not          "type"  Requirement  "requirement")
@@ -117,6 +118,7 @@
     (match (first requirement)
       :session-tag  (some #{arg}  (session-model :tags))
       :node-tag     (some #{arg} ((session-model :node) :tags))
+      :reserved     (= arg (session-model :reserved))
       :browser-name (= arg (session-model :browser-name))
       :current-url  (= arg (session-model :current-url))
       :not          (not     (matches-requirement arg session-model))

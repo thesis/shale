@@ -45,6 +45,16 @@
             session     {:node {:tags ["b" "c"]}}]
         (is (not (matches-requirement requirement session)))))
 
+    (testing "reserved matches"
+      (let [requirement [:reserved false]
+            session     {:reserved false}]
+        (is (matches-requirement requirement session))))
+
+    (testing "reserved doesn't match"
+      (let [requirement [:reserved false]
+            session     {:reserved true}]
+        (is (not (matches-requirement requirement session)))))
+
     (testing "browser matches"
       (let [requirement [:browser-name "a"]
             session     {:browser-name "a"}]
