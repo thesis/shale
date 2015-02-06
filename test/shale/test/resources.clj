@@ -1,37 +1,37 @@
 (ns shale.test.resources
   (:require [clojure.test :refer :all]
-            [shale.resources :refer [parse-json ->sessions-request]]))
+            [shale.resources :refer [parse-request-data ->sessions-request]]))
 
-(deftest test-parse-json
+(deftest test-parse-request-data
 
-  (testing "parse-json"
+  (testing "parse-request-data"
 
     (testing "ok"
       (let [context {:request {:request-method :post
                                :body "{\"a\": 1}"}}]
         (is (=
-          (parse-json :context context :key :xyz)
+          (parse-request-data :context context :key :xyz)
           [false {:xyz {"a" 1}}]))))
 
     (testing "malformed json"
       (let [context {:request {:request-method :post
                                :body "q"}}]
         (is (=
-          (parse-json :context context :key :xyz)
+          (parse-request-data :context context :key :xyz)
           {:message "Malformed JSON."}))))
 
     (testing "empty body"
       (let [context {:request {:request-method :post
                                :body nil}}]
         (is (=
-          (parse-json :context context :key :xyz)
+          (parse-request-data :context context :key :xyz)
           {:message "Empty body."}))))
 
     (testing "default key"
       (let [context {:request {:request-method :post
                                :body "{\"a\": 1}"}}]
         (is (=
-          (parse-json :context context)
+          (parse-request-data :context context)
           [false {:shale.resources/data {"a" 1}}]))))))
 
 (deftest test-->sessions-resource

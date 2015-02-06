@@ -49,7 +49,8 @@
       java.lang.String body
       (slurp (io/reader body)))))
 
-(defn parse-json [& {:keys [context key] :or {key ::data}}]
+(defn parse-request-data
+  [& {:keys [context key] :or {key ::data}}]
   (when (#{:put :post} (get-in context [:request :request-method]))
     (try
       (if-let [body (body-as-string context)]
@@ -94,7 +95,7 @@
   :allowed-methods  [:get :post]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-json :context %)
+  :malformed? #(parse-request-data :context %)
   :handle-ok (fn [context]
                (jsonify (shale.sessions/view-models nil)))
   :handle-exception handle-exception
@@ -108,7 +109,7 @@
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-json :context %)
+  :malformed? #(parse-request-data :context %)
   :handle-ok (fn [context]
                (jsonify (get context ::session)))
   :handle-exception handle-exception
@@ -134,7 +135,7 @@
   :allowed-methods  [:get]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-json :context %)
+  :malformed? #(parse-request-data :context %)
   :handle-ok (fn [context]
                (jsonify (shale.nodes/view-models nil)))
   :handle-exception handle-exception)
@@ -150,7 +151,7 @@
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-json :context %)
+  :malformed? #(parse-request-data :context %)
   :handle-ok (fn [context]
                (jsonify (get context ::node)))
   :handle-exception handle-exception
