@@ -19,17 +19,20 @@
                  [org.bovinegenius/exploding-fish "0.3.4"]
                  [overtone/at-at "1.2.0"]
                  [prismatic/schema "0.3.0"]
-                 [camel-snake-kebab "0.2.5" :exclusions [org.clojure/clojure]]]
+                 [camel-snake-kebab "0.2.5" :exclusions [org.clojure/clojure]]
+                 [org.clojure/core.typed "0.2.13"]]
   :scm {:name "git"
         :url "http://github.com/cardforcoin/shale"}
   :auto-clean false
   :main shale.handler
   :plugins [[lein-ring "0.8.12"]
-            [lein-environ "1.0.0"]]
+            [lein-environ "1.0.0"]
+            [lein-typed "0.3.0"]]
   :ring {:handler shale.handler/app
          :init shale.handler/init
          :destroy shale.handler/destroy
          :port 5000}
+  :core.typed {:check [shale.sessions]}
   :profiles {:dev
               {:dependencies [[org.clojure/tools.trace "0.7.8"]
                               [ring-mock "0.1.5"]]}

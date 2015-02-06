@@ -11,6 +11,7 @@ PATH="$PATH:$PWD/phantomjs/bin/"
 sleep 1
 
 lein version
+lein typed check
 lein compile
 lein with-profile aws uberjar
 
