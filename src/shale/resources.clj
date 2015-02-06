@@ -5,7 +5,8 @@
             [clj-json [core :as json]]
             [clojure.java.io :as io]
             [camel-snake-kebab.core :refer :all]
-            [camel-snake-kebab.extras :refer  [transform-keys]])
+            [camel-snake-kebab.extras :refer [transform-keys]]
+            [schema.core :as s])
   (:use [liberator.core :only  [defresource]]
         [compojure.core :only  [context ANY routes]]
         [hiccup.page :only [html5]]
@@ -53,14 +54,18 @@
   (name-keys (truth-from-str-vals (get-in context [:request :params]))))
 
 (defn parse-request-data
-  [& {:keys [context key include-boolean-params] :or {key ::data}}]
+  [& {:keys [context key include-boolean-params schema]
+      :or {key ::data schema s/Any}}]
   (when (#{:put :post} (get-in context [:request :request-method]))
     (try
       (if-let [body (body-as-string context)]
-        [false {key (merge
-                      (json/parse-string body)
-                      (if include-boolean-params
-                        (->boolean-params-data context)))}]
+        (let [body-data (json/parse-string body)
+              params-data (if include-boolean-params
+                            (->boolean-params-data context))
+              data (merge body-data params-data)]
+          (if-let [schema-error (s/check schema data)]
+            {:message (str schema-error)}
+            [false {key data}]))
         {:message "Empty body."})
       (catch org.codehaus.jackson.JsonParseException e
         {:message "Malformed JSON."}))))
@@ -96,7 +101,12 @@
   :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-request-data
                  :context %
-                 :include-boolean-params true)
+                 :include-boolean-params true
+                 :schema {(s/optional-key "browser_name") s/Str
+                          (s/optional-key "tags") [s/Str]
+                          (s/optional-key "reserve") s/Bool
+                          (s/optional-key "reserved") s/Bool
+                          (s/optional-key "force_create") s/Bool})
   :handle-ok (fn [context]
                (jsonify (shale.sessions/view-models nil)))
   :handle-exception handle-exception

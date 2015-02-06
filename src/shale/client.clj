@@ -2,7 +2,9 @@
   (:require [clj-http.client :as client]
             (clj-json [core :as json])
             [clj-webdriver.taxi :as taxi]
-            [shale.webdriver :as webdriver])
+            [shale.webdriver :as webdriver]
+            [slingshot.slingshot :refer [try+ throw+]]
+            [taoensso.timbre :as timbre :refer [error]])
   (:use [clj-webdriver.remote.driver :only [session-id]]
         [clojure.set :only [rename-keys]]
         shale.utils))
@@ -14,12 +16,13 @@
   (str "http://localhost:5000/" "sessions/" id))
 
 (defn sessions []
-   (json/parse-string
-     (get (client/get (sessions-url)) :body)))
+  (let [response (try+ (client/get (sessions-url))
+                       (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+    (json/parse-string (response :body))))
 
 (defn session [id]
-  (json/parse-string
-    (get (client/get (session-url id)))))
+  (let [response (client/get (session-url id))]
+    (json/parse-string (response :body))))
 
 (defn get-or-create-session! [{:keys [browser-name
                                      node
@@ -40,24 +43,27 @@
         params (rename-keys (select-keys requirements
                                          [:reserve-after-create :force-create])
                             {:reserve-after-create :reserve
-                             :force-create :force_create})]
-    (json/parse-string (get (client/post (sessions-url)
-                                         {:body (json/generate-string body)
-                                          :content-type :json
-                                          :accept :json
-                                          :query-params params})
-                            :body))))
+                             :force-create :force_create})
+        response (try+
+                   (client/post (sessions-url)
+                     {:body (json/generate-string body)
+                      :content-type :json
+                      :accept :json
+                      :query-params params})
+                   (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+    (json/parse-string (response :body))))
 
 (defn modify-session! [id {:keys [reserved tags]
                           :or {reserved nil
                                tags nil}}]
   (let [body (into {} [(if (nil? reserved) {} {:reserved reserved})
                       (if (nil? tags) {} {:tags tags})])
-        response (client/put (session-url id)
-                             {:body (json/generate-string body)
-                              :content-type :json
-                              :accept :json})]
-    (json/parse-string (get response :body))))
+        response (try+ (client/put (session-url id)
+                         {:body (json/generate-string body)
+                          :content-type :json
+                          :accept :json})
+                   (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+    (json/parse-string (response :body))))
 
 (defn reserve-session! [id]
   (modify-session! id {:reserved true}))
@@ -70,8 +76,10 @@
   nil)
 
 (defn refresh-sessions! []
-  (json/parse-string
-    (get (client/post (str (sessions-url) "refresh") {}) :body)))
+  (let [response (try+
+                   (client/post (str (sessions-url) "refresh") {})
+                   (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+    (json/parse-string (response :body))))
 
 (defn get-or-create-webdriver! [{:keys [browser-name
                                         node

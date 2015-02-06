@@ -1,6 +1,7 @@
 (ns shale.test.resources
   (:require [clojure.test :refer :all]
-            [shale.resources :refer [parse-request-data ->sessions-request]]))
+            [shale.resources :refer [parse-request-data ->sessions-request]]
+            [schema.core :as s]))
 
 (deftest test-parse-request-data
 
@@ -11,7 +12,8 @@
                                :body "{\"a\": 1}"
                                :params {"b" "c"}}}]
         (is (=
-          (parse-request-data :context context :key :xyz)
+          (parse-request-data :context context :key :xyz
+                              :schema {(s/required-key "a") s/Num})
           [false {:xyz {"a" 1}}]))))
 
     (testing "with boolean params"
@@ -34,6 +36,13 @@
         (is (=
           (parse-request-data :context context :key :xyz)
           {:message "Empty body."}))))
+
+    (testing "schema error"
+      (let [context {:request {:request-method :post :body "{}"}}]
+        (is (=
+          (parse-request-data :context context
+                              :schema {(s/required-key "a") s/Num})
+          {:message "{\"a\" missing-required-key}"}))))
 
     (testing "default key"
       (let [context {:request {:request-method :post :body "{\"a\": 1}"}}]
