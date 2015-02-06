@@ -53,6 +53,8 @@
     (s/pair :session-tag  "type"  s/Str        "tag")
     (s/pair :node-tag     "type"  s/Str        "tag")
     (s/pair :reserved     "type"  s/Str        "reserved")
+    (s/pair :session-id   "type"  s/Str        "session id")
+    (s/pair :node-id      "type"  s/Str        "node id")
     (s/pair :browser-name "type"  s/Str        "browser")
     (s/pair :current-url  "type"  s/Str        "url")
     (s/pair :not          "type"  Requirement  "requirement")
@@ -116,8 +118,10 @@
 (defn matches-requirement [requirement session-model]
   (let [arg (second requirement)]
     (match (first requirement)
-      :session-tag  (some #{arg}  (session-model :tags))
-      :node-tag     (some #{arg} ((session-model :node) :tags))
+      :session-tag  (some #{arg} (session-model :tags))
+      :node-tag     (some #{arg} (get-in session-model [:node :tags]))
+      :session-id   (= arg (session-model :id))
+      :node-id      (= arg (get-in session-model [:node :id]))
       :reserved     (= arg (session-model :reserved))
       :browser-name (= arg (session-model :browser-name))
       :current-url  (= arg (session-model :current-url))

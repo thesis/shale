@@ -74,4 +74,23 @@
       (let [requirement [:current-url "a"]
             session     {:current-url "b"}]
         (is (not (matches-requirement requirement session)))))
-))
+
+    (testing "session-id matches"
+      (let [requirement [:session-id "a"]
+            session     {:id "a"}]
+        (is (matches-requirement requirement session))))
+
+    (testing "session-id doesn't match"
+      (let [requirement [:session-id "a"]
+            session     {:id "b"}]
+        (is (not (matches-requirement requirement session)))))
+
+    (testing "node-id matches"
+      (let [requirement [:node-id "a"]
+            session     {:node {:id "a"}}]
+        (is (matches-requirement requirement session))))
+
+    (testing "node-id doesn't match"
+      (let [requirement [:node-id "a"]
+            session     {:node {:id "b"}}]
+        (is (not (matches-requirement requirement session)))))))
