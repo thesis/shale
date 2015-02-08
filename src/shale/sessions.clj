@@ -1,20 +1,20 @@
 (ns shale.sessions
-  (:require [clj-webdriver.remote.driver :as remote-webdriver]
-            [taoensso.carmine :as car]
+  (:require [clojure.set :refer [rename-keys]]
             [clojure.string :as string]
+            [clojure.walk :refer :all]
+            [clojure.core.match :refer [match]]
+            [clj-dns.core :refer [dns-lookup]]
+            [clj-webdriver.remote.driver :as remote-webdriver]
+            [clj-webdriver.taxi :refer [current-url quit]]
+            [taoensso.carmine :as car]
             [org.bovinegenius  [exploding-fish :as uri]]
-            [shale.nodes :as nodes]
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
             [taoensso.timbre :as timblre :refer [info warn error]]
-            [clojure.core.match :refer [match]])
-  (:use shale.utils
-        shale.redis
-        clojure.walk
-        [shale.webdriver :only [new-webdriver resume-webdriver to-async]]
-        [clj-webdriver.taxi :only [current-url quit]]
-        [clj-dns.core :only [dns-lookup]]
-        [clojure.set :only [rename-keys]])
+            [shale.nodes :as nodes]
+            [shale.utils :refer :all]
+            [shale.redis :refer :all]
+            [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
   (:import org.openqa.selenium.WebDriverException
            org.xbill.DNS.Type))
 
