@@ -1,10 +1,13 @@
 (ns shale.test.handler
   (:require [clojure.test :refer :all]
             [clj-json [core :as json]]
-            [shale.handler :refer :all]
             [carica.core :refer [override-config]]
             [shale.configurer :as configurer]
-            [ring.mock.request :as mock]))
+            [ring.mock.request :as mock]
+            [shale.handler :refer :all]
+            [shale.test.utils :refer [with-selenium-servers]]))
+
+(use-fixtures :once (with-selenium-servers [4444]))
 
 (deftest test-app
   (testing "main route"

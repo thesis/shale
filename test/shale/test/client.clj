@@ -1,7 +1,34 @@
 (ns shale.test.client
   (:require [clojure.test :refer :all]
-            [shale.client :refer :all])
-  (:use [clj-webdriver.taxi :only [execute-script]]))
+            [ring.adapter.jetty :as jetty]
+            [clj-webdriver.taxi :refer [execute-script]]
+            [shale.client :refer :all]
+            [shale.handler :as handler]
+            [shale.test.utils :refer [with-selenium-servers
+                                      local-port-available?]])
+  (:import java.net.Socket
+           java.io.IOException))
+
+(defn server-fixture [f]
+  (let [port 5000
+        app (jetty/run-jetty handler/app {:port port :join? false})]
+    ; give the app 5 seconds to start, or cry real hard
+    (pr "Waiting for the web server...")
+    (loop [tries 0]
+      (if (local-port-available? port)
+        (if (> tries 20)
+          (do
+            (pr ".")
+            (Thread/sleep 100)
+            (recur (inc tries)))
+          (do
+            (.stop app)
+            (handler/destroy)
+            (throw (ex-info "Timed out waiting for the web server." {}))))))
+    (handler/init)
+    (f)
+    (.stop app)
+    (handler/destroy)))
 
 (defn logged-in-sessions-fixture [f]
   (let [reqs {:browser-name "phantomjs" :tags []}]
@@ -21,6 +48,7 @@
       (shale.client/destroy-session! session-id))
     test-value))
 
+(use-fixtures :once (with-selenium-servers [4443 4444]) server-fixture)
 (use-fixtures :each delete-sessions-fixture)
 
 (defn session-count []
