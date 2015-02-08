@@ -6,7 +6,8 @@
             [shale.nodes :as nodes]
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
-            [taoensso.timbre :as timblre :refer [info warn error]])
+            [taoensso.timbre :as timblre :refer [info warn error]]
+            [clojure.core.match :refer [match]])
   (:use shale.utils
         shale.redis
         clojure.walk
@@ -28,14 +29,49 @@
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
 
-(defn ^:private is-ip? [s]
+(defn is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
 
-(def ^:private Node
+(def Node
   "A schema for a node spec."
-  {(s/optional-key :url) s/Str
-   (s/optional-key :id) s/Str
+  {(s/optional-key :url)   s/Str
+   (s/optional-key :id)    s/Str
    (s/optional-key :tags) [s/Str]})
+
+(def Session
+  "A schema for a session spec."
+  {:id                            s/Str
+   (s/optional-key :tags)        [s/Str]
+   (s/optional-key :reserved)     s/Bool
+   (s/optional-key :current-url)  s/Str
+   (s/optional-key :browser-name) s/Str
+   (s/optional-key :node)         Node})
+
+(def Requirement
+  "A schema for a session requirement."
+  (s/either
+    (s/pair :session-tag  "type"  s/Str        "tag")
+    (s/pair :node-tag     "type"  s/Str        "tag")
+    (s/pair :reserved     "type"  s/Str        "reserved")
+    (s/pair :session-id   "type"  s/Str        "session id")
+    (s/pair :node-id      "type"  s/Str        "node id")
+    (s/pair :browser-name "type"  s/Str        "browser")
+    (s/pair :current-url  "type"  s/Str        "url")
+    (s/pair :not          "type"  Requirement  "requirement")
+    (s/pair :and          "type" [Requirement] "requirements")
+    (s/pair :or           "type" [Requirement] "requirements")))
+
+(defn maybe-bigdec [x]
+  (try (bigdec x) (catch NumberFormatException e nil)))
+
+(def DecString
+  "A schema for a string that is convertable to bigdec."
+  (s/pred #(boolean (maybe-bigdec %)) 'decimal-string))
+
+(def Score
+  "A schema for a session score rule."
+  {:weight  DecString
+   :require Requirement})
 
 (defn resolve-host [host]
   (info (format "Resolving host %s..." host))
@@ -59,7 +95,7 @@
   (let [u (if (string? url) (uri/uri url) url)]
     (assoc u :host (resolve-host (uri/host u)))))
 
-(defn ^:private matches-requirements [session-model requirements]
+(defn matches-requirements [session-model requirements]
   (let [exact-match-keys [:browser-name :reserved]
         resolved-nodes (map (comp str host-resolved-url)
                             (filter identity
@@ -79,22 +115,38 @@
         (apply = resolved-nodes)
         true))))
 
+(defn matches-requirement [requirement session-model]
+  (let [arg (second requirement)]
+    (match (first requirement)
+      :session-tag  (some #{arg} (session-model :tags))
+      :node-tag     (some #{arg} (get-in session-model [:node :tags]))
+      :session-id   (= arg (session-model :id))
+      :node-id      (= arg (get-in session-model [:node :id]))
+      :reserved     (= arg (session-model :reserved))
+      :browser-name (= arg (session-model :browser-name))
+      :current-url  (= arg (session-model :current-url))
+      :not          (not     (matches-requirement arg session-model))
+      :and          (every? #(matches-requirement % session-model) arg)
+      :or           (some   #(matches-requirement % session-model) arg)
+    )))
+
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
 (defn session-ids []
   (with-car* (car/smembers session-set-key)))
 
-(defn modify-session [session-id {:keys [browser-name
-                                         node
-                                         reserved
-                                         tags
-                                         current-url]
-                                  :or {browser-name nil
-                                       node nil
-                                       reserved nil
-                                       tags nil
-                                       current-url nil}
-                                  :as modifications}]
+(defn modify-session
+  [session-id {:keys [browser-name
+                      node
+                      reserved
+                      tags
+                      current-url]
+               :or {browser-name nil
+                    node nil
+                    reserved nil
+                    tags nil
+                    current-url nil}
+               :as modifications}]
   (s/validate (s/maybe Node ) node)
   (info (format "Modifing session %s, %s" session-id (str modifications)))
   (if (some #{session-id} (session-ids))
@@ -122,20 +174,21 @@
         (car/return (view-model session-id))))
     nil))
 
-(defn create-session [{:keys [browser-name
-                              node
-                              tags
-                              extra-desired-capabilities
-                              reserve-after-create
-                              current-url]
-                       :or {browser-name "firefox"
-                            node nil
-                            reserved false
-                            tags []
-                            extra-desired-capabilities nil
-                            reserve-after-create nil
-                            current-url nil}
-                       :as requirements}]
+(defn create-session
+  [{:keys [browser-name
+           node
+           tags
+           extra-desired-capabilities
+           reserve-after-create
+           current-url]
+    :or {browser-name "firefox"
+         node nil
+         reserved false
+         tags []
+         extra-desired-capabilities nil
+         reserve-after-create nil
+         current-url nil}
+    :as requirements}]
   (s/validate (s/maybe Node ) node)
   (info (format "Creating a new session.\nRequirements: %s"
                 (str requirements)))
@@ -182,35 +235,37 @@
         (car/sadd session-set-key session-id)
         (car/return (modify-session session-id defaulted-reqs))))))
 
-(defn get-or-create-session [{:keys [browser-name
-                                     node
-                                     reserved
-                                     tags
-                                     extra-desired-capabilities
-                                     reserve-after-create
-                                     force-create
-                                     current-url]
-                              :or {browser-name "firefox"
-                                   node nil
-                                   reserved false
-                                   tags []
-                                   extra-desired-capabilities nil
-                                   reserve-after-create nil
-                                   force-create nil
-                                   current-url nil}
-                              :as requirements}]
+(defn get-or-create-session
+  [{:keys [browser-name
+           node
+           reserved
+           tags
+           extra-desired-capabilities
+           reserve-after-create
+           force-create
+           current-url]
+    :or {browser-name "firefox"
+         node nil
+         reserved false
+         tags []
+         extra-desired-capabilities nil
+         reserve-after-create nil
+         force-create nil
+         current-url nil}
+    :as requirements}]
   (s/validate (s/maybe Node ) node)
   (let [requirements (update-in requirements [:reserved] #(or % false))]
 
     (with-car*
       (car/return
         (or
-          (and force-create (create-session
-                              (rename-keys requirements
-                                           {:reserve-after-create :reserved})))
-          (if-let [candidate (-> #(matches-requirements % requirements)
-                                 (filter (view-models nil))
-                                 first)]
+          (if force-create
+            (create-session
+              (rename-keys requirements
+                           {:reserve-after-create :reserved})))
+          (if-let [candidate (->> (view-models nil)
+                                  (filter #(matches-requirements % requirements))
+                                  first)]
             (if (or reserve-after-create current-url)
               (modify-session (get candidate :id)
                               (rename-keys

@@ -2,8 +2,8 @@
   (:require [taoensso.carmine :as car :refer (wcar)])
   (:use [shale.configurer :only [config]]))
 
-(def redis-conn  {:pool {} :spec (config :redis)})
-(defmacro with-car*  [& body] `(car/wcar redis-conn ~@body))
+(def redis-conn-opts {:pool {} :spec (config :redis)})
+(defmacro with-car* [& body] `(car/wcar redis-conn-opts ~@body))
 
 (def redis-key-prefix "_shale")
 
