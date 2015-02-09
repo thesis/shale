@@ -10,7 +10,7 @@
             [org.bovinegenius  [exploding-fish :as uri]]
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
-            [taoensso.timbre :as timblre :refer [info warn error]]
+            [taoensso.timbre :as timblre :refer [info warn error debug]]
             [shale.nodes :as nodes]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
@@ -127,8 +127,7 @@
       :current-url  (= arg (session-model :current-url))
       :not          (not     (matches-requirement arg session-model))
       :and          (every? #(matches-requirement % session-model) arg)
-      :or           (some   #(matches-requirement % session-model) arg)
-    )))
+      :or           (some   #(matches-requirement % session-model) arg))))
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
@@ -304,7 +303,7 @@
 
 (defn refresh-session [session-id]
    (with-car*
-     (info (format "Refreshing session %s..." session-id))
+     (debug (format "Refreshing session %s..." session-id))
      (car/watch session-set-key)
      (let [sess-key (format session-key-template session-id)]
        (car/watch sess-key)
@@ -319,7 +318,7 @@
 
 (defn refresh-sessions [ids]
   (with-car*
-    (info "Refreshing sessions...")
+    (debug "Refreshing sessions...")
     (car/watch session-set-key)
     (doseq [session-id (or ids (session-ids))]
       (refresh-session session-id)))
