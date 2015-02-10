@@ -333,9 +333,8 @@
       m)))
 
 (defn log-session-pool-stats! []
-  (prn "SENDING STATS TO RIEMANN!!!")
   (when-let [client shale.riemann/client]
-    (prn "Riemann client" client)
+    (debug "Sending session pool stats to Riemann...")
     (let [models (view-models nil)]
       (riemann/send-event
         client
