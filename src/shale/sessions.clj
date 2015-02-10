@@ -11,9 +11,11 @@
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
             [taoensso.timbre :as timblre :refer [info warn error debug]]
+            [riemann.client :as riemann]
             [shale.nodes :as nodes]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
+            [shale.riemann]
             [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
   (:import org.openqa.selenium.WebDriverException
            org.xbill.DNS.Type))
@@ -129,7 +131,11 @@
       :and          (every? #(matches-requirement % session-model) arg)
       :or           (some   #(matches-requirement % session-model) arg))))
 
-(declare view-model view-models resume-webdriver-from-id destroy-session)
+(declare view-model
+         view-models
+         resume-webdriver-from-id
+         destroy-session
+         session-pool-stats)
 
 (defn session-ids []
   (with-car* (car/smembers session-set-key)))
@@ -279,7 +285,6 @@
 (defn resume-webdriver-from-id [session-id]
   (if-let [model (view-model session-id)]
     (apply resume-webdriver
-
            (map-indexed (fn [index e] (if (= index 2) {"browserName" e} e))
                         [(model :id)
                          (get-in model [:node :url])
@@ -316,12 +321,44 @@
            (destroy-session session-id)))))
    true)
 
+(defn update-all
+  "Like update-in, but for multiple key paths.
+
+  (update-all {:a 1 :b 2 :c 3} [[:a] [:b]] inc) -> {:a 2 :b 3 :c 3}"
+  [v paths f]
+  (loop [m v
+         ps paths]
+    (if (> (count ps) 0)
+      (recur (update-in m (first ps) f) (rest ps))
+      m)))
+
+(defn log-session-pool-stats! []
+  (prn "SENDING STATS TO RIEMANN!!!")
+  (when-let [client shale.riemann/client]
+    (prn "Riemann client" client)
+    (let [models (view-models nil)]
+      (riemann/send-event
+        client
+        (-> {:service "shale"
+             :state "ok"
+             :tags ["session" "pool"]
+             :metric (count models)
+             :browsers (frequencies (map :browser-name models))
+             :session-tags (->> (map :tags models)
+                                (apply concat)
+                                frequencies)
+             :reserved (->> (map :reserved models)
+                            (filter boolean)
+                            count)}
+            (update-all [[:browsers] [:session-tags] [:reserved]] pr-str))))))
+
 (defn refresh-sessions [ids]
   (with-car*
     (debug "Refreshing sessions...")
     (car/watch session-set-key)
     (doseq [session-id (or ids (session-ids))]
       (refresh-session session-id)))
+  (log-session-pool-stats!)
   true)
 
 (defn view-model [session-id]
