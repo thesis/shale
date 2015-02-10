@@ -329,6 +329,7 @@
         client
         (-> {:service "shale"
              :state "ok"
+             :ids (map :id models)
              :tags ["session" "pool"]
              :metric (count models)
              :browsers (frequencies (map :browser-name models))
@@ -338,7 +339,7 @@
              :reserved (->> (map :reserved models)
                             (filter boolean)
                             count)}
-            (update-all (map vector [:browsers :session-tags :reserved])
+            (update-all (map vector [:ids :browsers :session-tags :reserved])
                         pr-str))))))
 
 (defn refresh-sessions [ids]
