@@ -321,17 +321,6 @@
            (destroy-session session-id)))))
    true)
 
-(defn update-all
-  "Like update-in, but for multiple key paths.
-
-  (update-all {:a 1 :b 2 :c 3} [[:a] [:b]] inc) -> {:a 2 :b 3 :c 3}"
-  [v paths f]
-  (loop [m v
-         ps paths]
-    (if (> (count ps) 0)
-      (recur (update-in m (first ps) f) (rest ps))
-      m)))
-
 (defn log-session-pool-stats! []
   (when-let [client shale.riemann/client]
     (debug "Sending session pool stats to Riemann...")
@@ -349,7 +338,8 @@
              :reserved (->> (map :reserved models)
                             (filter boolean)
                             count)}
-            (update-all [[:browsers] [:session-tags] [:reserved]] pr-str))))))
+            (update-all (map vector [:browsers :session-tags :reserved])
+                        pr-str))))))
 
 (defn refresh-sessions [ids]
   (with-car*
