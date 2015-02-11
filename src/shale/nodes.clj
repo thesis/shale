@@ -1,11 +1,15 @@
 (ns shale.nodes
-  (:require [shale.node-pools :as node-pools]
-            [taoensso.carmine :as car :refer (wcar)])
-  (:use shale.redis
-        shale.utils
-        clojure.walk
-        [clojure.set :only [difference]]
-        [shale.configurer :only [config]])
+  (:require [clojure.set :refer [difference]]
+            [clojure.walk :refer :all]
+            [taoensso.carmine :as car :refer [wcar]]
+            [taoensso.timbre :as timblre :refer [debug]]
+            [riemann.client :as riemann]
+            [shale.nodes :as nodes]
+            [shale.utils :refer :all]
+            [shale.redis :refer :all]
+            [shale.riemann]
+            [shale.node-pools :as node-pools]
+            [shale.configurer :refer [config]])
   (:import java.util.UUID
            [shale.node_pools DefaultNodePool AWSNodePool]))
 
@@ -104,6 +108,23 @@
 (defn ^:private to-set [s]
   (into #{} s))
 
+(defn log-node-pool-stats! []
+  (when-let [client shale.riemann/client]
+    (debug "Sending node pool stats to Riemann...")
+    (let [models (view-models nil)]
+      (riemann/send-event
+        client
+        (-> {:service "shale"
+             :state "ok"
+             :description "Stats on the node pool, including the size and tags."
+             :tags ["node" "pool"]
+             :metric (count models)
+             :ids (map :id models)
+             :node-tags (->> (map :tags models)
+                             (apply concat)
+                             frequencies)}
+            (update-all (map vector [:ids :node-tags]) pr-str))))))
+
 (defn refresh-nodes
   "Syncs the node list with the backing node pool."
   []
@@ -115,6 +136,7 @@
              (difference nodes registered-nodes))
         (map #(destroy-node ((view-model-from-url %) :id))
              (difference registered-nodes nodes)))))
+  (log-node-pool-stats!)
   true)
 
 (defn get-node [{:keys [url
