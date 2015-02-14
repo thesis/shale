@@ -134,6 +134,17 @@
 (defn session-ids []
   (with-car* (car/smembers session-set-key)))
 
+(defn webdriver-go-to-url [wd url]
+  "Asynchronously point a webdriver to a url.
+  Return nil or :webdriver-is-dead."
+  (try (do (to-async wd url) nil)
+    (catch WebDriverException e :webdriver-is-dead)))
+
+(defn session-go-to-url [session-id url]
+  "Asynchronously point a session to a url.
+  Return nil or :webdriver-is-dead."
+  (webdriver-go-to-url (resume-webdriver-from-id session-id) url))
+
 (defn modify-session
   [session-id {:keys [browser-name
                       node
@@ -152,15 +163,10 @@
     (last
       (with-car*
         (if (if current-url
-                (try
-                  (to-async
-                    (resume-webdriver-from-id session-id)
-                    current-url)
-                  true
-                  (catch WebDriverException e
-                    (destroy-session session-id)
-                    nil))
-                true)
+              (let [okay (not (session-go-to-url session-id current-url))]
+                (when (not okay) (destroy-session session-id))
+                okay)
+              true)
             (let [sess-key (session-key session-id)
                   sess-tags-key (session-tags-key session-id)]
               (doall
