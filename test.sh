@@ -1,5 +1,12 @@
 #!/bin/bash
 
+#
+# Runs all tests.
+#
+# Prerequisites:
+#   - Redis must be running.
+#
+
 export PATH="$PATH:$PWD/phantomjs/bin/"
 
 lein version
