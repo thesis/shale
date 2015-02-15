@@ -137,7 +137,71 @@
   (with-car* (car/smembers session-set-key)))
 
 (defn webdriver-timeout []
-  (config :webdriver-timeout))
+  (or
+    (config :webdriver-timeout)
+    1000))
+
+(defn start-webdriver-timeout []
+  (or
+    (config :start-webdriver-timeout)
+    5000))
+
+(defn start-webdriver!
+  "Create a webdriver. Optionally specify a timeout in milliseconds.
+
+  Throws an exception on timeout, but blocks forever by default."
+  [node capabilities & {:keys [timeout]}]
+  (let [future-wd (future (new-webdriver node capabilities))
+        wd (if (or (nil? timeout) (= 0 timeout))
+               (deref future-wd)
+               (deref future-wd timeout ::timeout))]
+    (if (= wd ::timeout)
+        (do
+          (future-cancel future-wd)
+          ;; TODO send to riemann
+          (warn (format
+                  "Timeout starting new webdriver on node %s"
+                  node))
+          (throw
+            (ex-info "Timeout starting a new webdriver."
+                     {:timeout timeout
+                      :node-url node})))
+        wd)))
+
+(defn resume-webdriver-from-id
+  "Resume and return a web driver from a session id. Optionally include a
+  timeout, in milliseconds.
+
+  Throws an exception on timeout, but blocks forever by default."
+  [session-id & {:keys [timeout]}]
+  (if-let [model (view-model session-id)]
+    (let [node-url (get-in model [:node :url])
+          resume-args (map-indexed
+                        (fn [index e] (if (= index 2) {"browserName" e} e))
+                        [(model :id)
+                         node-url
+                         :browser-name])
+          future-wd (future (apply resume-webdriver resume-args))
+          wd (if (or (nil? timeout) (= 0 timeout))
+               (deref future-wd)
+               (deref future-wd timeout ::timeout))]
+      (if (= wd ::timeout)
+        (do
+          (future-cancel future-wd)
+          ;; TODO send to riemann
+          (warn (format
+                  "Timeout resuming session %s after %d ms against node %s"
+                  session-id
+                  timeout
+                  node-url))
+          (throw
+            (ex-info "Timeout resuming session."
+                     {:session-id session-id
+                      :timeout timeout
+                      :node-url node-url})))
+        wd))
+    (throw
+      (ex-info "Unknown session id." {:session-id session-id}))))
 
 (defn modify-session
   [session-id {:keys [browser-name
@@ -236,7 +300,10 @@
               (ex-info "No suitable node found!"
                        {:user-visible true :status 500})))
         wd
-        (new-webdriver node-url capabilities)
+        (start-webdriver!
+          node-url
+          capabilities
+          :timeout (start-webdriver-timeout))
         session-id
         (remote-webdriver/session-id wd)]
     (last
@@ -285,41 +352,6 @@
                                 {:reserve-after-create :reserved}))
               candidate))
           (create-session requirements))))))
-
-(defn resume-webdriver-from-id
-  "Resume and return a web driver from a session id. Optionally include a
-  timeout, in milliseconds.
-
-  Throws an exception on timeout, but blocks forever by default."
-  [session-id & {:keys [timeout]}]
-  (if-let [model (view-model session-id)]
-    (let [node-url (get-in model [:node :url])
-          resume-args (map-indexed
-                        (fn [index e] (if (= index 2) {"browserName" e} e))
-                        [(model :id)
-                         node-url
-                         :browser-name])
-          future-wd (future (apply resume-webdriver resume-args))
-          wd (if (nil? timeout)
-               (deref future-wd)
-               (deref future-wd timeout ::timeout))]
-      (if (= wd ::timeout)
-        (do
-          (future-cancel future-wd)
-          ;; TODO send to riemann
-          (warn (format
-                  "Timeout resuming session %s after %d ms against node %s"
-                  session-id
-                  timeout
-                  node-url))
-          (throw
-            (ex-info "Timeout resuming session."
-                     {:session-id session-id
-                      :timeout timeout
-                      :node-url node-url})))
-        wd))
-    (throw
-      (ex-info "Unknown session id." {:session-id session-id}))))
 
 (defn destroy-session [session-id]
   (with-car*
