@@ -10,7 +10,9 @@
             [org.bovinegenius  [exploding-fish :as uri]]
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
-            [taoensso.timbre :as timblre :refer [info warn error debug]]
+            [taoensso.timbre :as timbre :refer [info warn error debug]]
+            [slingshot.slingshot :refer [try+]]
+            [shale.configurer :refer [config]]
             [shale.nodes :as nodes]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
@@ -134,6 +136,9 @@
 (defn session-ids []
   (with-car* (car/smembers session-set-key)))
 
+(defn webdriver-timeout []
+  (config :webdriver-timeout))
+
 (defn modify-session
   [session-id {:keys [browser-name
                       node
@@ -152,12 +157,17 @@
     (last
       (with-car*
         (if (if current-url
-                (try
+                (try+
                   (to-async
-                    (resume-webdriver-from-id session-id)
+                    (resume-webdriver-from-id
+                      session-id
+                      :timeout (webdriver-timeout))
                     current-url)
                   true
                   (catch WebDriverException e
+                    (destroy-session session-id)
+                    nil)
+                  (catch :timeout e
                     (destroy-session session-id)
                     nil))
                 true)
@@ -302,13 +312,14 @@
                   session-id
                   timeout
                   node-url))
-          (throw (ex-info "Timeout resuming session."
-                          {:session-id session-id
-                           :timeout timeout
-                           :node-url node-url})))
+          (throw
+            (ex-info "Timeout resuming session."
+                     {:session-id session-id
+                      :timeout timeout
+                      :node-url node-url})))
         wd))
-    (throw (ex-info "Unknown session id."
-                    {:session-id session-id}))))
+    (throw
+      (ex-info "Unknown session id." {:session-id session-id}))))
 
 (defn destroy-session [session-id]
   (with-car*
@@ -316,11 +327,13 @@
     (car/watch session-set-key)
     (let [sess-key (session-key session-id)
           sess-tags-key (session-tags-key session-id)]
-      (try
-        (let [wd (resume-webdriver-from-id session-id)]
-          (if wd
-            (quit wd)))
-        (catch WebDriverException e))
+      (try+
+        (if-let [wd (resume-webdriver-from-id
+                      session-id
+                      :timeout (webdriver-timeout))]
+          (quit wd))
+        (catch WebDriverException e)
+        (catch :timeout e))
       (car/srem session-set-key session-id)
       (car/del sess-key)
       (car/del sess-tags-key)))
@@ -332,12 +345,15 @@
      (car/watch session-set-key)
      (let [sess-key (format session-key-template session-id)]
        (car/watch sess-key)
-       (let [wd (resume-webdriver-from-id session-id)]
-         (if (not (nil? wd))
-           (try
-             (car/hset sess-key :current-url (current-url wd))
-             (catch WebDriverException e
-               (destroy-session session-id)))
+       (try+
+         (if-let [wd (resume-webdriver-from-id
+                       session-id
+                       :timeout (webdriver-timeout))]
+           (car/hset sess-key :current-url (current-url wd))
+           (destroy-session session-id))
+         (catch WebDriverException e
+           (destroy-session session-id))
+         (catch :timeout e
            (destroy-session session-id)))))
    true)
 

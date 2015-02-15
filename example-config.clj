@@ -25,4 +25,7 @@
  ;; if not provided, the defaults will be used
  :redis {:host "localhost"
          :port 6379
-         :db 0}}
+         :db 0}
+ ;; webdriver timeout, in milliseconds. this prevents shale from hanging when
+ ;; a node has a memory or network issue. if not set, defaults to 1000.
+ :webdriver-timeout 1000}
