@@ -276,14 +276,30 @@
               candidate))
           (create-session requirements))))))
 
-(defn resume-webdriver-from-id [session-id]
-  (if-let [model (view-model session-id)]
-    (apply resume-webdriver
+(defn resume-webdriver-from-id
+  "Resume and return a web driver from a session id. Optionally include a
+  timeout, in milliseconds.
 
-           (map-indexed (fn [index e] (if (= index 2) {"browserName" e} e))
+  Throws an exception on timeout, but blocks forever by default."
+  [session-id & {:keys [timeout]}]
+  (if-let [model (view-model session-id)]
+    (let [resume-args (map-indexed
+                        (fn [index e] (if (= index 2) {"browserName" e} e))
                         [(model :id)
                          (get-in model [:node :url])
-                         :browser-name]))))
+                         :browser-name])
+          future-wd (future (apply resume-webdriver resume-args))
+          wd (if (nil? timeout)
+               (deref future-wd)
+               (deref future-wd timeout ::timeout))]
+      (if (= wd ::timeout)
+        (do
+          (future-cancel future-wd)
+          (throw (ex-info "Timeout resuming session."
+                          {:session-id session-id :timeout timeout})))
+        wd))
+    (throw (ex-info "Unknown session id."
+                    {:session-id session-id}))))
 
 (defn destroy-session [session-id]
   (with-car*
