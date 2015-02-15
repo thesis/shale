@@ -283,10 +283,11 @@
   Throws an exception on timeout, but blocks forever by default."
   [session-id & {:keys [timeout]}]
   (if-let [model (view-model session-id)]
-    (let [resume-args (map-indexed
+    (let [node-url (get-in model [:node :url])
+          resume-args (map-indexed
                         (fn [index e] (if (= index 2) {"browserName" e} e))
                         [(model :id)
-                         (get-in model [:node :url])
+                         node-url
                          :browser-name])
           future-wd (future (apply resume-webdriver resume-args))
           wd (if (nil? timeout)
@@ -295,8 +296,16 @@
       (if (= wd ::timeout)
         (do
           (future-cancel future-wd)
+          ;; TODO send to riemann
+          (warn (format
+                  "Timeout resuming session %s after %d ms against node %s"
+                  session-id
+                  timeout
+                  node-url))
           (throw (ex-info "Timeout resuming session."
-                          {:session-id session-id :timeout timeout})))
+                          {:session-id session-id
+                           :timeout timeout
+                           :node-url node-url})))
         wd))
     (throw (ex-info "Unknown session id."
                     {:session-id session-id}))))
