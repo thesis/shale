@@ -393,8 +393,9 @@
   (with-car*
     (debug "Refreshing sessions...")
     (car/watch session-set-key)
-    (doseq [session-id (or ids (session-ids))]
-      (refresh-session session-id)))
+    (doall
+      (pmap refresh-session
+            (or ids (session-ids)))))
   true)
 
 (defn view-model [session-id]
