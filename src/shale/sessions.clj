@@ -47,6 +47,8 @@
    (s/optional-key :browser-name) s/Str
    (s/optional-key :node)         Node})
 
+(def Capabilities {s/Any s/Any})
+
 (def Requirement
   "A schema for a session requirement."
   (s/either
@@ -95,7 +97,14 @@
   (let [u (if (string? url) (uri/uri url) url)]
     (assoc u :host (resolve-host (uri/host u)))))
 
+(def OldRequirements
+  {(s/optional-key :browser-name)  s/Str
+   (s/optional-key :reserved)      s/Bool
+   (s/optional-key :tags)          [s/Str]
+   (s/optional-key :node)          {:url s/Str}})
+
 (defn matches-requirements [session-model requirements]
+  (s/validate OldRequirements requirements)
   (let [exact-match-keys [:browser-name :reserved]
         resolved-nodes (map (comp str host-resolved-url)
                             (filter identity
@@ -240,6 +249,16 @@
         (car/sadd session-set-key session-id)
         (car/return (modify-session session-id defaulted-reqs))))))
 
+(def OldGetOrCreateArg
+  {(s/optional-key :browser-name)  s/Str
+   (s/optional-key :reserved)      s/Bool
+   (s/optional-key :tags)          [s/Str]
+   (s/optional-key :node)          {:url s/Str}
+   (s/optional-key :current-url)   s/Str
+   (s/optional-key :reserve-after-create)       s/Bool
+   (s/optional-key :extra-desired-capabilities) Capabilities
+   (s/optional-key :force-create)               s/Bool})
+
 (defn get-or-create-session
   [{:keys [browser-name
            node
@@ -257,30 +276,28 @@
          reserve-after-create nil
          force-create nil
          current-url nil}
-    :as requirements}]
-  (s/validate (s/maybe Node ) node)
-  (let [requirements (update-in requirements [:reserved] #(or % false))]
-
-    (with-car*
-      (car/return
-        (or
-          (if force-create
-            (create-session
-              (rename-keys requirements
-                           {:reserve-after-create :reserved})))
-          (if-let [candidate (->> (view-models nil)
-                                  (filter #(matches-requirements % requirements))
-                                  first)]
-            (if (or reserve-after-create current-url)
-              (modify-session (get candidate :id)
-                              (rename-keys
-                                (select-keys requirements
-                                             [:reserve-after-create
-                                              :current-url
-                                              :tags])
-                                {:reserve-after-create :reserved}))
-              candidate))
-          (create-session requirements))))))
+    :as arg}]
+  (s/validate OldGetOrCreateArg arg)
+  (with-car*
+    (car/return
+      (or
+        (if force-create
+          (create-session
+            (rename-keys arg
+                         {:reserve-after-create :reserved})))
+        (if-let [candidate (->> (view-models nil)
+                                (filter #(matches-requirements % (dissoc arg :reserve-after-create)))
+                                first)]
+          (if (or reserve-after-create current-url)
+            (modify-session (get candidate :id)
+                            (rename-keys
+                              (select-keys arg
+                                           [:reserve-after-create
+                                            :current-url
+                                            :tags])
+                              {:reserve-after-create :reserved}))
+            candidate))
+        (create-session arg)))))
 
 (defn resume-webdriver-from-id [session-id]
   (if-let [model (view-model session-id)]
