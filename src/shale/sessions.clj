@@ -36,7 +36,7 @@
 
 (def SessionInRedis
   "A session, as represented in redis."
-  {:id                            s/Str
+  {(s/optional-key :id)           s/Str
    (s/optional-key :tags)        [s/Str]
    (s/optional-key :reserved)     s/Bool
    (s/optional-key :current-url)  s/Str
@@ -45,7 +45,7 @@
 
 (def SessionView
   "A session, as presented to library users."
-  {:id                            s/Str
+  {(s/optional-key :id)           s/Str
    (s/optional-key :tags)        [s/Str]
    (s/optional-key :reserved)     s/Bool
    (s/optional-key :current-url)  s/Str
@@ -133,19 +133,21 @@
         (apply = resolved-nodes)
         true))))
 
-(defn matches-requirement [requirement session-model]
+(defn matches-requirement [requirement s]
+  (s/validate SessionInRedis (:session s))
+  (s/validate NodeInRedis (:node s))
   (let [arg (second requirement)]
     (match (first requirement)
-      :session-tag  (some #{arg} (session-model :tags))
-      :node-tag     (some #{arg} (get-in session-model [:node :tags]))
-      :session-id   (= arg (session-model :id))
-      :node-id      (= arg (get-in session-model [:node :id]))
-      :reserved     (= arg (session-model :reserved))
-      :browser-name (= arg (session-model :browser-name))
-      :current-url  (= arg (session-model :current-url))
-      :not          (not     (matches-requirement arg session-model))
-      :and          (every? #(matches-requirement % session-model) arg)
-      :or           (some   #(matches-requirement % session-model) arg))))
+      :session-tag  (some #{arg} (get-in s [:session :tags]))
+      :node-tag     (some #{arg} (get-in s [:node :tags]))
+      :session-id   (= arg (get-in s [:session :id]))
+      :node-id      (= arg (get-in s [:node :id]))
+      :reserved     (= arg (get-in s [:session :reserved]))
+      :browser-name (= arg (get-in s [:session :browser-name]))
+      :current-url  (= arg (get-in s [:session :current-url]))
+      :not          (not     (matches-requirement arg s))
+      :and          (every? #(matches-requirement % s) arg)
+      :or           (some   #(matches-requirement % s) arg))))
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
