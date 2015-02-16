@@ -1,6 +1,7 @@
 (ns shale.nodes
   (:require [shale.node-pools :as node-pools]
-            [taoensso.carmine :as car :refer (wcar)])
+            [taoensso.carmine :as car :refer (wcar)]
+            [schema.core :as s])
   (:use shale.redis
         shale.utils
         clojure.walk
@@ -88,6 +89,7 @@
         (car/return (view-model id))))))
 
 (defn destroy-node [id]
+  (s/validate s/Str id)
   (with-car*
     (car/watch node-set-key)
     (try
