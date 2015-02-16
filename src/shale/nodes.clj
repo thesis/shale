@@ -51,6 +51,12 @@
 (defn node-ids []
   (with-car* (car/smembers node-set-key)))
 
+(def Node
+  "A schema for a node spec."
+  {(s/optional-key :url)   s/Str
+   (s/optional-key :id)    s/Str
+   (s/optional-key :tags) [s/Str]})
+
 (defn view-model [id]
   (let [node-key (node-key id)
         node-tags-key (node-tags-key id)
@@ -61,10 +67,11 @@
       (assoc (apply hash-map contents) :tags (or tags []) :id id))))
 
 (defn view-models []
-  (map view-model (node-ids)))
+  (s/validate [Node] (map view-model (node-ids))))
 
 (defn view-model-from-url [url]
-  (first (filter #(= (% :url) url) (view-models))))
+  (s/validate s/Str url)
+  (s/validate Node (first (filter #(= (% :url) url) (view-models)))))
 
 (defn modify-node [id {:keys [url tags]
                        :or {:url nil

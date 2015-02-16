@@ -11,7 +11,7 @@
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
             [taoensso.timbre :as timblre :refer [info warn error debug]]
-            [shale.nodes :as nodes]
+            [shale.nodes :as nodes :refer [Node]]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
             [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
@@ -31,12 +31,6 @@
 
 (defn is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
-
-(def Node
-  "A schema for a node spec."
-  {(s/optional-key :url)   s/Str
-   (s/optional-key :id)    s/Str
-   (s/optional-key :tags) [s/Str]})
 
 (def Session
   "A schema for a session spec."
