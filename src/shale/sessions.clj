@@ -32,8 +32,19 @@
 (defn is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
 
-(def Session
-  "A schema for a session spec."
+(def Capabilities {s/Any s/Any})
+
+(def SessionInRedis
+  "A session, as represented in redis."
+  {:id                            s/Str
+   (s/optional-key :tags)        [s/Str]
+   (s/optional-key :reserved)     s/Bool
+   (s/optional-key :current-url)  s/Str
+   (s/optional-key :browser-name) s/Str
+   (s/optional-key :node-id)      s/Str})
+
+(def SessionView
+  "A session, as presented to library users."
   {:id                            s/Str
    (s/optional-key :tags)        [s/Str]
    (s/optional-key :reserved)     s/Bool
@@ -41,7 +52,11 @@
    (s/optional-key :browser-name) s/Str
    (s/optional-key :node)         NodeView})
 
-(def Capabilities {s/Any s/Any})
+(def TagChange
+  "Add/remove a session/node tag"
+  {:resource (s/either :session :node)
+   :action   (s/either :add :remove)
+   :tag      s/Str})
 
 (def Requirement
   "A schema for a session requirement."
@@ -148,6 +163,13 @@
   Return nil or :webdriver-is-dead."
   (webdriver-go-to-url (resume-webdriver-from-id session-id) url))
 
+(def ModifyArg
+  "Modification to a session"
+  (s/either
+    (s/pair :change-tag "action" TagChange "tag change")
+    (s/pair :go-to-url  "action" s/Str     "url")
+    (s/pair :reserve    "action" s/Bool    "reserve")))
+
 (defn modify-session
   [session-id {:keys [browser-name
                       node
@@ -181,6 +203,12 @@
             nil)
         (car/return (view-model session-id))))
     nil))
+
+(def CreateArg
+  "Session-creation args"
+  {(s/optional-key :browser-name) s/Str
+   (s/optional-key :capabilities) Capabilities
+   (s/optional-key :node-id) s/Str})
 
 (defn create-session
   [{:keys [browser-name
@@ -258,6 +286,13 @@
    :tags []
    :reserved false})
 (s/validate OldGetOrCreateArg get-or-create-defaults)
+
+(def GetOrCreateArg
+  "The arg to get-or-create-session."
+  {(s/optional-key :require) Requirement  ; filter criteria
+   (s/optional-key :score) [Score]        ; sort ranking
+   (s/optional-key :create) CreateArg     ; how to create, if creating
+   (s/optional-key :modify) [ModifyArg]}) ; modifications to perform always
 
 (defn get-or-create-session [arg]
   (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))]
