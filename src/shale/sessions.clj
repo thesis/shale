@@ -11,7 +11,7 @@
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
             [taoensso.timbre :as timblre :refer [info warn error debug]]
-            [shale.nodes :as nodes :refer [Node]]
+            [shale.nodes :as nodes :refer [NodeInRedis NodeView]]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
             [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
@@ -39,7 +39,7 @@
    (s/optional-key :reserved)     s/Bool
    (s/optional-key :current-url)  s/Str
    (s/optional-key :browser-name) s/Str
-   (s/optional-key :node)         Node})
+   (s/optional-key :node)         NodeView})
 
 (def Capabilities {s/Any s/Any})
 
@@ -160,7 +160,7 @@
                     tags nil
                     current-url nil}
                :as modifications}]
-  (s/validate (s/maybe Node ) node)
+  (s/validate (s/maybe NodeInRedis) node)
   (info (format "Modifing session %s, %s" session-id (str modifications)))
   (if (some #{session-id} (session-ids))
     (last
@@ -197,7 +197,7 @@
          reserve-after-create nil
          current-url nil}
     :as requirements}]
-  (s/validate (s/maybe Node ) node)
+  (s/validate (s/maybe NodeInRedis) node)
   (info (format "Creating a new session.\nRequirements: %s"
                 (str requirements)))
   (let [merged-reqs

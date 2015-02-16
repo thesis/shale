@@ -51,11 +51,13 @@
 (defn node-ids []
   (with-car* (car/smembers node-set-key)))
 
-(def Node
+(def NodeInRedis
   "A schema for a node spec."
   {(s/optional-key :url)   s/Str
    (s/optional-key :id)    s/Str
    (s/optional-key :tags) [s/Str]})
+
+(def NodeView NodeInRedis) ; coincidentally the same
 
 (defn view-model [id]
   (let [node-key (node-key id)
@@ -67,11 +69,11 @@
       (assoc (apply hash-map contents) :tags (or tags []) :id id))))
 
 (defn view-models []
-  (s/validate [Node] (map view-model (node-ids))))
+  (s/validate [NodeView] (map view-model (node-ids))))
 
 (defn view-model-from-url [url]
   (s/validate s/Str url)
-  (s/validate Node (first (filter #(= (% :url) url) (view-models)))))
+  (s/validate NodeView (first (filter #(= (% :url) url) (view-models)))))
 
 (defn modify-node [id {:keys [url tags]
                        :or {:url nil
