@@ -285,7 +285,7 @@
           (create-session
             (rename-keys arg
                          {:reserve-after-create :reserved})))
-        (if-let [candidate (->> (view-models nil)
+        (if-let [candidate (->> (view-models)
                                 (filter #(matches-requirements % (dissoc arg :reserve-after-create)))
                                 first)]
           (if (or reserve-after-create current-url)
@@ -368,7 +368,7 @@
         (keywordize-keys
           (apply hash-map contents)) :tags tags :id session-id))))
 
-(defn view-models [ids]
+(defn view-models []
   (with-car*
     (car/return
       (map view-model (session-ids)))))

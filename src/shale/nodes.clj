@@ -59,12 +59,11 @@
     (keywordize-keys
       (assoc (apply hash-map contents) :tags (or tags []) :id id))))
 
-(defn view-models [ids]
-  (let [ids (or ids (node-ids) )]
-    (map view-model ids)))
+(defn view-models []
+  (map view-model (node-ids)))
 
 (defn view-model-from-url [url]
-  (first (filter #(= (% :url) url) (view-models nil))))
+  (first (filter #(= (% :url) url) (view-models))))
 
 (defn modify-node [id {:keys [url tags]
                        :or {:url nil
@@ -108,7 +107,7 @@
   "Syncs the node list with the backing node pool."
   []
   (let [nodes (to-set (node-pools/get-nodes node-pool))
-        registered-nodes (to-set (map #(get % :url) (view-models nil)))]
+        registered-nodes (to-set (map #(get % :url) (view-models)))]
     (doall
       (concat
         (map #(create-node {:url %})
@@ -129,5 +128,5 @@
     (try
       (rand-nth
       (filter matches-requirements
-              (view-models nil)))
+              (view-models)))
       (catch IndexOutOfBoundsException e))))

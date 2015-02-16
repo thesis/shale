@@ -108,7 +108,7 @@
                           (s/optional-key "reserved") s/Bool
                           (s/optional-key "force_create") s/Bool})
   :handle-ok (fn [context]
-               (jsonify (shale.sessions/view-models nil)))
+               (jsonify (shale.sessions/view-models)))
   :handle-exception handle-exception
   :post! (fn [context]
            {::session (shale.sessions/get-or-create-session
@@ -148,7 +148,7 @@
   :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-request-data :context %)
   :handle-ok (fn [context]
-               (jsonify (shale.nodes/view-models nil)))
+               (jsonify (shale.nodes/view-models)))
   :handle-exception handle-exception)
 
 (defresource nodes-refresh-resource []
