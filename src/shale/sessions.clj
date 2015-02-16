@@ -165,6 +165,13 @@
   Return nil or :webdriver-is-dead."
   (webdriver-go-to-url (resume-webdriver-from-id session-id) url))
 
+(defn session-go-to-url-or-destroy-session [session-id url]
+  "Asynchronously point a session to a url. Destroy the session if the
+  webdriver is dead. Return true if everything seems okay."
+  (let [okay (not (session-go-to-url session-id current-url))]
+    (when (not okay) (destroy-session session-id))
+    okay))
+
 (def ModifyArg
   "Modification to a session"
   (s/either
@@ -189,11 +196,8 @@
   (if (some #{session-id} (session-ids))
     (last
       (with-car*
-        (if (if current-url
-              (let [okay (not (session-go-to-url session-id current-url))]
-                (when (not okay) (destroy-session session-id))
-                okay)
-              true)
+        (if (or (not current-url)
+              (session-go-to-url-or-destroy-session session-id current-url))
             (let [sess-key (session-key session-id)
                   sess-tags-key (session-tags-key session-id)]
               (doall
