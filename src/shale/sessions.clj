@@ -253,45 +253,34 @@
    (s/optional-key :extra-desired-capabilities) Capabilities
    (s/optional-key :force-create)               s/Bool})
 
-(defn get-or-create-session
-  [{:keys [browser-name
-           node
-           reserved
-           tags
-           extra-desired-capabilities
-           reserve-after-create
-           force-create
-           current-url]
-    :or {browser-name "firefox"
-         node nil
-         reserved false
-         tags []
-         extra-desired-capabilities nil
-         reserve-after-create nil
-         force-create nil
-         current-url nil}
-    :as arg}]
-  (s/validate OldGetOrCreateArg arg)
-  (with-car*
-    (car/return
-      (or
-        (if force-create
-          (create-session
-            (rename-keys arg
-                         {:reserve-after-create :reserved})))
-        (if-let [candidate (->> (view-models)
-                                (filter #(matches-requirements % (dissoc arg :reserve-after-create)))
-                                first)]
-          (if (or reserve-after-create current-url)
-            (modify-session (get candidate :id)
-                            (rename-keys
-                              (select-keys arg
-                                           [:reserve-after-create
-                                            :current-url
-                                            :tags])
-                              {:reserve-after-create :reserved}))
-            candidate))
-        (create-session arg)))))
+(def get-or-create-defaults
+  {:browser-name "firefox"
+   :tags []
+   :reserved false})
+(s/validate OldGetOrCreateArg get-or-create-defaults)
+
+(defn get-or-create-session [arg]
+  (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))]
+    (with-car*
+      (car/return
+        (or
+          (if (arg :force-create)
+            (create-session
+              (rename-keys arg
+                           {:reserve-after-create :reserved})))
+          (if-let [candidate (->> (view-models)
+                                  (filter #(matches-requirements % (dissoc arg :reserve-after-create)))
+                                  first)]
+            (if (or (arg :reserve-after-create) (arg :current-url))
+              (modify-session (get candidate :id)
+                              (rename-keys
+                                (select-keys arg
+                                             [:reserve-after-create
+                                              :current-url
+                                              :tags])
+                                {:reserve-after-create :reserved}))
+              candidate))
+          (create-session arg))))))
 
 (defn resume-webdriver-from-id [session-id]
   (if-let [model (view-model session-id)]
