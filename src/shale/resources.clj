@@ -120,7 +120,11 @@
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-request-data :context %)
+  :malformed? #(parse-request-data
+                 :context %
+                 :schema {(s/optional-key "reserved") s/Bool
+                          (s/optional-key "tags") [s/Str]
+                          (s/optional-key "current_url") s/Str})
   :handle-ok (fn [context]
                (jsonify (get context ::session)))
   :handle-exception handle-exception
@@ -146,7 +150,6 @@
   :allowed-methods  [:get]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-request-data :context %)
   :handle-ok (fn [context]
                (jsonify (shale.nodes/view-models)))
   :handle-exception handle-exception)
@@ -162,7 +165,10 @@
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-request-data :context %)
+  :malformed? #(parse-request-data
+                 :context %
+                 :schema {(s/optional-key "url") s/Str
+                          (s/optional-key "tags") [s/Str]})
   :handle-ok (fn [context]
                (jsonify (get context ::node)))
   :handle-exception handle-exception
