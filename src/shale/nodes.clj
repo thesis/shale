@@ -52,12 +52,15 @@
   (with-car* (car/smembers node-set-key)))
 
 (def NodeInRedis
-  "A schema for a node spec."
+  "A node, as represented in redis."
   {(s/optional-key :url)   s/Str
-   (s/optional-key :id)    s/Str
    (s/optional-key :tags) [s/Str]})
 
-(def NodeView NodeInRedis) ; coincidentally the same
+(def NodeView
+  "A node, as presented to library users."
+  {(s/optional-key :id)    s/Str
+   (s/optional-key :url)   s/Str
+   (s/optional-key :tags) [s/Str]})
 
 (defn view-model [id]
   (let [node-key (node-key id)

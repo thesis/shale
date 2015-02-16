@@ -36,8 +36,7 @@
 
 (def SessionInRedis
   "A session, as represented in redis."
-  {(s/optional-key :id)           s/Str
-   (s/optional-key :tags)        [s/Str]
+  {(s/optional-key :tags)        [s/Str]
    (s/optional-key :reserved)     s/Bool
    (s/optional-key :current-url)  s/Str
    (s/optional-key :browser-name) s/Str
@@ -134,14 +133,17 @@
         true))))
 
 (defn matches-requirement [requirement s]
-  (s/validate SessionInRedis (:session s))
-  (s/validate NodeInRedis (:node s))
+  (s/validate
+    {(s/optional-key :session-id) s/Str
+     (s/optional-key :session) SessionInRedis
+     (s/optional-key :node) NodeInRedis}
+    s)
   (let [arg (second requirement)]
     (match (first requirement)
       :session-tag  (some #{arg} (get-in s [:session :tags]))
       :node-tag     (some #{arg} (get-in s [:node :tags]))
-      :session-id   (= arg (get-in s [:session :id]))
-      :node-id      (= arg (get-in s [:node :id]))
+      :session-id   (= arg (get-in s [:session-id]))
+      :node-id      (= arg (get-in s [:session :node-id]))
       :reserved     (= arg (get-in s [:session :reserved]))
       :browser-name (= arg (get-in s [:session :browser-name]))
       :current-url  (= arg (get-in s [:session :current-url]))
@@ -179,6 +181,19 @@
     (s/pair :go-to-url  "action" s/Str     "url")
     (s/pair :reserve    "action" s/Bool    "reserve")))
 
+(defn save-session-tags-to-redis [session-id tags]
+  (with-car* (sset-all (session-tags-key session-id) tags)))
+
+(defn save-session-diff-to-redis [session-id session]
+  "For any key present in the session arg, write that value to redis."
+  (with-car*
+    (hset-all
+      (session-key session-id)
+      (select-keys session
+        [:reserved :current-url :browser-name :node]))
+    (when (contains? session :tags)
+      (save-session-tags-to-redis session-id (session :tags)))))
+
 (defn modify-session
   [session-id {:keys [browser-name
                       node
@@ -191,24 +206,15 @@
                     tags nil
                     current-url nil}
                :as modifications}]
-  (s/validate (s/maybe NodeInRedis) node)
   (info (format "Modifing session %s, %s" session-id (str modifications)))
-  (if (some #{session-id} (session-ids))
-    (last
-      (with-car*
-        (if (or (not current-url)
-              (session-go-to-url-or-destroy-session session-id current-url))
-            (let [sess-key (session-key session-id)
-                  sess-tags-key (session-tags-key session-id)]
-              (doall
-                (map #(car/hset sess-key (key %1) (val %1))
-                     (select-keys modifications
-                                  [:reserved :current-url :browser-name :node])))
-              (car/del sess-tags-key)
-              (doall (map #(car/sadd sess-tags-key %) (or tags []))))
-            nil)
-        (car/return (view-model session-id))))
-    nil))
+  (when (some #{session-id} (session-ids))
+    (when (or (not current-url)
+            (session-go-to-url-or-destroy-session session-id current-url))
+      (save-session-diff-to-redis
+        session-id
+        (select-keys modifications
+          [:reserved :current-url :browser-name :node :tags])))
+    (view-model session-id)))
 
 (def CreateArg
   "Session-creation args"

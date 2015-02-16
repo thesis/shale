@@ -8,8 +8,10 @@
 (def redis-key-prefix "_shale")
 
 (defn hset-all [k m]
-  (doall #(car/hset (key %) (val %)) m))
+  (doseq [[a b] m]
+    (car/hset k a b)))
 
 (defn sset-all [k s]
   (car/del k)
-  (doall (map #(car/sadd k %) s)))
+  (doseq [a s]
+    (car/sadd k a)))
