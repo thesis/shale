@@ -134,18 +134,21 @@
              (difference registered-nodes nodes)))))
   true)
 
+(def NodeRequirements
+  {(s/optional-key :url)   s/Str
+   (s/optional-key :tags) [s/Str]})
+
+(s/defn matches-requirements :- s/Bool
+  [model :- NodeView
+   requirements :- NodeRequirements]
+  (apply clojure.set/subset?
+         (map #(select-keys % [:url :tags])
+              [requirements model])))
+
 (s/defn get-node :- (s/maybe NodeView)
-  [{:keys [url
-           tags]
-    :or {:url nil
-         :tags []}
-    :as requirements}]
-  (let [matches-requirements (fn [model]
-                               (apply clojure.set/subset?
-                                      (map #(select-keys % [:url :tags])
-                                           [requirements model])))]
-    (try
-      (rand-nth
-      (filter matches-requirements
+  [requirements :- NodeRequirements]
+  (try
+    (rand-nth
+      (filter #(matches-requirements % requirements)
               (view-models)))
-      (catch IndexOutOfBoundsException e))))
+    (catch IndexOutOfBoundsException e)))
