@@ -171,7 +171,7 @@
   "Asynchronously point a session to a url. Destroy the session if the
   webdriver is dead. Return true if everything seems okay."
   (let [okay (not (session-go-to-url session-id current-url))]
-    (when (not okay) (destroy-session session-id))
+    (if-not okay (destroy-session session-id))
     okay))
 
 (def ModifyArg
@@ -191,7 +191,7 @@
       (session-key session-id)
       (select-keys session
         [:reserved :current-url :browser-name :node]))
-    (when (contains? session :tags)
+    (if (contains? session :tags)
       (save-session-tags-to-redis session-id (session :tags)))))
 
 (defn modify-session
@@ -208,7 +208,7 @@
                :as modifications}]
   (info (format "Modifing session %s, %s" session-id (str modifications)))
   (when (some #{session-id} (session-ids))
-    (when (or (not current-url)
+    (if (or (not current-url)
             (session-go-to-url-or-destroy-session session-id current-url))
       (save-session-diff-to-redis
         session-id
