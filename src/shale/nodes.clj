@@ -43,12 +43,9 @@
 (defn node-tags-key [id]
   (format node-tags-key-template id))
 
-(defn node-ids []
-  (with-car* (car/smembers node-set-key)))
-
 (defn uuid [] (str (java.util.UUID/randomUUID)))
 
-(defn node-ids []
+(s/defn node-ids :- [s/Str] []
   (with-car* (car/smembers node-set-key)))
 
 (def NodeInRedis
@@ -62,7 +59,8 @@
    (s/optional-key :url)   s/Str
    (s/optional-key :tags) [s/Str]})
 
-(defn view-model [id]
+(s/defn view-model :- NodeView
+  [id :- s/Str]
   (let [node-key (node-key id)
         node-tags-key (node-tags-key id)
         [contents tags] (with-car*
@@ -71,16 +69,17 @@
     (keywordize-keys
       (assoc (apply hash-map contents) :tags (or tags []) :id id))))
 
-(defn view-models []
-  (s/validate [NodeView] (map view-model (node-ids))))
+(s/defn view-models :- [NodeView] []
+  (map view-model (node-ids)))
 
-(defn view-model-from-url [url]
-  (s/validate s/Str url)
-  (s/validate NodeView (first (filter #(= (% :url) url) (view-models)))))
+(s/defn view-model-from-url :- NodeView
+  [url :- s/Str]
+  (first (filter #(= (% :url) url) (view-models))))
 
-(defn modify-node [id {:keys [url tags]
-                       :or {:url nil
-                            :tags nil}}]
+(s/defn modify-node :- NodeView
+  [id {:keys [url tags]
+       :or {:url nil
+            :tags nil}}]
   (last
     (with-car*
       (let [node-key (node-key id)
@@ -89,9 +88,10 @@
         (if tags (sset-all node-tags-key tags))
         (car/return (view-model id))))))
 
-(defn create-node [{:keys [url
-                           tags]
-                    :or {:tags []}}]
+(s/defn create-node :- NodeView
+  [{:keys [url
+           tags]
+    :or {:tags []}}]
   (last
     (with-car*
       (let [id (uuid)
@@ -100,8 +100,7 @@
         (modify-node id {:url url :tags tags})
         (car/return (view-model id))))))
 
-(defn destroy-node [id]
-  (s/validate s/Str id)
+(s/defn destroy-node [id :- s/Str]
   (with-car*
     (car/watch node-set-key)
     (try
@@ -130,11 +129,12 @@
              (difference registered-nodes nodes)))))
   true)
 
-(defn get-node [{:keys [url
-                        tags]
-                 :or {:url nil
-                      :tags []}
-                 :as requirements}]
+(s/defn get-node :- (s/maybe NodeView)
+  [{:keys [url
+           tags]
+    :or {:url nil
+         :tags []}
+    :as requirements}]
   (let [matches-requirements (fn [model]
                                (apply clojure.set/subset?
                                       (map #(select-keys % [:url :tags])
