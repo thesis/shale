@@ -160,8 +160,8 @@
    s :- {(s/optional-key :session-id) s/Str
          (s/optional-key :session) SessionInRedis
          (s/optional-key :node) NodeInRedis}]
-  (let [arg (second requirement)]
-    (match (first requirement)
+  (let [[req-type arg] requirement]
+    (match req-type
       :session-tag  (some #{arg} (get-in s [:session :tags]))
       :node-tag     (some #{arg} (get-in s [:node :tags]))
       :session-id   (= arg (get-in s [:session-id]))
