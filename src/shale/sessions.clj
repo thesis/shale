@@ -1,13 +1,10 @@
 (ns shale.sessions
   (:require [clojure.set :refer [rename-keys]]
-            [clojure.string :as string]
-            [clojure.walk :refer :all]
             [clojure.core.match :refer [match]]
-            [clj-dns.core :refer [dns-lookup]]
+            [clojure.walk :refer :all]
             [clj-webdriver.remote.driver :as remote-webdriver]
             [clj-webdriver.taxi :refer [current-url quit]]
             [taoensso.carmine :as car]
-            [org.bovinegenius  [exploding-fish :as uri]]
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
             [taoensso.timbre :as timblre :refer [info warn error debug]]
@@ -15,8 +12,7 @@
             [shale.utils :refer :all]
             [shale.redis :refer :all]
             [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
-  (:import org.openqa.selenium.WebDriverException
-           org.xbill.DNS.Type))
+  (:import org.openqa.selenium.WebDriverException))
 
 (def session-set-key
   (apply str (interpose "/" [redis-key-prefix "sessions"])))
@@ -28,9 +24,6 @@
   (format session-key-template session-id))
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
-
-(defn is-ip? [s]
-  (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
 
 (def Capabilities {s/Any s/Any})
 
@@ -104,28 +97,6 @@
   "A schema for a session score rule."
   {:weight  DecString
    :require Requirement})
-
-(defn resolve-host [host]
-  (info (format "Resolving host %s..." host))
-  (if (is-ip? host)
-    host
-    (if-let [resolved (first ((dns-lookup host Type/A) :answers))]
-        (string/replace (str (.getAddress resolved)) "/" "")
-        (if-let [resolved
-                 (try
-                   (java.net.InetAddress/getByName host)
-                   (catch java.net.UnknownHostException e nil))]
-          (.getHostAddress resolved)
-          (do
-            (let [message (format "Unable to resolve host %s" host)]
-              (warn message)
-              (throw
-                (ex-info message
-                         {:user-visible true :status 500}))))))))
-
-(defn host-resolved-url [url]
-  (let [u (if (string? url) (uri/uri url) url)]
-    (assoc u :host (resolve-host (uri/host u)))))
 
 (def OldRequirements
   {(s/optional-key :browser-name)  s/Str

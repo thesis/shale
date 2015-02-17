@@ -1,12 +1,12 @@
 (ns shale.nodes
-  (:require [shale.node-pools :as node-pools]
+  (:require [clojure.set :refer [difference]]
             [taoensso.carmine :as car :refer (wcar)]
-            [schema.core :as s])
-  (:use shale.redis
-        shale.utils
-        clojure.walk
-        [clojure.set :only [difference]]
-        [shale.configurer :only [config]])
+            [schema.core :as s]
+            [shale.redis :refer :all]
+            [shale.utils :refer :all]
+            [clojure.walk :refer :all]
+            [shale.configurer :refer [config]]
+            [shale.node-pools :as node-pools])
   (:import java.util.UUID
            [shale.node_pools DefaultNodePool AWSNodePool]))
 
