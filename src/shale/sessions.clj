@@ -57,19 +57,41 @@
    :action   (s/either :add :remove)
    :tag      s/Str})
 
+(defmacro literal-pred
+  "Yields a predicate schema that only matches one value. Takes an optional
+  name."
+  [kw & rest]
+  (let [pred-name (first (split-at 1 rest))]
+    `(s/pred #(= ~kw %) ~@pred-name)))
+
+(defmacro keyword-schema-pair
+  "Yields a predicate that matches keyword / schema pairs like
+  [:my-keyword \"My Value\"].
+  "
+  [kw schema]
+  `(s/pair (literal-pred ~kw) "keyword" ~schema ~kw))
+
+(defmacro any-pair
+  [& pairs]
+  (s/validate (s/pred even? 'even?) (count pairs))
+  (let [pairs (vec (map vec (partition 2 pairs)))]
+    `(let [pred-pairs# (map #(keyword-schema-pair (first %) (second %))
+                            ~pairs)]
+       (apply s/either pred-pairs#))))
+
 (def Requirement
   "A schema for a session requirement."
-  (s/either
-    (s/pair :session-tag  "type"  s/Str        "tag")
-    (s/pair :node-tag     "type"  s/Str        "tag")
-    (s/pair :reserved     "type"  s/Str        "reserved")
-    (s/pair :session-id   "type"  s/Str        "session id")
-    (s/pair :node-id      "type"  s/Str        "node id")
-    (s/pair :browser-name "type"  s/Str        "browser")
-    (s/pair :current-url  "type"  s/Str        "url")
-    (s/pair :not          "type"  Requirement  "requirement")
-    (s/pair :and          "type" [Requirement] "requirements")
-    (s/pair :or           "type" [Requirement] "requirements")))
+  (any-pair
+    :session-tag   s/Str
+    :node-tag      s/Str
+    :reserved      s/Str
+    :session-id    s/Str
+    :node-id       s/Str
+    :browser-name  s/Str
+    :current-url   s/Str
+    :not           (s/recursive #'Requirement)
+    :and           (s/recursive #'Requirement)
+    :or            (s/recursive #'Requirement)))
 
 (defn maybe-bigdec [x]
   (try (bigdec x) (catch NumberFormatException e nil)))
@@ -111,8 +133,9 @@
    (s/optional-key :tags)          [s/Str]
    (s/optional-key :node)          {:url s/Str}})
 
-(defn matches-requirements [session-model requirements]
-  (s/validate OldRequirements requirements)
+(s/defn matches-requirements :- s/Bool
+  [session-model :- s/Any
+   requirements :- OldRequirements]
   (let [exact-match-keys [:browser-name :reserved]
         resolved-nodes (map (comp str host-resolved-url)
                             (filter identity
@@ -132,12 +155,11 @@
         (apply = resolved-nodes)
         true))))
 
-(defn matches-requirement [requirement s]
-  (s/validate
-    {(s/optional-key :session-id) s/Str
-     (s/optional-key :session) SessionInRedis
-     (s/optional-key :node) NodeInRedis}
-    s)
+(s/defn matches-requirement :- s/Bool
+  [requirement :- Requirement
+   s :- {(s/optional-key :session-id) s/Str
+         (s/optional-key :session) SessionInRedis
+         (s/optional-key :node) NodeInRedis}]
   (let [arg (second requirement)]
     (match (first requirement)
       :session-tag  (some #{arg} (get-in s [:session :tags]))
@@ -293,11 +315,10 @@
    (s/optional-key :extra-desired-capabilities) Capabilities
    (s/optional-key :force-create)               s/Bool})
 
-(def get-or-create-defaults
+(s/def get-or-create-defaults :- OldGetOrCreateArg
   {:browser-name "firefox"
    :tags []
    :reserved false})
-(s/validate OldGetOrCreateArg get-or-create-defaults)
 
 (def GetOrCreateArg
   "The arg to get-or-create-session."
@@ -306,7 +327,7 @@
    (s/optional-key :create) CreateArg     ; how to create, if creating
    (s/optional-key :modify) [ModifyArg]}) ; modifications to perform always
 
-(defn get-or-create-session [arg]
+(s/defn get-or-create-session [arg]
   (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))]
     (with-car*
       (car/return
