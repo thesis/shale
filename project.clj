@@ -26,6 +26,9 @@
   :main shale.handler
   :plugins [[lein-ring "0.8.12"]
             [lein-environ "1.0.0"]]
+  :test-selectors {:default (complement :integration)
+                   :integration :integration
+                   :all (constantly true)}
   :ring {:handler shale.handler/app
          :init shale.handler/init
          :destroy shale.handler/destroy

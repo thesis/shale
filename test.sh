@@ -10,3 +10,4 @@ mkdir resources
 cp test-config.clj resources/config.clj
 
 lein test
+lein test :integration
