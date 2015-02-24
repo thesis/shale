@@ -304,11 +304,16 @@
       (car/return
         (or
           (if (arg :force-create)
-            (create-session
-              (rename-keys arg
-                           {:reserve-after-create :reserved})))
+            (-> arg
+                (rename-keys {:reserve-after-create :reserve-after-create})
+                create-session)
+            )
           (if-let [candidate (->> (view-models)
-                                  (filter #(matches-requirements % (dissoc arg :reserve-after-create)))
+                                  (filter
+                                    (fn [session-model]
+                                      (matches-requirement
+                                        session-model
+                                        (dissoc arg :reserve-after-create))))
                                   first)]
             (if (or (arg :reserve-after-create) (arg :current-url))
               (modify-session (get candidate :id)
