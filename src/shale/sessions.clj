@@ -8,6 +8,7 @@
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
             [taoensso.timbre :as timblre :refer [info warn error debug]]
+            [slingshot.slingshot :refer [throw+]]
             [shale.nodes :as nodes :refer [NodeInRedis NodeView]]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
@@ -77,14 +78,14 @@
   (any-pair
     :session-tag   s/Str
     :node-tag      s/Str
-    :reserved      s/Str
+    :reserved      s/Bool
     :session-id    s/Str
     :node-id       s/Str
     :browser-name  s/Str
     :current-url   s/Str
     :not           (s/recursive #'Requirement)
-    :and           (s/recursive #'Requirement)
-    :or            (s/recursive #'Requirement)))
+    :and           [(s/recursive #'Requirement)]
+    :or            [(s/recursive #'Requirement)]))
 
 (defn maybe-bigdec [x]
   (try (bigdec x) (catch NumberFormatException e nil)))
@@ -104,7 +105,59 @@
    (s/optional-key :tags)          [s/Str]
    (s/optional-key :node)          {:url s/Str}})
 
-(s/defn matches-requirements :- s/Bool
+(defn first-checked-schema
+  "Return the first schema which validates a value. Useful as a dispatch
+  function for multimethods."
+  [value schemas]
+  (doto (->> schemas
+             (filter (fn [schema]
+                       (try
+                         (s/validate schema value)
+                         schema
+                         (catch RuntimeException e))))
+             first)))
+
+(defmacro defmultischema
+  "Dispatches multimethods based on whether their args match the provided
+  schemas.
+
+  Each schema is validated against a vector of a method's args. The first that
+  validates successfully is used as the dispatch value.
+
+  For example,
+  ```
+  (defmultischema test-method :number [s/Num] :string [s/Str])
+  (defmethod test-method :number [n]
+    (prn \"number\"))
+  (defmethod test-method :string [s]
+    (prn \"string\"))
+  ```"
+  [multi-name & schemas]
+  (if-not (even? (count schemas))
+    (throw+ (str "defmultischema expects an even number of args (for "
+                 "value / schema pairs)")))
+  `(defmulti ~multi-name
+     (fn [& args#]
+       (let [schema-to-value# (->> ~(vec schemas)
+                                   (partition 2)
+                                   (map (comp vec reverse))
+                                   (into {}))
+             schemas# (keys schema-to-value#)
+             matching-schema# (get schema-to-value#
+                                   (first-checked-schema (vec args#) schemas#))]
+         (if (nil? matching-schema#)
+           (throw+ (str "No matching schema for multimethod "
+                        (name '~multi-name)
+                        " with args "
+                        (vec args#)))
+           matching-schema#)
+         ))))
+
+(defmultischema matches-requirement
+  :old (s/pair s/Any "session" OldRequirements "requirements")
+  :new (s/pair s/Any "session" Requirement "requirement"))
+
+(s/defmethod matches-requirement :old :- s/Bool
   [session-model :- s/Any
    requirements :- OldRequirements]
   (let [exact-match-keys [:browser-name :reserved]
@@ -125,13 +178,13 @@
       (if (> (count resolved-nodes) 0)
         (apply = resolved-nodes)
         true))))
-
-(s/defn matches-requirement :- s/Bool
-  [requirement :- Requirement
-   s :- {(s/optional-key :session-id) s/Str
-         (s/optional-key :session) SessionInRedis
-         (s/optional-key :node) NodeInRedis}]
-  (let [[req-type arg] requirement]
+(s/defmethod matches-requirement :new :- s/Bool
+  [session-model :- {(s/optional-key :session-id) s/Str
+                     (s/optional-key :session) SessionInRedis
+                     (s/optional-key :node) NodeInRedis}
+   requirement :- Requirement]
+  (let [[req-type arg] requirement
+        s session-model]
     (match req-type
       :session-tag  (some #{arg} (get-in s [:session :tags]))
       :node-tag     (some #{arg} (get-in s [:node :tags]))
@@ -140,9 +193,9 @@
       :reserved     (= arg (get-in s [:session :reserved]))
       :browser-name (= arg (get-in s [:session :browser-name]))
       :current-url  (= arg (get-in s [:session :current-url]))
-      :not          (not     (matches-requirement arg s))
-      :and          (every? #(matches-requirement % s) arg)
-      :or           (some   #(matches-requirement % s) arg))))
+      :not          (not     (matches-requirement s arg))
+      :and          (every? #(matches-requirement s %) arg)
+      :or           (some   #(matches-requirement s %) arg))))
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
