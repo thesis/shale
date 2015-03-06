@@ -91,9 +91,7 @@
     (jsonify {:error message})))
 
 (defn ->sessions-request [context]
-  (rename-keys
-    (clojure-keys (get context ::data))
-    {:reserve :reserve-after-create}))
+  (clojure-keys (get context ::data)))
 
 (defresource sessions-resource [params]
   :allowed-methods  [:get :post]
@@ -104,7 +102,7 @@
                  :include-boolean-params true
                  :schema {(s/optional-key "browser_name") s/Str
                           (s/optional-key "tags") [s/Str]
-                          (s/optional-key "reserve") s/Bool
+                          (s/optional-key "reserve_after_create") s/Bool
                           (s/optional-key "reserved") s/Bool
                           (s/optional-key "force_create") s/Bool})
   :handle-ok (fn [context]

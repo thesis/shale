@@ -42,7 +42,7 @@
                           {:browser-name :browser_name})
         params (rename-keys (select-keys requirements
                                          [:reserve-after-create :force-create])
-                            {:reserve-after-create :reserve
+                            {:reserve-after-create :reserve_after_create
                              :force-create :force_create})
         response (try+
                    (client/post (sessions-url)
