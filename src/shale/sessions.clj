@@ -158,26 +158,38 @@
   :new (s/pair s/Any "session" Requirement "requirement"))
 
 (s/defmethod matches-requirement :old :- s/Bool
-  [session-model :- s/Any
+  [session-model :- {(s/optional-key :id) s/Str
+                     (s/optional-key :reserved) s/Bool
+                     (s/optional-key :tags) [s/Str]
+                     (s/optional-key :browser-name) s/Str
+                     (s/optional-key :current-url) s/Str
+                     (s/optional-key :node) {(s/optional-key :id) s/Str
+                                             (s/optional-key :url) s/Str
+                                             (s/optional-key :tags) [s/Str]}}
    requirements :- OldRequirements]
-  (let [exact-match-keys [:browser-name :reserved]
-        resolved-nodes (map (comp str host-resolved-url)
-                            (filter identity
-                                    (map #(get-in % [:node :url])
-                                         [session-model requirements])))]
-    (info "Checking session requirements..."
-         session-model
-         requirements)
-    (info "Resolved node hosts..." resolved-nodes)
-    (and
-      (every? #(apply clojure.set/subset? %)
-              [(map #(into #{} (% :tags))
-                       [requirements session-model])
-               (map #(into #{} (select-keys % exact-match-keys))
-                    [requirements session-model])])
-      (if (> (count resolved-nodes) 0)
-        (apply = resolved-nodes)
-        true))))
+  (matches-requirement
+    {:session-id (:id session-model)
+     :session (merge
+                (select-keys session-model
+                           [:tags :reserved :browser-name :current-url])
+                (if-let [node-id (get-in session-model [:node :id])]
+                  {:node-id node-id}))
+     :node (select-keys (:node session-model) [:tags :url])}
+    [:and
+     (vec
+       (concat
+         (map #(vec [:session-tag %])
+              (get requirements :tags))
+         (->> [:browser-name :reserved]
+              (map #(vec [% (get requirements %)]))
+              (filter identity)
+              (into []))
+         (if-let [node-id
+                  (get-in requirements [:node :id])]
+           [[:node-id node-id]])
+         (map #(vec [:node-tag %])
+              (get-in requirements [:node :tags]))))]))
+
 (s/defmethod matches-requirement :new :- s/Bool
   [session-model :- {(s/optional-key :session-id) s/Str
                      (s/optional-key :session) SessionInRedis
