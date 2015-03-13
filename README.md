@@ -86,11 +86,11 @@ $ curl http://localhost:5000/sessions/
 }]
 ```
 
-Get or create a new session with tags
+Create a new session with tags
 
 ```sh
 $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
-       -XPOST http://localhost:5000/sessions/ \
+       -XPOST http://localhost:5000/sessions/?force_create=True \
        --header "Content-Type:application/json"
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
