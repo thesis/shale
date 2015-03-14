@@ -47,8 +47,8 @@
 
 (def TagChange
   "Add/remove a session/node tag"
-  {:resource (s/either :session :node)
-   :action   (s/either :add :remove)
+  {:resource (s/either (literal-pred :session) (literal-pred :node))
+   :action   (s/either (literal-pred :add) (literal-pred :remove))
    :tag      s/Str})
 
 (def Requirement
@@ -212,10 +212,10 @@
 
 (def ModifyArg
   "Modification to a session"
-  (s/either
-    (s/pair :change-tag "action" TagChange "tag change")
-    (s/pair :go-to-url  "action" s/Str     "url")
-    (s/pair :reserve    "action" s/Bool    "reserve")))
+  (any-pair
+    :change-tag TagChange
+    :go-to-url s/Str
+    :reserve s/Bool))
 
 (defn save-session-tags-to-redis [session-id tags]
   (with-car* (sset-all (session-tags-key session-id) tags)))
@@ -255,7 +255,7 @@
 (def CreateArg
   "Session-creation args"
   {(s/optional-key :browser-name) s/Str
-   (s/optional-key :capabilities) Capabilities
+   (s/optional-key :capabilities) {}
    (s/optional-key :node-id) s/Str})
 
 (defn create-session
