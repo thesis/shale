@@ -51,28 +51,6 @@
    :action   (s/either :add :remove)
    :tag      s/Str})
 
-(defmacro literal-pred
-  "Yields a predicate schema that only matches one value. Takes an optional
-  name."
-  [kw & rest]
-  (let [pred-name (first (split-at 1 rest))]
-    `(s/pred #(= ~kw %) ~@pred-name)))
-
-(defmacro keyword-schema-pair
-  "Yields a predicate that matches keyword / schema pairs like
-  [:my-keyword \"My Value\"].
-  "
-  [kw schema]
-  `(s/pair (literal-pred ~kw) "keyword" ~schema ~kw))
-
-(defmacro any-pair
-  [& pairs]
-  (s/validate (s/pred even? 'even?) (count pairs))
-  (let [pairs (vec (map vec (partition 2 pairs)))]
-    `(let [pred-pairs# (map #(keyword-schema-pair (first %) (second %))
-                            ~pairs)]
-       (apply s/either pred-pairs#))))
-
 (def Requirement
   "A schema for a session requirement."
   (any-pair
