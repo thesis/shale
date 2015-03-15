@@ -6,7 +6,7 @@
                  [javax.servlet/servlet-api "2.5"]
                  [compojure "1.1.9"]
                  [liberator "0.12.0"]
-                 [clj-http "1.0.0"]
+                 [clj-http "1.0.1"]
                  [clj-json "0.5.3"]
                  [clj-webdriver "0.6.1"]
                  [clj-wallhack "1.0.1"]
