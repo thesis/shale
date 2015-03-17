@@ -90,8 +90,21 @@
                   "Internal server error.")]
     (jsonify {:error message})))
 
-(defn ->sessions-request [context]
-  (clojure-keys (get context ::data)))
+(defn ->sessions-request
+  "Convert context to a sessions request. Merge the `reserve-after-create`
+  and deprecated `reserve` keys for older clients."
+  [context]
+  (let [data (clojure-keys (get context ::data))]
+    (dissoc
+      (if (nil? (:reserve data))
+        data
+        (assoc data
+               :reserve-after-create
+               (->> [:reserve-after-create :reserve]
+                    (map #(data %) )
+                    (filter boolean )
+                    first)))
+      :reserve)))
 
 (defresource sessions-resource [params]
   :allowed-methods  [:get :post]
@@ -103,6 +116,7 @@
                  :schema {(s/optional-key "browser_name") s/Str
                           (s/optional-key "tags") [s/Str]
                           (s/optional-key "reserve_after_create") s/Bool
+                          (s/optional-key "reserve") s/Bool
                           (s/optional-key "reserved") s/Bool
                           (s/optional-key "force_create") s/Bool})
   :handle-ok (fn [context]
