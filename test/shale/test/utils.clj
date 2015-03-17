@@ -38,5 +38,6 @@
   [ports]
   (fn [test-fn]
     (let [servers (doall (pmap start-selenium-server ports))]
-      (test-fn)
-      (doall (pmap stop-selenium-server servers)))))
+      (try
+        (test-fn)
+        (finally (doall (pmap stop-selenium-server servers)))))))

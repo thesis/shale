@@ -9,7 +9,7 @@
 
 (use-fixtures :once (with-selenium-servers [4444]))
 
-(deftest test-app
+(deftest ^:integration test-app
   (testing "main route"
     (let [response (app (mock/request :get "/"))]
       (is (= (:status response) 200))))

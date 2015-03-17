@@ -105,7 +105,7 @@ Get or create a new reserved session with tags
 
 ```sh
 $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
-       -XPOST http://localhost:5000/sessions/?reserve=True \
+       -XPOST http://localhost:5000/sessions/?reserve_after_create=True \
        --header "Content-Type:application/json"
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",

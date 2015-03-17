@@ -1,24 +1,20 @@
 (ns shale.sessions
   (:require [clojure.set :refer [rename-keys]]
-            [clojure.string :as string]
-            [clojure.walk :refer :all]
             [clojure.core.match :refer [match]]
-            [clj-dns.core :refer [dns-lookup]]
+            [clojure.walk :refer :all]
             [clj-webdriver.remote.driver :as remote-webdriver]
             [clj-webdriver.taxi :refer [current-url quit]]
             [taoensso.carmine :as car]
-            [org.bovinegenius  [exploding-fish :as uri]]
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
             [taoensso.timbre :as timbre :refer [info warn error debug]]
-            [slingshot.slingshot :refer [try+]]
+            [slingshot.slingshot :refer [try+ throw+]]
             [shale.configurer :refer [config]]
-            [shale.nodes :as nodes]
+            [shale.nodes :as nodes :refer [NodeInRedis NodeView]]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
             [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
-  (:import org.openqa.selenium.WebDriverException
-           org.xbill.DNS.Type))
+  (:import org.openqa.selenium.WebDriverException))
 
 (def session-set-key
   (apply str (interpose "/" [redis-key-prefix "sessions"])))
@@ -31,37 +27,44 @@
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
 
-(defn is-ip? [s]
-  (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
+(def Capabilities {s/Any s/Any})
 
-(def Node
-  "A schema for a node spec."
-  {(s/optional-key :url)   s/Str
-   (s/optional-key :id)    s/Str
-   (s/optional-key :tags) [s/Str]})
+(def SessionInRedis
+  "A session, as represented in redis."
+  {(s/optional-key :tags)        [s/Str]
+   (s/optional-key :reserved)     s/Bool
+   (s/optional-key :current-url)  s/Str
+   (s/optional-key :browser-name) s/Str
+   (s/optional-key :node-id)      s/Str})
 
-(def Session
-  "A schema for a session spec."
-  {:id                            s/Str
+(def SessionView
+  "A session, as presented to library users."
+  {(s/optional-key :id)           s/Str
    (s/optional-key :tags)        [s/Str]
    (s/optional-key :reserved)     s/Bool
    (s/optional-key :current-url)  s/Str
    (s/optional-key :browser-name) s/Str
-   (s/optional-key :node)         Node})
+   (s/optional-key :node)         NodeView})
+
+(def TagChange
+  "Add/remove a session/node tag"
+  {:resource (s/either (literal-pred :session) (literal-pred :node))
+   :action   (s/either (literal-pred :add) (literal-pred :remove))
+   :tag      s/Str})
 
 (def Requirement
   "A schema for a session requirement."
-  (s/either
-    (s/pair :session-tag  "type"  s/Str        "tag")
-    (s/pair :node-tag     "type"  s/Str        "tag")
-    (s/pair :reserved     "type"  s/Str        "reserved")
-    (s/pair :session-id   "type"  s/Str        "session id")
-    (s/pair :node-id      "type"  s/Str        "node id")
-    (s/pair :browser-name "type"  s/Str        "browser")
-    (s/pair :current-url  "type"  s/Str        "url")
-    (s/pair :not          "type"  Requirement  "requirement")
-    (s/pair :and          "type" [Requirement] "requirements")
-    (s/pair :or           "type" [Requirement] "requirements")))
+  (any-pair
+    :session-tag   s/Str
+    :node-tag      s/Str
+    :reserved      s/Bool
+    :session-id    s/Str
+    :node-id       s/Str
+    :browser-name  s/Str
+    :current-url   s/Str
+    :not           (s/recursive #'Requirement)
+    :and           [(s/recursive #'Requirement)]
+    :or            [(s/recursive #'Requirement)]))
 
 (defn maybe-bigdec [x]
   (try (bigdec x) (catch NumberFormatException e nil)))
@@ -75,61 +78,115 @@
   {:weight  DecString
    :require Requirement})
 
-(defn resolve-host [host]
-  (info (format "Resolving host %s..." host))
-  (if (is-ip? host)
-    host
-    (if-let [resolved (first ((dns-lookup host Type/A) :answers))]
-        (string/replace (str (.getAddress resolved)) "/" "")
-        (if-let [resolved
-                 (try
-                   (java.net.InetAddress/getByName host)
-                   (catch java.net.UnknownHostException e nil))]
-          (.getHostAddress resolved)
-          (do
-            (let [message (format "Unable to resolve host %s" host)]
-              (warn message)
-              (throw
-                (ex-info message
-                         {:user-visible true :status 500}))))))))
+(def OldRequirements
+  {(s/optional-key :browser-name)  s/Str
+   (s/optional-key :reserved)      s/Bool
+   (s/optional-key :tags)          [s/Str]
+   (s/optional-key :node)          {:url s/Str}})
 
-(defn host-resolved-url [url]
-  (let [u (if (string? url) (uri/uri url) url)]
-    (assoc u :host (resolve-host (uri/host u)))))
+(defn first-checked-schema
+  "Return the first schema which validates a value. Useful as a dispatch
+  function for multimethods."
+  [value schemas]
+  (doto (->> schemas
+             (filter (fn [schema]
+                       (try
+                         (s/validate schema value)
+                         schema
+                         (catch RuntimeException e))))
+             first)))
 
-(defn matches-requirements [session-model requirements]
-  (let [exact-match-keys [:browser-name :reserved]
-        resolved-nodes (map (comp str host-resolved-url)
-                            (filter identity
-                                    (map #(get-in % [:node :url])
-                                         [session-model requirements])))]
-    (info "Checking session requirements..."
-         session-model
-         requirements)
-    (info "Resolved node hosts..." resolved-nodes)
-    (and
-      (every? #(apply clojure.set/subset? %)
-              [(map #(into #{} (% :tags))
-                       [requirements session-model])
-               (map #(into #{} (select-keys % exact-match-keys))
-                    [requirements session-model])])
-      (if (> (count resolved-nodes) 0)
-        (apply = resolved-nodes)
-        true))))
+(defmacro defmultischema
+  "Dispatches multimethods based on whether their args match the provided
+  schemas.
 
-(defn matches-requirement [requirement session-model]
-  (let [arg (second requirement)]
-    (match (first requirement)
-      :session-tag  (some #{arg} (session-model :tags))
-      :node-tag     (some #{arg} (get-in session-model [:node :tags]))
-      :session-id   (= arg (session-model :id))
-      :node-id      (= arg (get-in session-model [:node :id]))
-      :reserved     (= arg (session-model :reserved))
-      :browser-name (= arg (session-model :browser-name))
-      :current-url  (= arg (session-model :current-url))
-      :not          (not     (matches-requirement arg session-model))
-      :and          (every? #(matches-requirement % session-model) arg)
-      :or           (some   #(matches-requirement % session-model) arg))))
+  Each schema is validated against a vector of a method's args. The first that
+  validates successfully is used as the dispatch value.
+
+  For example,
+  ```
+  (defmultischema test-method :number [s/Num] :string [s/Str])
+  (defmethod test-method :number [n]
+    (prn \"number\"))
+  (defmethod test-method :string [s]
+    (prn \"string\"))
+  ```"
+  [multi-name & schemas]
+  (if-not (even? (count schemas))
+    (throw+ (str "defmultischema expects an even number of args (for "
+                 "value / schema pairs)")))
+  `(defmulti ~multi-name
+     (fn [& args#]
+       (let [schema-to-value# (->> ~(vec schemas)
+                                   (partition 2)
+                                   (map (comp vec reverse))
+                                   (into {}))
+             schemas# (keys schema-to-value#)
+             matching-schema# (get schema-to-value#
+                                   (first-checked-schema (vec args#) schemas#))]
+         (if (nil? matching-schema#)
+           (throw+ (str "No matching schema for multimethod "
+                        (name '~multi-name)
+                        " with args "
+                        (vec args#)))
+           matching-schema#)
+         ))))
+
+(defmultischema matches-requirement
+  :old (s/pair s/Any "session" OldRequirements "requirements")
+  :new (s/pair s/Any "session" Requirement "requirement"))
+
+(s/defmethod matches-requirement :old :- s/Bool
+  [session-model :- {(s/optional-key :id) s/Str
+                     (s/optional-key :reserved) s/Bool
+                     (s/optional-key :tags) [s/Str]
+                     (s/optional-key :browser-name) s/Str
+                     (s/optional-key :current-url) s/Str
+                     (s/optional-key :node) {(s/optional-key :id) s/Str
+                                             (s/optional-key :url) s/Str
+                                             (s/optional-key :tags) [s/Str]}}
+   requirements :- OldRequirements]
+  (matches-requirement
+    {:session-id (:id session-model)
+     :session (merge
+                (select-keys session-model
+                           [:tags :reserved :browser-name :current-url])
+                (if-let [node-id (get-in session-model [:node :id])]
+                  {:node-id node-id}))
+     :node (select-keys (:node session-model) [:tags :url])}
+    [:and
+     (vec
+       (concat
+         (map #(vec [:session-tag %])
+              (get requirements :tags))
+         (->> [:browser-name :reserved]
+              (map #(vec [% (get requirements %)]))
+              (filter identity)
+              (into []))
+         (if-let [node-id
+                  (get-in requirements [:node :id])]
+           [[:node-id node-id]])
+         (map #(vec [:node-tag %])
+              (get-in requirements [:node :tags]))))]))
+
+(s/defmethod matches-requirement :new :- s/Bool
+  [session-model :- {(s/optional-key :session-id) s/Str
+                     (s/optional-key :session) SessionInRedis
+                     (s/optional-key :node) NodeInRedis}
+   requirement :- Requirement]
+  (let [[req-type arg] requirement
+        s session-model]
+    (match req-type
+      :session-tag  (some #{arg} (get-in s [:session :tags]))
+      :node-tag     (some #{arg} (get-in s [:node :tags]))
+      :session-id   (= arg (get-in s [:session-id]))
+      :node-id      (= arg (get-in s [:session :node-id]))
+      :reserved     (= arg (get-in s [:session :reserved]))
+      :browser-name (= arg (get-in s [:session :browser-name]))
+      :current-url  (= arg (get-in s [:session :current-url]))
+      :not          (not     (matches-requirement s arg))
+      :and          (every? #(matches-requirement s %) arg)
+      :or           (some   #(matches-requirement s %) arg))))
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
@@ -203,6 +260,44 @@
     (throw
       (ex-info "Unknown session id." {:session-id session-id}))))
 
+(defn webdriver-go-to-url [wd url]
+  "Asynchronously point a webdriver to a url.
+  Return nil or :webdriver-is-dead."
+  (try (do (to-async wd url) nil)
+    (catch WebDriverException e :webdriver-is-dead)))
+
+(defn session-go-to-url [session-id url]
+  "Asynchronously point a session to a url.
+  Return nil or :webdriver-is-dead."
+  (webdriver-go-to-url (resume-webdriver-from-id session-id) url))
+
+(defn session-go-to-url-or-destroy-session [session-id url]
+  "Asynchronously point a session to a url. Destroy the session if the
+  webdriver is dead. Return true if everything seems okay."
+  (let [okay (not (session-go-to-url session-id current-url))]
+    (if-not okay (destroy-session session-id))
+    okay))
+
+(def ModifyArg
+  "Modification to a session"
+  (any-pair
+    :change-tag TagChange
+    :go-to-url s/Str
+    :reserve s/Bool))
+
+(defn save-session-tags-to-redis [session-id tags]
+  (with-car* (sset-all (session-tags-key session-id) tags)))
+
+(defn save-session-diff-to-redis [session-id session]
+  "For any key present in the session arg, write that value to redis."
+  (with-car*
+    (hset-all
+      (session-key session-id)
+      (select-keys session
+        [:reserved :current-url :browser-name :node]))
+    (if (contains? session :tags)
+      (save-session-tags-to-redis session-id (session :tags)))))
+
 (defn modify-session
   [session-id {:keys [browser-name
                       node
@@ -215,37 +310,21 @@
                     tags nil
                     current-url nil}
                :as modifications}]
-  (s/validate (s/maybe Node ) node)
   (info (format "Modifing session %s, %s" session-id (str modifications)))
-  (if (some #{session-id} (session-ids))
-    (last
-      (with-car*
-        (if (if current-url
-                (try+
-                  (to-async
-                    (resume-webdriver-from-id
-                      session-id
-                      :timeout (webdriver-timeout))
-                    current-url)
-                  true
-                  (catch WebDriverException e
-                    (destroy-session session-id)
-                    nil)
-                  (catch :timeout e
-                    (destroy-session session-id)
-                    nil))
-                true)
-            (let [sess-key (session-key session-id)
-                  sess-tags-key (session-tags-key session-id)]
-              (doall
-                (map #(car/hset sess-key (key %1) (val %1))
-                     (select-keys modifications
-                                  [:reserved :current-url :browser-name :node])))
-              (car/del sess-tags-key)
-              (doall (map #(car/sadd sess-tags-key %) (or tags []))))
-            nil)
-        (car/return (view-model session-id))))
-    nil))
+  (when (some #{session-id} (session-ids))
+    (if (or (not current-url)
+            (session-go-to-url-or-destroy-session session-id current-url))
+      (save-session-diff-to-redis
+        session-id
+        (select-keys modifications
+          [:reserved :current-url :browser-name :node :tags])))
+    (view-model session-id)))
+
+(def CreateArg
+  "Session-creation args"
+  {(s/optional-key :browser-name) s/Str
+   (s/optional-key :capabilities) {}
+   (s/optional-key :node-id) s/Str})
 
 (defn create-session
   [{:keys [browser-name
@@ -262,7 +341,7 @@
          reserve-after-create nil
          current-url nil}
     :as requirements}]
-  (s/validate (s/maybe Node ) node)
+  (s/validate (s/maybe NodeInRedis) node)
   (info (format "Creating a new session.\nRequirements: %s"
                 (str requirements)))
   (let [merged-reqs
@@ -311,47 +390,55 @@
         (car/sadd session-set-key session-id)
         (car/return (modify-session session-id defaulted-reqs))))))
 
-(defn get-or-create-session
-  [{:keys [browser-name
-           node
-           reserved
-           tags
-           extra-desired-capabilities
-           reserve-after-create
-           force-create
-           current-url]
-    :or {browser-name "firefox"
-         node nil
-         reserved false
-         tags []
-         extra-desired-capabilities nil
-         reserve-after-create nil
-         force-create nil
-         current-url nil}
-    :as requirements}]
-  (s/validate (s/maybe Node ) node)
-  (let [requirements (update-in requirements [:reserved] #(or % false))]
+(def OldGetOrCreateArg
+  {(s/optional-key :browser-name)  s/Str
+   (s/optional-key :reserved)      s/Bool
+   (s/optional-key :tags)          [s/Str]
+   (s/optional-key :node)          {:url s/Str}
+   (s/optional-key :current-url)   s/Str
+   (s/optional-key :reserve-after-create)       s/Bool
+   (s/optional-key :extra-desired-capabilities) Capabilities
+   (s/optional-key :force-create)               s/Bool})
 
+(s/def get-or-create-defaults :- OldGetOrCreateArg
+  {:browser-name "firefox"
+   :tags []
+   :reserved false})
+
+(def GetOrCreateArg
+  "The arg to get-or-create-session."
+  {(s/optional-key :require) Requirement  ; filter criteria
+   (s/optional-key :score) [Score]        ; sort ranking
+   (s/optional-key :create) CreateArg     ; how to create, if creating
+   (s/optional-key :modify) [ModifyArg]}) ; modifications to perform always
+
+(s/defn get-or-create-session [arg]
+  (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))]
     (with-car*
       (car/return
         (or
-          (if force-create
-            (create-session
-              (rename-keys requirements
-                           {:reserve-after-create :reserved})))
-          (if-let [candidate (->> (view-models nil)
-                                  (filter #(matches-requirements % requirements))
+          (if (arg :force-create)
+            (-> arg
+                (rename-keys {:reserve-after-create :reserve-after-create})
+                create-session)
+            )
+          (if-let [candidate (->> (view-models)
+                                  (filter
+                                    (fn [session-model]
+                                      (matches-requirement
+                                        session-model
+                                        (dissoc arg :reserve-after-create))))
                                   first)]
-            (if (or reserve-after-create current-url)
+            (if (or (arg :reserve-after-create) (arg :current-url))
               (modify-session (get candidate :id)
                               (rename-keys
-                                (select-keys requirements
+                                (select-keys arg
                                              [:reserve-after-create
                                               :current-url
                                               :tags])
                                 {:reserve-after-create :reserved}))
               candidate))
-          (create-session requirements))))))
+          (create-session arg))))))
 
 (defn destroy-session [session-id]
   (with-car*
@@ -419,7 +506,7 @@
         (keywordize-keys
           (apply hash-map contents)) :tags tags :id session-id))))
 
-(defn view-models [ids]
+(defn view-models []
   (with-car*
     (car/return
       (map view-model (session-ids)))))

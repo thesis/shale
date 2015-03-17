@@ -1,11 +1,12 @@
 (ns shale.nodes
-  (:require [shale.node-pools :as node-pools]
-            [taoensso.carmine :as car :refer (wcar)])
-  (:use shale.redis
-        shale.utils
-        clojure.walk
-        [clojure.set :only [difference]]
-        [shale.configurer :only [config]])
+  (:require [clojure.set :refer [difference]]
+            [taoensso.carmine :as car :refer (wcar)]
+            [schema.core :as s]
+            [shale.redis :refer :all]
+            [shale.utils :refer :all]
+            [clojure.walk :refer :all]
+            [shale.configurer :refer [config]]
+            [shale.node-pools :as node-pools])
   (:import java.util.UUID
            [shale.node_pools DefaultNodePool AWSNodePool]))
 
@@ -42,15 +43,24 @@
 (defn node-tags-key [id]
   (format node-tags-key-template id))
 
-(defn node-ids []
-  (with-car* (car/smembers node-set-key)))
-
 (defn uuid [] (str (java.util.UUID/randomUUID)))
 
-(defn node-ids []
+(s/defn node-ids :- [s/Str] []
   (with-car* (car/smembers node-set-key)))
 
-(defn view-model [id]
+(def NodeInRedis
+  "A node, as represented in redis."
+  {(s/optional-key :url)   s/Str
+   (s/optional-key :tags) [s/Str]})
+
+(def NodeView
+  "A node, as presented to library users."
+  {(s/optional-key :id)    s/Str
+   (s/optional-key :url)   s/Str
+   (s/optional-key :tags) [s/Str]})
+
+(s/defn view-model :- NodeView
+  [id :- s/Str]
   (let [node-key (node-key id)
         node-tags-key (node-tags-key id)
         [contents tags] (with-car*
@@ -59,27 +69,34 @@
     (keywordize-keys
       (assoc (apply hash-map contents) :tags (or tags []) :id id))))
 
-(defn view-models [ids]
-  (let [ids (or ids (node-ids) )]
-    (map view-model ids)))
+(s/defn view-models :- [NodeView] []
+  (map view-model (node-ids)))
 
-(defn view-model-from-url [url]
-  (first (filter #(= (% :url) url) (view-models nil))))
+(s/defn view-model-from-url :- NodeView
+  [url :- s/Str]
+  (first (filter #(= (% :url) url) (view-models))))
 
-(defn modify-node [id {:keys [url tags]
-                       :or {:url nil
-                            :tags nil}}]
+(s/defn modify-node :- NodeView
+  "Modify a node's url or tags in Redis. Any provided url that's host isn't an
+  IP address will be resolved before storing."
+  [id {:keys [url tags]
+       :or {:url nil
+            :tags nil}}]
   (last
     (with-car*
       (let [node-key (node-key id)
             node-tags-key (node-tags-key id)]
-        (if url (car/hset node-key :url url))
+        (if url (->> url
+                     host-resolved-url
+                     str
+                     (car/hset node-key :url)))
         (if tags (sset-all node-tags-key tags))
         (car/return (view-model id))))))
 
-(defn create-node [{:keys [url
-                           tags]
-                    :or {:tags []}}]
+(s/defn create-node :- NodeView
+  [{:keys [url
+           tags]
+    :or {:tags []}}]
   (last
     (with-car*
       (let [id (uuid)
@@ -88,7 +105,7 @@
         (modify-node id {:url url :tags tags})
         (car/return (view-model id))))))
 
-(defn destroy-node [id]
+(s/defn destroy-node [id :- s/Str]
   (with-car*
     (car/watch node-set-key)
     (try
@@ -108,7 +125,7 @@
   "Syncs the node list with the backing node pool."
   []
   (let [nodes (to-set (node-pools/get-nodes node-pool))
-        registered-nodes (to-set (map #(get % :url) (view-models nil)))]
+        registered-nodes (to-set (map #(get % :url) (view-models)))]
     (doall
       (concat
         (map #(create-node {:url %})
@@ -117,17 +134,21 @@
              (difference registered-nodes nodes)))))
   true)
 
-(defn get-node [{:keys [url
-                        tags]
-                 :or {:url nil
-                      :tags []}
-                 :as requirements}]
-  (let [matches-requirements (fn [model]
-                               (apply clojure.set/subset?
-                                      (map #(select-keys % [:url :tags])
-                                           [requirements model])))]
-    (try
-      (rand-nth
-      (filter matches-requirements
-              (view-models nil)))
-      (catch IndexOutOfBoundsException e))))
+(def NodeRequirements
+  {(s/optional-key :url)   s/Str
+   (s/optional-key :tags) [s/Str]})
+
+(s/defn matches-requirements :- s/Bool
+  [model :- NodeView
+   requirements :- NodeRequirements]
+  (apply clojure.set/subset?
+         (map #(select-keys % [:url :tags])
+              [requirements model])))
+
+(s/defn get-node :- (s/maybe NodeView)
+  [requirements :- NodeRequirements]
+  (try
+    (rand-nth
+      (filter #(matches-requirements % requirements)
+              (view-models)))
+    (catch IndexOutOfBoundsException e)))

@@ -59,11 +59,11 @@
     (f)
     (- (session-count) before)))
 
-(deftest test-sessions
+(deftest ^:integration test-sessions
   (testing "sessions"
     (is (= 0 (session-count)))))
 
-(deftest test-get-or-create
+(deftest ^:integration test-get-or-create
   (testing "get-or-create"
     (testing "creating one session"
       (is (= 1 (session-diff #(shale.client/get-or-create-session!
@@ -81,7 +81,7 @@
         (is (= 3 (session-diff
                    #(logged-in-sessions-fixture test-fn))))))))
 
-(deftest test-force-create
+(deftest ^:integration test-force-create
   (testing "force create a new session"
     (let [test-fn
           (fn []
@@ -91,7 +91,7 @@
               (is (get session "browser_name") "phantomjs")))]
       (is (= 1 (session-diff test-fn))))))
 
-(deftest test-reservations
+(deftest ^:integration test-reservations
   (testing "releasing a session"
     (let [test-fn (fn []
                     (shale.client/release-session!
@@ -106,7 +106,7 @@
                      :browser-name "phantomjs"})]
       (is (get session "reserved")))))
 
-(deftest test-webdriver-macro
+(deftest ^:integration test-webdriver-macro
   (testing "that the with-webdriver* macro properly releases its session"
     (shale.client/with-webdriver* {:browser-name "phantomjs"}
       (is (get (first (shale.client/sessions)) "reserved"))
@@ -114,7 +114,7 @@
     (is (= 1 (session-count)))
     (is (not (get (first (shale.client/sessions)) "reserved")))))
 
-(deftest test-webdriver-js
+(deftest ^:integration test-webdriver-js
   (testing "that the wrapped webdriver can execute javascript"
     (shale.client/with-webdriver* {:browser-name "phantomjs"}
       (is (= 1 (execute-script "return 1;"))))))

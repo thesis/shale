@@ -91,9 +91,7 @@
     (jsonify {:error message})))
 
 (defn ->sessions-request [context]
-  (rename-keys
-    (clojure-keys (get context ::data))
-    {:reserve :reserve-after-create}))
+  (clojure-keys (get context ::data)))
 
 (defresource sessions-resource [params]
   :allowed-methods  [:get :post]
@@ -104,11 +102,11 @@
                  :include-boolean-params true
                  :schema {(s/optional-key "browser_name") s/Str
                           (s/optional-key "tags") [s/Str]
-                          (s/optional-key "reserve") s/Bool
+                          (s/optional-key "reserve_after_create") s/Bool
                           (s/optional-key "reserved") s/Bool
                           (s/optional-key "force_create") s/Bool})
   :handle-ok (fn [context]
-               (jsonify (shale.sessions/view-models nil)))
+               (jsonify (shale.sessions/view-models)))
   :handle-exception handle-exception
   :post! (fn [context]
            {::session (shale.sessions/get-or-create-session
@@ -120,7 +118,11 @@
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-request-data :context %)
+  :malformed? #(parse-request-data
+                 :context %
+                 :schema {(s/optional-key "reserved") s/Bool
+                          (s/optional-key "tags") [s/Str]
+                          (s/optional-key "current_url") s/Str})
   :handle-ok (fn [context]
                (jsonify (get context ::session)))
   :handle-exception handle-exception
@@ -146,9 +148,8 @@
   :allowed-methods  [:get]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-request-data :context %)
   :handle-ok (fn [context]
-               (jsonify (shale.nodes/view-models nil)))
+               (jsonify (shale.nodes/view-models)))
   :handle-exception handle-exception)
 
 (defresource nodes-refresh-resource []
@@ -162,7 +163,10 @@
   :allowed-methods [:get :put :delete]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-request-data :context %)
+  :malformed? #(parse-request-data
+                 :context %
+                 :schema {(s/optional-key "url") s/Str
+                          (s/optional-key "tags") [s/Str]})
   :handle-ok (fn [context]
                (jsonify (get context ::node)))
   :handle-exception handle-exception
