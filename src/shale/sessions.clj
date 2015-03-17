@@ -10,32 +10,13 @@
             [taoensso.timbre :as timbre :refer [info warn error debug]]
             [slingshot.slingshot :refer [try+ throw+]]
             [shale.configurer :refer [config]]
-            [shale.nodes :as nodes :refer [NodeInRedis NodeView]]
+            [shale.nodes :as nodes :refer [NodeView]]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
             [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
   (:import org.openqa.selenium.WebDriverException))
 
-(def session-set-key
-  (apply str (interpose "/" [redis-key-prefix "sessions"])))
-(def session-key-template
-  (apply str (interpose "/" [redis-key-prefix "sessions" "%s"])))
-(def session-tags-key-template
-  (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "tags"])))
-(defn session-key [session-id]
-  (format session-key-template session-id))
-(defn session-tags-key [session-id]
-  (format session-tags-key-template session-id))
-
 (def Capabilities {s/Any s/Any})
-
-(def SessionInRedis
-  "A session, as represented in redis."
-  {(s/optional-key :tags)        [s/Str]
-   (s/optional-key :reserved)     s/Bool
-   (s/optional-key :current-url)  s/Str
-   (s/optional-key :browser-name) s/Str
-   (s/optional-key :node-id)      s/Str})
 
 (def SessionView
   "A session, as presented to library users."

@@ -28,36 +28,20 @@
                        (config :node-pool-impl))
                    (ConfigNodePool.))))
 
-(def node-set-key
-  (apply str (interpose "/" [redis-key-prefix "nodes"])))
-
-(def node-key-template
-  (apply str (interpose "/" [redis-key-prefix "nodes" "%s"])))
-
-(def node-tags-key-template
-  (apply str (interpose "/" [redis-key-prefix "nodes" "%s" "tags"])))
-
-(defn node-key [id]
-  (format node-key-template id))
-
-(defn node-tags-key [id]
-  (format node-tags-key-template id))
+(def default-session-limit
+  (or (config :max-sessions-per-node) 3))
 
 (defn uuid [] (str (java.util.UUID/randomUUID)))
 
 (s/defn node-ids :- [s/Str] []
   (with-car* (car/smembers node-set-key)))
 
-(def NodeInRedis
-  "A node, as represented in redis."
-  {(s/optional-key :url)   s/Str
-   (s/optional-key :tags) [s/Str]})
-
 (def NodeView
   "A node, as presented to library users."
-  {(s/optional-key :id)    s/Str
-   (s/optional-key :url)   s/Str
-   (s/optional-key :tags) [s/Str]})
+  {(s/optional-key :id)           s/Str
+   (s/optional-key :url)          s/Str
+   (s/optional-key :tags)        [s/Str]
+   (s/optional-key :max-sessions) s/Int})
 
 (s/defn view-model :- NodeView
   [id :- s/Str]
