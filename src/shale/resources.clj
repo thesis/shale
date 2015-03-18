@@ -107,7 +107,7 @@
       :reserve)))
 
 (defresource sessions-resource [params]
-  :allowed-methods  [:get :post]
+  :allowed-methods  [:get :post :delete]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-request-data
@@ -125,6 +125,10 @@
   :post! (fn [context]
            {::session (shale.sessions/get-or-create-session
                         (->sessions-request context))})
+  :delete! (fn [context]
+             (doall
+               (map (comp shale.sessions/destroy-session :id)
+                    (shale.sessions/view-models))))
   :handle-created (fn [context]
                     (jsonify (get context ::session))))
 

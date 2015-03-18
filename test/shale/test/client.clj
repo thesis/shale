@@ -44,8 +44,7 @@
 
 (defn delete-sessions-fixture [f]
   (let [test-value (f)]
-    (doseq [session-id (map #(get % "id") (shale.client/sessions))]
-      (shale.client/destroy-session! session-id))
+    (shale.client/destroy-sessions!)
     test-value))
 
 (use-fixtures :once (with-selenium-servers [4443 4444]) server-fixture)

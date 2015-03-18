@@ -138,6 +138,12 @@ $ curl -XDELETE http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea
 true
 ```
 
+Delete all sessions.
+
+```sh
+$ curl -XDELETE http://localhost:5000/sessions/
+true
+```
 ### Clojure
 
 The Clojure client returns functional web drivers using `clj-webdriver`,

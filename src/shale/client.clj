@@ -75,6 +75,10 @@
   (client/delete (session-url id))
   nil)
 
+(defn destroy-sessions! []
+  (client/delete (sessions-url))
+  nil)
+
 (defn refresh-sessions! []
   (let [response (try+
                    (client/post (str (sessions-url) "refresh") {})
