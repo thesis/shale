@@ -44,6 +44,23 @@
   (let [u (if (string? url) (uri/uri url) url)]
     (assoc u :host (resolve-host (uri/host u)))))
 
+(defn vector->map [v]
+  (->> v
+       (s/validate (s/pred #(even? (count %))))
+       (partition 2 )
+       (map vec )
+       (into {})))
+
+(defn keys-with-vals-matching-pred [pred m]
+  (->> m
+       (map #(if (pred (val %)) (key %)))
+       (filter identity)))
+
+(defn merge-meta
+  "Return an object with an additional metadata map merged in."
+  [obj new-meta]
+  (with-meta obj (merge (meta obj) new-meta)))
+
 ;; schema utils
 
 (defmacro literal-pred

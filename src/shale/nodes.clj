@@ -45,13 +45,9 @@
 
 (s/defn view-model :- NodeView
   [id :- s/Str]
-  (let [node-key (node-key id)
-        node-tags-key (node-tags-key id)
-        [contents tags] (with-car*
-                          (car/hgetall node-key)
-                          (car/smembers node-tags-key))]
-    (keywordize-keys
-      (assoc (apply hash-map contents) :tags (or tags []) :id id))))
+  (->> (model NodeInRedis id)
+       (merge {:id id})
+       keywordize-keys))
 
 (s/defn view-models :- [NodeView] []
   (map view-model (node-ids)))

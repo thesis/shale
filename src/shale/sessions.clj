@@ -171,9 +171,6 @@
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
-(defn session-ids []
-  (with-car* (car/smembers session-set-key)))
-
 (defn webdriver-timeout []
   (or
     (config :webdriver-timeout)
@@ -292,7 +289,7 @@
                     current-url nil}
                :as modifications}]
   (info (format "Modifing session %s, %s" session-id (str modifications)))
-  (when (some #{session-id} (session-ids))
+  (when (some #{session-id} (model-ids SessionInRedis))
     (if (or (not current-url)
             (session-go-to-url-or-destroy-session session-id current-url))
       (save-session-diff-to-redis
@@ -463,31 +460,16 @@
     (car/watch session-set-key)
     (doall
       (pmap refresh-session
-            (or ids (session-ids)))))
+            (or ids (model-ids SessionInRedis)))))
   true)
 
-(defn view-model [session-id]
-  (let [[contents tags]
-        (subvec
-          (with-car*
-            (let [sess-key (session-key session-id)
-                  sess-tags-key (session-tags-key session-id)]
-              (car/watch sess-key)
-              (car/watch sess-tags-key)
-              (if (with-car* (car/exists session-key))
-                (do
-                  (car/hgetall sess-key)
-                  (car/smembers sess-tags-key))
-                [nil nil])))
-          2
-          4)]
-    (if (= (count contents) 0)
-      nil
-      (assoc
-        (keywordize-keys
-          (apply hash-map contents)) :tags tags :id session-id))))
+(s/defn view-model :- SessionView [session-id :- s/Str]
+  (prn "SESSION " (model SessionInRedis session-id))
+  (->> (model SessionInRedis session-id)
+       keywordize-keys
+       (merge {:id session-id})))
 
-(defn view-models []
+(s/defn view-models :- [SessionView] []
   (with-car*
     (car/return
-      (map view-model (session-ids)))))
+      (map view-model (model-ids SessionInRedis)))))
