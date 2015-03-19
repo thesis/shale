@@ -118,6 +118,7 @@
                           (s/optional-key "reserve_after_create") s/Bool
                           (s/optional-key "reserve") s/Bool
                           (s/optional-key "reserved") s/Bool
+                          (s/optional-key "extra_desired_capabilities") {s/Any s/Any}
                           (s/optional-key "force_create") s/Bool})
   :handle-ok (fn [context]
                (jsonify (shale.sessions/view-models)))
