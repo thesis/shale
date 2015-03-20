@@ -322,6 +322,10 @@
   (s/validate (s/maybe NodeInRedis) node)
   (info (format "Creating a new session.\nRequirements: %s"
                 (str requirements)))
+  (if (= 0 (count (nodes/nodes-under-capacity)))
+    (throw
+      (ex-info "All nodes are over capacity!"
+               {:user-visible true :status 503})))
   (let [merged-reqs
         (merge {:node (select-keys (nodes/get-node {}) [:url :id])
                 :tags tags}

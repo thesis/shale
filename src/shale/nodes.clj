@@ -29,7 +29,7 @@
                    (ConfigNodePool.))))
 
 (def default-session-limit
-  (or (config :max-sessions-per-node) 3))
+  (or (config :node-max-sessions) 3))
 
 (defn uuid [] (str (java.util.UUID/randomUUID)))
 
@@ -43,11 +43,15 @@
    (s/optional-key :tags)        [s/Str]
    (s/optional-key :max-sessions) s/Int})
 
-(s/defn view-model :- NodeView
-  [id :- s/Str]
-  (->> (model NodeInRedis id)
+(s/defn ->NodeView [id :- s/Str
+                    from-redis :- NodeInRedis]
+  (->> from-redis
        (merge {:id id})
        keywordize-keys))
+
+(s/defn view-model :- NodeView
+  [id :- s/Str]
+  (->NodeView id (model NodeInRedis id)))
 
 (s/defn view-models :- [NodeView] []
   (map view-model (node-ids)))
@@ -118,6 +122,15 @@
   {(s/optional-key :url)   s/Str
    (s/optional-key :tags) [s/Str]})
 
+(s/defn session-count [node-id :- s/Str]
+  (->> (models SessionInRedis)
+       (filter #(= node-id (:node-id %)))
+       count))
+
+(s/defn nodes-under-capacity []
+  (filter #(< (session-count (:id %)) default-session-limit)
+          (view-models)))
+
 (s/defn matches-requirements :- s/Bool
   [model :- NodeView
    requirements :- NodeRequirements]
@@ -130,5 +143,5 @@
   (try
     (rand-nth
       (filter #(matches-requirements % requirements)
-              (view-models)))
+              (nodes-under-capacity)))
     (catch IndexOutOfBoundsException e)))
