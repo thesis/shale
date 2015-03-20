@@ -151,6 +151,8 @@
           {::session
            (shale.sessions/modify-session id (clojure-keys
                                                (get context ::data)))})
+  :respond-with-entity? (fn [context]
+                          (contains? context ::session))
   :exists? (fn [context]
              (let [session (shale.sessions/view-model id)]
                (if-not (nil? session)
