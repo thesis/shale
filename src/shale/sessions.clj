@@ -468,9 +468,9 @@
   true)
 
 (s/defn view-model :- SessionView [session-id :- s/Str]
-  (->> (model SessionInRedis session-id)
-       keywordize-keys
-       (merge {:id session-id})))
+  (if-let [m (->> (model SessionInRedis session-id)
+                  keywordize-keys)]
+    (merge {:id session-id} m)))
 
 (s/defn view-models :- [SessionView] []
   (with-car*

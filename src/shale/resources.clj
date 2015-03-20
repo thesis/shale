@@ -150,9 +150,13 @@
   :put! (fn [context]
           {::session
            (shale.sessions/modify-session id (clojure-keys
-                                               (get context ::data)))})
+                                               (get context ::data)))
+           ::new? false})
   :respond-with-entity? (fn [context]
                           (contains? context ::session))
+  :new? (fn [context]
+          (and (not (false? (::new? context)))
+               (contains? context ::session)))
   :exists? (fn [context]
              (let [session (shale.sessions/view-model id)]
                (if-not (nil? session)

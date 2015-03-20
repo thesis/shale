@@ -168,9 +168,12 @@
                        {list-k (list (with-car* (car/lrange list-k 0 -1)))})
                 maps (for [map-k map-keys]
                        {map-k (hash-map (with-car* (car/smembers map-k)))})]
-            (reduce merge (list* base (concat sets [])))))))))
+            (if-not (= base {})
+              (reduce merge (list* base (concat sets []))))))))))
 
 (defn models [model-schema]
   (with-car*
     (car/return
-      (map #(model model-schema %) (model-ids model-schema)))))
+      (->> (model-ids model-schema)
+           (map #(model model-schema %))
+           (filter identity)))))
