@@ -105,7 +105,8 @@
 (defmodel SessionInRedis
   "A session, as represented in redis."
   :model-name "sessions"
-  {(s/optional-key :tags)        [s/Str]
+  {(s/optional-key :webdriver-id) s/Str
+   (s/optional-key :tags)        [s/Str]
    (s/optional-key :reserved)     s/Bool
    (s/optional-key :current-url)  s/Str
    (s/optional-key :browser-name) s/Str

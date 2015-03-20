@@ -76,13 +76,13 @@
         (is (not (matches-requirement s requirement)))))
 
     (testing "session-id matches"
-      (let [requirement [:session-id "a"]
-            s {:session-id "a"}]
+      (let [requirement [:id "a"]
+            s {:id "a"}]
         (is (matches-requirement s requirement))))
 
     (testing "session-id doesn't match"
-      (let [requirement [:session-id "a"]
-            s {:session-id "b"}]
+      (let [requirement [:id "a"]
+            s {:id "b"}]
         (is (not (matches-requirement s requirement)))))
 
     (testing "node-id matches"

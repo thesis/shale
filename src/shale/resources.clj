@@ -70,14 +70,6 @@
       (catch org.codehaus.jackson.JsonParseException e
         {:message "Malformed JSON."}))))
 
-(defn build-session-url [request id]
-  (URL. (format "%s://%s:%s%s/%s"
-                (name (:scheme request))
-                (:server-name request)
-                (:server-port request)
-                (:uri request)
-                (str id))))
-
 (defn a-href-text [text]
   [:a {:href text} text])
 
@@ -133,34 +125,59 @@
   :handle-created (fn [context]
                     (jsonify (get context ::session))))
 
-(defresource session-resource [id]
-  :allowed-methods [:get :put :delete]
-  :available-media-types ["application/json"]
-  :known-content-type? is-json-or-unspecified?
-  :malformed? #(parse-request-data
-                 :context %
-                 :schema {(s/optional-key "reserved") s/Bool
-                          (s/optional-key "tags") [s/Str]
-                          (s/optional-key "current_url") s/Str})
-  :handle-ok (fn [context]
-               (jsonify (get context ::session)))
-  :handle-exception handle-exception
-  :delete! (fn [context]
-             (shale.sessions/destroy-session id))
-  :put! (fn [context]
-          {::session
-           (shale.sessions/modify-session id (clojure-keys
-                                               (get context ::data)))
-           ::new? false})
-  :respond-with-entity? (fn [context]
-                          (contains? context ::session))
-  :new? (fn [context]
-          (and (not (false? (::new? context)))
-               (contains? context ::session)))
-  :exists? (fn [context]
-             (let [session (shale.sessions/view-model id)]
-               (if-not (nil? session)
-                 {::session session}))))
+(defn build-session-url [request id]
+  (URL. (format "%s://%s:%s/sessions/%s"
+                (name (:scheme request))
+                (:server-name request)
+                (:server-port request)
+                (str id))))
+
+(def shared-session-resource
+  {:allowed-methods [:get :put :delete]
+   :available-media-types ["application/json"]
+   :known-content-type? is-json-or-unspecified?
+   :malformed? #(parse-request-data
+                  :context %
+                  :schema {(s/optional-key "reserved") s/Bool
+                           (s/optional-key "tags") [s/Str]
+                           (s/optional-key "current_url") s/Str})
+   :handle-ok (fn [context]
+                (jsonify (::session context)))
+   :handle-exception handle-exception
+   :delete! (fn [context]
+              (shale.sessions/destroy-session
+                (or (::id context) (get-in context [:request :params :id]))))
+   :put! (fn [context]
+           {::session
+            (shale.sessions/modify-session (or (::id context)
+                                               (get-in context [:request :params :id]))
+                                           (clojure-keys (get context ::data)))
+            ::new? false})
+   :respond-with-entity? (fn [context]
+                           (contains? context ::session))
+   :new? (fn [context]
+           (and (not (false? (::new? context)))
+                (contains? context ::session)))
+   :exists? (fn [context]
+              (let [session (shale.sessions/view-model
+                              (or (::id context)
+                                  (get-in context [:request :params :id])))]
+                (if-not (nil? session)
+                  {::session session
+                   ::id (:id session)})))})
+
+(defresource session-resource [id] shared-session-resource)
+
+(defresource session-by-webdriver-id [webdriver-id]
+  shared-session-resource
+  :location (fn [context]
+              (build-session-url (:request context)
+                                 (get-in context [::session :id])))
+  :exists?  (fn [context]
+              (let [session (shale.sessions/view-model-by-webdriver-id webdriver-id)]
+                (if-not (nil? session)
+                  {::session session
+                   ::id (:id session)}))))
 
 (defresource sessions-refresh-resource [id]
   :allowed-methods [:post]
@@ -216,12 +233,13 @@
                      [:body
                        [:h1 "Shale - Selenium Manager / Hub Replacement"]
                        [:ul
-                       [:li (a-href-text "/sessions") "Active Selenium sessions."]
-                       [:li (a-href-text "/sessions/:id")
-                        "A session identified by id. Accepts GET, PUT, & DELETE."]
-                       [:li (a-href-text "/sessions/refresh")
-                        "POST to refresh all sessions."]
-                       ]])))))
+                         [:li (a-href-text "/sessions")
+                              "Active Selenium sessions."]
+                         [:li (a-href-text "/sessions/:id")
+                              (str "A session identified by id."
+                                   "Accepts GET, PUT, & DELETE.")]
+                         [:li (a-href-text "/sessions/refresh")
+                              "POST to refresh all sessions."]]])))))
 
 (defn assemble-routes []
   (routes
@@ -231,6 +249,9 @@
     (ANY ["/sessions/:id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
       [id]
       (session-resource id))
+    (ANY ["/sessions/webdriver/:webdriver-id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
+      [webdriver-id]
+      (session-by-webdriver-id webdriver-id))
     (ANY ["/sessions/:id/refresh", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
       [id]
       (sessions-refresh-resource id))

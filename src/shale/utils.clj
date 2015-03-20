@@ -61,6 +61,8 @@
   [obj new-meta]
   (with-meta obj (merge (meta obj) new-meta)))
 
+(defn gen-uuid [] (str (java.util.UUID/randomUUID)))
+
 ;; schema utils
 
 (defmacro literal-pred

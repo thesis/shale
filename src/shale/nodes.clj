@@ -31,8 +31,6 @@
 (def default-session-limit
   (or (config :node-max-sessions) 3))
 
-(defn uuid [] (str (java.util.UUID/randomUUID)))
-
 (s/defn node-ids :- [s/Str] []
   (with-car* (car/smembers node-set-key)))
 
@@ -83,7 +81,7 @@
     :or {:tags []}}]
   (last
     (with-car*
-      (let [id (uuid)
+      (let [id (gen-uuid)
             node-key (node-key id)]
         (car/sadd node-set-key id)
         (modify-node id {:url url :tags tags})
