@@ -464,7 +464,6 @@
   true)
 
 (s/defn view-model :- SessionView [session-id :- s/Str]
-  (prn "SESSION " (model SessionInRedis session-id))
   (->> (model SessionInRedis session-id)
        keywordize-keys
        (merge {:id session-id})))
