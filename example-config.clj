@@ -22,6 +22,10 @@
  :node-list ["http://localhost:5555/wd/hub" "http://anotherhost:5555/wd/hub"]
  ;; the default max number of sessions to create per node.
  :node-max-sessions 3
+ ;; the number of milliseconds between each node refresh
+ :node-refresh-delay 1000
+ ;; the number of milliseconds between each session refresh
+ :session-refresh-delay 200
  ;; optionally provide redis connection details suitable for use by carmine
  ;; eg http://ptaoussanis.github.io/carmine/taoensso.carmine.html#var-wcar
  ;; if not provided, the defaults will be used
