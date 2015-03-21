@@ -4,6 +4,8 @@
             [clojure.walk :refer :all]
             [clj-webdriver.remote.driver :as remote-webdriver]
             [clj-webdriver.taxi :refer [current-url quit]]
+            [clj-http.client :as client]
+            [cemerick.url :refer [url]]
             [taoensso.carmine :as car]
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
@@ -14,7 +16,10 @@
             [shale.utils :refer :all]
             [shale.redis :refer :all]
             [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
-  (:import org.openqa.selenium.WebDriverException))
+  (:import org.openqa.selenium.WebDriverException
+           org.xbill.DNS.Type
+           org.apache.http.conn.ConnectTimeoutException
+           java.net.ConnectException))
 
 (def Capabilities {s/Any s/Any})
 
@@ -439,14 +444,40 @@
     (info (format "Destroying sessions %s..." id))
     (car/watch session-set-key)
     (let [sess-key (session-key id)
-          sess-tags-key (session-tags-key id)]
+          sess-tags-key (session-tags-key id)
+          session (view-model id)
+          webdriver-id (:webdriver-id session)
+          node-url (get-in session [:node :url])]
       (try+
-        (if-let [wd (resume-webdriver-from-id
-                      id
-                      :timeout (webdriver-timeout))]
-          (quit wd))
-        (catch WebDriverException e)
-        (catch :timeout e))
+        (if webdriver-id
+          (let [timeout (webdriver-timeout)
+                session-url (->> webdriver-id
+                                 (format "./session/%s")
+                                 (url node-url)
+                                 str)]
+            (prn "SESSION URL TO BE DESTROYED" session-url)
+            (prn "NODE URL" node-url)
+            (prn "SESSIONS ON NODE" (client/get (str node-url "/sessions")))
+            (client/delete session-url
+                           {:socket-timeout timeout
+                            :conn-timeout timeout})))
+        (catch [:status 500] _
+          (error
+            (format "Got a 500 attempting to delete session %s fomr node %s."
+                    id
+                    node-url)))
+        (catch [:status 404] _)
+        (catch #(or (instance? ConnectTimeoutException %)
+                    (instance? java.net.SocketTimeoutException %)) e
+          (error
+            (format "Timeout connecting to node %s to delete session %s."
+                    node-url
+                    id)))
+        (catch java.net.ConnectException e
+          (error
+            (format "Error connecting to node %s to delete session %s."
+                    node-url
+                    id))))
       (car/srem session-set-key id)
       (car/del sess-key)
       (car/del sess-tags-key)))
