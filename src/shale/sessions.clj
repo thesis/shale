@@ -15,6 +15,7 @@
             [shale.nodes :as nodes :refer [NodeView]]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
+            [shale.selenium :as selenium]
             [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
   (:import org.openqa.selenium.WebDriverException
            org.xbill.DNS.Type
@@ -507,7 +508,14 @@
     (car/watch session-set-key)
     (doall
       (pmap refresh-session
-            (or ids (model-ids SessionInRedis)))))
+            (or ids (model-ids SessionInRedis))))
+    (doall
+      (->> (nodes/view-models)
+           (map :url)
+           (filter identity)
+           (pmap #(selenium/session-ids-from-node %))
+           (pmap #(if (not (model-exists? SessionInRedis %))
+                    (destroy-session %))))))
   true)
 
 (def view-model-defaults {:tags #{}

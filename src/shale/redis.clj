@@ -124,6 +124,9 @@
   (with-car*
     (car/smembers (:redis-key (meta model-schema)))))
 
+(defn model-exists? [model-schema id]
+  (not (nil? (some #{id} (model-ids model-schema)))))
+
 (defn model
   "Return a model from a Redis key given a particular schema.
 
