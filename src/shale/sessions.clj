@@ -476,9 +476,7 @@
             (format "Error connecting to node %s to delete session %s."
                     node-url
                     id))))
-      (car/srem session-set-key id)
-      (car/del sess-key)
-      (car/del sess-tags-key)))
+      (delete-model! SessionInRedis id)))
   true)
 
 (defn refresh-session [id]

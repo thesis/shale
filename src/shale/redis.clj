@@ -49,9 +49,6 @@
 (defn node-tags-key [id]
   (format node-tags-key-template id))
 
-(defn model-key [model-schema id]
-  (clojure.string/join "/" [(:redis-key (meta model-schema)) id]))
-
 ;; model schemas
 (defmacro defmodel
   "A wrapper around schema's `defschema` to attach additional model metadata.
@@ -120,9 +117,15 @@
    (s/optional-key :tags)       #{s/Str}})
 
 ;; model fetching
+(defn model-key [model-schema id]
+  (clojure.string/join "/" [(:redis-key (meta model-schema)) id]))
+
+(defn model-ids-key [model-schema]
+  (:redis-key (meta model-schema)))
+
 (defn model-ids [model-schema]
   (with-car*
-    (car/smembers (:redis-key (meta model-schema)))))
+    (car/smembers (model-ids-key model-schema))))
 
 (defn model-exists? [model-schema id]
   (not (nil? (some #{id} (model-ids model-schema)))))
@@ -174,6 +177,27 @@
                        {map-k (hash-map (with-car* (car/smembers map-k)))})]
             (if-not (= base {})
               (reduce merge (list* base (concat sets []))))))))))
+
+(defn delete-model!
+  "Delete a model from Redis."
+  [model-schema id]
+  (let [m-key (model-key model-schema id)
+        ids-key (model-ids-key model-schema)]
+    (with-car*
+      (car/watch ids-key)
+      ; delete any associated keys first
+      (doall
+        (for [k (->> model-schema
+                     (keys-with-vals-matching-pred coll?)
+                     (map :k))]
+          (->> [m-key k]
+               (clojure.string/join "/")
+               car/del
+               with-car*)))
+      ; delete the base model data
+      (car/del m-key)
+      (car/srem ids-key id)))
+  true)
 
 (defn models [model-schema]
   (with-car*

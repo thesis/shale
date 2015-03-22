@@ -146,7 +146,8 @@
    :handle-exception handle-exception
    :delete! (fn [context]
               (shale.sessions/destroy-session
-                (or (::id context) (get-in context [:request :params :id]))))
+                (or (::id context) (get-in context [:request :params :id])))
+              {::session nil})
    :put! (fn [context]
            {::session
             (shale.sessions/modify-session (or (::id context)
