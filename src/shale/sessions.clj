@@ -20,7 +20,8 @@
   (:import org.openqa.selenium.WebDriverException
            org.xbill.DNS.Type
            org.apache.http.conn.ConnectTimeoutException
-           java.net.ConnectException))
+           java.net.ConnectException
+           java.net.SocketTimeoutException))
 
 (def Capabilities {s/Any s/Any})
 
@@ -440,7 +441,22 @@
               candidate))
           (create-session arg))))))
 
-(defn destroy-session [id]
+(defn destroy-webdriver! [webdriver-id node-url]
+  (try+
+    (let [timeout (webdriver-timeout)
+          session-url (->> webdriver-id
+                           (format "./session/%s")
+                           (url node-url)
+                           str)]
+      (client/delete session-url
+                     {:socket-timeout timeout
+                      :conn-timeout timeout}))
+
+    (catch [:status 404] _)
+
+    ))
+
+(defn destroy-session [id & {:keys [immediately] :or [immediately true]}]
   (with-car*
     (info (format "Destroying sessions %s..." id))
     (car/watch session-set-key)
@@ -448,34 +464,33 @@
           sess-tags-key (session-tags-key id)
           session (view-model id)
           webdriver-id (:webdriver-id session)
-          node-url (get-in session [:node :url])]
-      (try+
-        (if webdriver-id
-          (let [timeout (webdriver-timeout)
-                session-url (->> webdriver-id
-                                 (format "./session/%s")
-                                 (url node-url)
-                                 str)]
-            (client/delete session-url
-                           {:socket-timeout timeout
-                            :conn-timeout timeout})))
-        (catch [:status 500] _
-          (error
-            (format "Got a 500 attempting to delete session %s fomr node %s."
-                    id
-                    node-url)))
-        (catch [:status 404] _)
-        (catch #(or (instance? ConnectTimeoutException %)
-                    (instance? java.net.SocketTimeoutException %)) e
-          (error
-            (format "Timeout connecting to node %s to delete session %s."
-                    node-url
-                    id)))
-        (catch java.net.ConnectException e
-          (error
-            (format "Error connecting to node %s to delete session %s."
-                    node-url
-                    id))))
+          node-url (get-in session [:node :url])
+          deleted-future (future
+                           (if webdriver-id
+                             (try+
+                               (destroy-webdriver! webdriver-id node-url)
+                               (catch [:status 500] _
+                                 (error
+                                   (format (str "Got a 500 attempting to delete"
+                                                " session %s from node %s.")
+                                           id
+                                           node-url)))
+
+                               (catch #(or (instance? ConnectTimeoutException %)
+                                           (instance? SocketTimeoutException %)) e
+                                 (error
+                                   (format (str "Timeout connecting to node %s to "
+                                                "delete session %s.")
+                                           node-url
+                                           id)))
+                               (catch ConnectException e
+                                 (error
+                                   (format (str "Error connecting to node %s"
+                                                " to delete session %s.")
+                                           node-url
+                                           id))))))]
+      (if immediately
+        (deref deleted-future))
       (delete-model! SessionInRedis id)))
   true)
 
