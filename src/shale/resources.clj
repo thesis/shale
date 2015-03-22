@@ -157,7 +157,7 @@
                            (contains? context ::session))
    :new? (fn [context]
            (and (not (false? (::new? context)))
-                (contains? context ::session)))
+                (::session context)))
    :exists? (fn [context]
               (let [session (shale.sessions/view-model
                               (or (::id context)
