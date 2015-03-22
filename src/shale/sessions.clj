@@ -25,13 +25,13 @@
 
 (def SessionView
   "A session, as presented to library users."
-  {(s/optional-key :id)          s/Str
-   (s/optional-key :session-id)  s/Str
-   (s/optional-key :tags)         [s/Str]
-   (s/optional-key :reserved)      s/Bool
-   (s/optional-key :current-url)   s/Str
-   (s/optional-key :browser-name)  s/Str
-   (s/optional-key :node)          NodeView})
+  {(s/required-key :id)            s/Str
+   (s/required-key :webdriver-id)  s/Str
+   (s/required-key :tags)         [s/Str]
+   (s/required-key :reserved)      s/Bool
+   (s/required-key :current-url)   s/Str
+   (s/required-key :browser-name)  s/Str
+   (s/required-key :node)          NodeView})
 
 (def TagChange
   "Add/remove a session/node tag"
@@ -510,10 +510,17 @@
             (or ids (model-ids SessionInRedis)))))
   true)
 
+(def view-model-defaults {:tags #{}
+                          :browser-name nil
+                          :reserved false
+                          :node {}
+                          :current-url nil
+                          :webdriver-id nil})
+
 (s/defn view-model :- SessionView [id :- s/Str]
   (if-let [m (->> (model SessionInRedis id)
                   keywordize-keys)]
-    (merge {:id id} m)))
+    (merge view-model-defaults {:id id} m)))
 
 (s/defn view-models :- [SessionView] []
   (with-car*
