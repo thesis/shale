@@ -421,8 +421,7 @@
           (if (arg :force-create)
             (-> arg
                 (rename-keys {:reserve-after-create :reserve-after-create})
-                create-session)
-            )
+                create-session))
           (if-let [candidate (->> (view-models)
                                   (filter
                                     (fn [session-model]
@@ -451,10 +450,7 @@
       (client/delete session-url
                      {:socket-timeout timeout
                       :conn-timeout timeout}))
-
-    (catch [:status 404] _)
-
-    ))
+    (catch [:status 404] _)))
 
 (defn destroy-session [id & {:keys [immediately] :or [immediately true]}]
   (with-car*
