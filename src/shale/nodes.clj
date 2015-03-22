@@ -111,9 +111,11 @@
     (doall
       (concat
         (map #(create-node {:url %})
-             (difference nodes registered-nodes))
+             (filter identity
+                     (difference nodes registered-nodes)))
         (map #(destroy-node ((view-model-from-url %) :id))
-             (difference registered-nodes nodes)))))
+             (filter identity
+                     (difference registered-nodes nodes))))))
   true)
 
 (def NodeRequirements
