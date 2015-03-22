@@ -456,9 +456,6 @@
                                  (format "./session/%s")
                                  (url node-url)
                                  str)]
-            (prn "SESSION URL TO BE DESTROYED" session-url)
-            (prn "NODE URL" node-url)
-            (prn "SESSIONS ON NODE" (client/get (str node-url "/sessions")))
             (client/delete session-url
                            {:socket-timeout timeout
                             :conn-timeout timeout})))
