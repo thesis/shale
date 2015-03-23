@@ -90,6 +90,15 @@
               (is (get session "browser_name") "phantomjs")))]
       (is (= 1 (session-diff test-fn))))))
 
+(deftest ^:integration test-tag-modification
+  (testing "setting tags"
+    (let [session (first (shale.client/sessions))
+          id (:id session)]
+      (shale.client/modify-session! id {:tags ["test-tag"]})
+      (is (= "test-tag" (-> (shale.client/session id)
+                            :tags
+                            first))))))
+
 (deftest ^:integration test-reservations
   (testing "releasing a session"
     (let [test-fn (fn []
