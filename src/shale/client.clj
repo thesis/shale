@@ -68,8 +68,9 @@
                            :or {reserved nil
                                 tags nil}}]
   (let [url (map->session-url id)
-        body (merge (if reserved {:reserved reserved})
-                    (if tags {:tags tags}))
+        body (merge (if (not (nil? reserved)) {:reserved reserved})
+                    (if tags {:tags tags})
+                    {})
         response (try+
                    (client/put url
                                {:body (json/generate-string body)
