@@ -68,13 +68,16 @@
                            :or {reserved nil
                                 tags nil}}]
   (let [url (map->session-url id)
-        body (into {} [(if (nil? reserved) {} {:reserved reserved})
-                      (if (nil? tags) {} {:tags tags})])
-        response (try+ (client/put url
-                         {:body (json/generate-string body)
-                          :content-type :json
-                          :accept :json})
-                   (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+        body (merge (if (nil? reserved) {} {:reserved reserved})
+                    (if (nil? tags) {} {:tags tags}))
+        response (try+
+                   (client/put url
+                               {:body (json/generate-string body)
+                                :content-type :json
+                                :accept :json})
+                   (catch [:status 400] {:keys [body]}
+                     (error body)
+                     (throw+)))]
     (json/parse-string (response :body))))
 
 (defn reserve-session! [id]
