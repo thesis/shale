@@ -103,7 +103,7 @@
   "A session, as represented in redis."
   :model-name "sessions"
   {(s/optional-key :webdriver-id) s/Str
-   (s/optional-key :tags)        [s/Str]
+   (s/optional-key :tags)       #{s/Str}
    (s/optional-key :reserved)     s/Bool
    (s/optional-key :current-url)  s/Str
    (s/optional-key :browser-name) s/Str
@@ -148,17 +148,17 @@
   [model-schema id]
   (let [set-keys (->> model-schema
                       (keys-with-vals-matching-pred set?)
-                      (map :k))
+                      (map (comp name :k)))
         list-keys (->> model-schema
                        (keys-with-vals-matching-pred sequential?)
-                       (map :k))
+                       (map (comp name :k)))
         map-keys (->> model-schema
                       (keys-with-vals-matching-pred map?)
-                      (map :k))
+                      (map (comp name :k)))
         regular-keys (->> model-schema
                           (keys-with-vals-matching-pred
                             #(not-any? identity (juxt sequential? map? set?)))
-                          (map :k))
+                          (map (comp name :k)))
         k (model-key model-schema id)]
     (last
       (with-car*
@@ -174,9 +174,10 @@
                 lists (for [list-k list-keys]
                        {list-k (list (with-car* (car/lrange list-k 0 -1)))})
                 maps (for [map-k map-keys]
-                       {map-k (hash-map (with-car* (car/smembers map-k)))})]
-            (if-not (= base {})
-              (reduce merge (list* base (concat sets []))))))))))
+                       {map-k (with-car* (car/hgetall map-k))})]
+            (->> (concat sets lists maps)
+                 (list* base)
+                 (reduce merge))))))))
 
 (defn delete-model!
   "Delete a model from Redis."
