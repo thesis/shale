@@ -92,11 +92,14 @@
 
 (deftest ^:integration test-tag-modification
   (testing "setting tags"
-    (let [session (first (shale.client/sessions))
-          id (:id session)]
-      (shale.client/modify-session! id {:tags ["test-tag"]})
-      (is (= "test-tag" (-> (shale.client/session id)
-                            :tags
+    (let [test-fn (fn []
+                    (let [session (first (shale.client/sessions))
+                          id (get session "id")]
+                      (shale.client/modify-session! id {:tags ["test-tag"]})
+                      id))]
+      (is (= "test-tag" (-> (logged-in-sessions-fixture test-fn)
+                            shale.client/session
+                            (get "tags")
                             first))))))
 
 (deftest ^:integration test-reservations
