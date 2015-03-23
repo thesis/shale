@@ -452,7 +452,7 @@
                       :conn-timeout timeout}))
     (catch [:status 404] _)))
 
-(defn destroy-session [id & {:keys [immediately] :or [immediately true]}]
+(defn destroy-session [id & {:keys [async] :or [async true]}]
   (with-car*
     (info (format "Destroying sessions %s..." id))
     (car/watch session-set-key)
@@ -485,7 +485,7 @@
                                                 " to delete session %s.")
                                            node-url
                                            id))))))]
-      (if immediately
+      (if (not async)
         (deref deleted-future))
       (delete-model! SessionInRedis id)))
   true)

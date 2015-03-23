@@ -120,7 +120,7 @@
                         (->sessions-request context))})
   :delete! (fn [context]
              (doall
-               (map #(shale.sessions/destroy-session (:id %) :immediately false)
+               (map #(shale.sessions/destroy-session (:id %) :async true)
                     (shale.sessions/view-models))))
   :handle-created (fn [context]
                     (jsonify (get context ::session))))
@@ -148,7 +148,7 @@
               (shale.sessions/destroy-session
                 (or (::id context)
                     (get-in context [:request :params :id]))
-                :immediately false)
+                :async true)
               {::session nil})
    :put! (fn [context]
            {::session
