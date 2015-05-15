@@ -145,7 +145,7 @@
                            [:tags :reserved :browser-name :current-url])
                 (if-let [node-id (get-in session-model [:node :id])]
                   {:node-id node-id}))
-     :node (select-keys (:node session-model) [:tags :url])}
+     :node (select-keys (:node session-model) [:tags :url :id])}
     [:and
      (vec
        (concat
@@ -173,7 +173,7 @@
       :node-tag     (some #{arg} (get-in s [:node :tags]))
       :id           (= arg (get-in s [:id]))
       :webdriver-id (= arg (get-in s [:session :webdriver-id]))
-      :node-id      (= arg (get-in s [:session :node-id]))
+      :node-id      (= arg (get-in s [:session :node :id]))
       :reserved     (= arg (get-in s [:session :reserved]))
       :browser-name (= arg (get-in s [:session :browser-name]))
       :current-url  (= arg (get-in s [:session :current-url]))
