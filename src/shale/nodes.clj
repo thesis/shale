@@ -120,7 +120,8 @@
 
 (def NodeRequirements
   {(s/optional-key :url)   s/Str
-   (s/optional-key :tags) [s/Str]})
+   (s/optional-key :tags) [s/Str]
+   (s/optional-key :id)    s/Str})
 
 (s/defn session-count [node-id :- s/Str]
   (->> (models SessionInRedis)
