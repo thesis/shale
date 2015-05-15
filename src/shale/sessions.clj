@@ -335,7 +335,7 @@
          reserve-after-create nil
          current-url nil}
     :as requirements}]
-  (s/validate (s/maybe NodeInRedis) node)
+  (s/validate (s/maybe NodeView) node)
   (info (format "Creating a new session.\nRequirements: %s"
                 (str requirements)))
   (if (= 0 (count (nodes/nodes-under-capacity)))
