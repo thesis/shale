@@ -87,10 +87,10 @@
 
     (testing "node-id matches"
       (let [requirement [:node-id "a"]
-            s {:session {:node-id "a"}}]
+            s {:session {:node {:id "a"}}}]
         (is (matches-requirement s requirement))))
 
     (testing "node-id doesn't match"
       (let [requirement [:node-id "a"]
-            s {:session {:node-id "b"}}]
+            s {:session {:node {:id "b"}}}]
         (is (not (matches-requirement s requirement)))))))
