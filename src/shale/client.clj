@@ -12,6 +12,9 @@
 (def sessions-url
   (clojure.string/join "/" ["http://localhost:5000" "sessions"]))
 
+(def nodes-url
+  (clojure.string/join "/" ["http://localhost:5000" "nodes"]))
+
 (defn session-url [id]
   (clojure.string/join "/" [sessions-url id]))
 
@@ -27,6 +30,11 @@
 
 (defn sessions []
   (let [response (try+ (client/get sessions-url)
+                       (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+    (json/parse-string (response :body))))
+
+(defn nodes []
+  (let [response (try+ (client/get nodes-url)
                        (catch [:status 400] {:keys [body]} (error body) (throw+)))]
     (json/parse-string (response :body))))
 
