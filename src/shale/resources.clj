@@ -107,6 +107,9 @@
                  :include-boolean-params true
                  :schema {(s/optional-key "browser_name") s/Str
                           (s/optional-key "tags") [s/Str]
+                          (s/optional-key "node") {(s/optional-key "id")    s/Str
+                                                   (s/optional-key "url")   s/Str
+                                                   (s/optional-key "tags") [s/Str]}
                           (s/optional-key "reserve_after_create") s/Bool
                           (s/optional-key "reserve") s/Bool
                           (s/optional-key "reserved") s/Bool
