@@ -399,11 +399,13 @@
                                  defaulted-reqs)))))))
 
 (def OldGetOrCreateArg
-  {(s/optional-key :browser-name)  s/Str
-   (s/optional-key :reserved)      s/Bool
+  {(s/optional-key :browser-name)   s/Str
+   (s/optional-key :reserved)       s/Bool
    (s/optional-key :tags)          [s/Str]
-   (s/optional-key :node)          {:url s/Str}
-   (s/optional-key :current-url)   s/Str
+   (s/optional-key :node)          {(s/optional-key :url)   s/Str
+                                    (s/optional-key :id)    s/Str
+                                    (s/optional-key :tags) [s/Str]}
+   (s/optional-key :current-url)    s/Str
    (s/optional-key :reserve-after-create)       s/Bool
    (s/optional-key :extra-desired-capabilities) Capabilities
    (s/optional-key :force-create)               s/Bool})
