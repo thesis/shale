@@ -9,6 +9,7 @@
             [taoensso.carmine :as car]
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
+            [camel-snake-kebab.extras :refer [transform-keys]]
             [taoensso.timbre :as timbre :refer [info warn error debug]]
             [slingshot.slingshot :refer [try+ throw+]]
             [shale.configurer :refer [config]]
@@ -366,10 +367,9 @@
                                 [(resolved-node-reqs :reserve-after-create) v]))
                         false)))
         capabilities
-        (into {}
-              (map (fn [[k v]] [(->camelCaseString k) v])
-                   (merge {:browser-name browser-name}
-                          extra-desired-capabilities)))
+        (transform-keys ->camelCaseString
+                        (merge {:browser-name browser-name}
+                               extra-desired-capabilities))
         node-url (get-in defaulted-reqs [:node :url])
         _ (if (nil? node-url)
             (throw
