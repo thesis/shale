@@ -78,7 +78,19 @@
                           {:browser-name "phantomjs"
                            :tags ["some-unknown-tag"]}))]
         (is (= 3 (session-diff
-                   #(logged-in-sessions-fixture test-fn))))))))
+                   #(logged-in-sessions-fixture test-fn))))))
+    (testing "that sessions are created on the specified node"
+      (let [node-id (-> shale.client/nodes
+                        first
+                        :id)]
+
+        (dotimes [_ 4]
+          (shale.client/get-or-create-session!
+            {:browser-name "phantomjs"
+             :node {:id node-id}}))
+        (is (= 4 (count
+                   (filter #(= (:id %) node-id)
+                           (shale.client/nodes)))))))))
 
 (deftest ^:integration test-force-create
   (testing "force create a new session"
