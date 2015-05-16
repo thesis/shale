@@ -84,11 +84,11 @@
                         first
                         :id)]
 
-        (dotimes [_ 4]
+        (dotimes [_ 3]
           (shale.client/get-or-create-session!
             {:browser-name "phantomjs"
              :node {:id node-id}}))
-        (is (= 4 (count
+        (is (= 3 (count
                    (filter #(= (:id %) node-id)
                            (shale.client/nodes)))))))))
 
