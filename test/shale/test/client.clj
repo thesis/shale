@@ -80,7 +80,7 @@
         (is (= 3 (session-diff
                    #(logged-in-sessions-fixture test-fn))))))
     (testing "that sessions are created on the specified node"
-      (let [node-id (-> shale.client/nodes
+      (let [node-id (-> (shale.client/nodes)
                         first
                         :id)]
 
