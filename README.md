@@ -136,6 +136,14 @@ curl -d '{"browser_name":"phantomjs", "node":{"id": "<node id>"}}' \
      --header "Content-Type:application/json"
 ```
 
+#### Create a Chrome session using a proxy
+
+```bash
+curl -d '{"browser_name":"chrome", "extra_desired_capabilities": {"chromeOptions": {"args": ["--proxy-server=socks5://<host>:<port>"]}}' \
+     -XPOST http://localhost:5000/sessions/?force_create=True \
+     --header "Content-Type:application/json"
+```
+
 #### Unreserve a session and add a tag
 
 ```bash
