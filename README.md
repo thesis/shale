@@ -58,12 +58,15 @@ machine running shale.
 
 ### curl
 
-Get or create a new session.
+#### Get or create a new session
 
-```sh
-$ curl -d '{"browser_name":"phantomjs"}' -XPOST \
-       http://localhost:5000/sessions/ \
-       --header "Content-Type:application/json"
+```bash
+curl -d '{"browser_name":"phantomjs"}' -XPOST \
+     http://localhost:5000/sessions/ \
+     --header "Content-Type:application/json"
+```
+
+```json
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": false,
@@ -73,10 +76,13 @@ $ curl -d '{"browser_name":"phantomjs"}' -XPOST \
 }
 ```
 
-List all the active sessions
+#### List all the active sessions
 
-```sh
-$ curl http://localhost:5000/sessions/
+```bash
+curl http://localhost:5000/sessions/
+```
+
+```json
 [{
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": false,
@@ -86,12 +92,15 @@ $ curl http://localhost:5000/sessions/
 }]
 ```
 
-Create a new session with tags
+#### Create a new session with tags
 
-```sh
-$ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
-       -XPOST http://localhost:5000/sessions/?force_create=True \
-       --header "Content-Type:application/json"
+```bash
+curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
+     -XPOST http://localhost:5000/sessions/?force_create=True \
+     --header "Content-Type:application/json"
+```
+
+```json
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": false,
@@ -101,12 +110,15 @@ $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 }
 ```
 
-Get or create a new reserved session with tags
+#### Get or create a new reserved session with tags
 
-```sh
-$ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
-       -XPOST http://localhost:5000/sessions/?reserve_after_create=True \
-       --header "Content-Type:application/json"
+```bash
+curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
+     -XPOST http://localhost:5000/sessions/?reserve_after_create=True \
+     --header "Content-Type:application/json"
+```
+
+```json
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": true,
@@ -116,12 +128,12 @@ $ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 }
 ```
 
-Unreserve a session and add a tag
+#### Unreserve a session and add a tag
 
-```sh
-$ curl -d '{"tags":["walmart", "logged-in"], "reserved":false}' \
-       -XPUT http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db \
-       --header "Content-Type:application/json"
+```bash
+curl -d '{"tags":["walmart", "logged-in"], "reserved":false}' \
+     -XPUT http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db \
+     --header "Content-Type:application/json"
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": false,
@@ -131,17 +143,25 @@ $ curl -d '{"tags":["walmart", "logged-in"], "reserved":false}' \
 }
 ```
 
-Delete a session. Note that this will de-allocate the Selenium driver.
+#### Delete a session
 
-```sh
-$ curl -XDELETE http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db
+Note that this will de-allocate the Selenium driver.
+
+```bash
+curl -XDELETE http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db
+```
+
+```
 true
 ```
 
-Delete all sessions.
+#### Delete all sessions
 
-```sh
-$ curl -XDELETE http://localhost:5000/sessions/
+```bash
+curl -XDELETE http://localhost:5000/sessions/
+```
+
+```
 true
 ```
 ### Clojure
