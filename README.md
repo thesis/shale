@@ -134,6 +134,9 @@ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 curl -d '{"tags":["walmart", "logged-in"], "reserved":false}' \
      -XPUT http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db \
      --header "Content-Type:application/json"
+```
+
+```json
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
   "reserved": false,
