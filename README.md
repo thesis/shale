@@ -128,6 +128,14 @@ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 }
 ```
 
+#### Create a session on a particular node
+
+```bash
+curl -d '{"browser_name":"phantomjs", "node":{"id": "<node id>"}}' \
+     -XPOST http://localhost:5000/sessions/?force_create=True \
+     --header "Content-Type:application/json"
+```
+
 #### Unreserve a session and add a tag
 
 ```bash
