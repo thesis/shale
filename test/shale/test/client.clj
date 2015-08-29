@@ -82,7 +82,7 @@
     (testing "that sessions are created on the specified node"
       (let [node-id (-> (shale.client/nodes)
                         first
-                        :id)]
+                        (get "id"))]
 
         (dotimes [_ 3]
           (shale.client/get-or-create-session!
