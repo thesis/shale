@@ -73,7 +73,9 @@
   {(s/optional-key :browser-name)  s/Str
    (s/optional-key :reserved)      s/Bool
    (s/optional-key :tags)          [s/Str]
-   (s/optional-key :node)          {:url s/Str}})
+   (s/optional-key :node)          {(s/optional-key :id)   s/Str
+                                    (s/optional-key :url)  s/Str
+                                    (s/optional-key :tags) [s/Str]}})
 
 (defn first-checked-schema
   "Return the first schema which validates a value. Useful as a dispatch
