@@ -17,7 +17,8 @@
             [shale.utils :refer :all]
             [shale.redis :refer :all]
             [shale.selenium :as selenium]
-            [shale.webdriver :refer [new-webdriver resume-webdriver to-async]])
+            [shale.webdriver :refer [new-webdriver resume-webdriver to-async]]
+            [io.aviso.ansi :refer [bold-red bold-green bold-blue]])
   (:import org.openqa.selenium.WebDriverException
            org.xbill.DNS.Type
            org.apache.http.conn.ConnectTimeoutException
@@ -77,77 +78,42 @@
                                     (s/optional-key :url)  s/Str
                                     (s/optional-key :tags) [s/Str]}})
 
-(defn first-checked-schema
-  "Return the first schema which validates a value. Useful as a dispatch
-  function for multimethods."
-  [value schemas]
-  (doto (->> schemas
-             (filter (fn [schema]
-                       (try
-                         (s/validate schema value)
-                         schema
-                         (catch RuntimeException e))))
-             first)))
+(def OldSessionViewModel
+  {(s/optional-key :id) s/Str
+   (s/optional-key :reserved) s/Bool
+   (s/optional-key :tags) [s/Str]
+   (s/optional-key :browser-name) s/Str
+   (s/optional-key :current-url) s/Str
+   (s/optional-key :node) {(s/optional-key :id) s/Str
+                           (s/optional-key :url) s/Str
+                           (s/optional-key :tags) [s/Str]}})
 
-(defmacro defmultischema
-  "Dispatches multimethods based on whether their args match the provided
-  schemas.
+(def SessionAndNode
+  {(s/optional-key :id)      s/Str
+   (s/optional-key :session) SessionInRedis
+   (s/optional-key :node)    NodeInRedis})
 
-  Each schema is validated against a vector of a method's args. The first that
-  validates successfully is used as the dispatch value.
-
-  For example,
-  ```
-  (defmultischema test-method :number [s/Num] :string [s/Str])
-  (defmethod test-method :number [n]
-    (prn \"number\"))
-  (defmethod test-method :string [s]
-    (prn \"string\"))
-  ```"
-  [multi-name & schemas]
-  (if-not (even? (count schemas))
-    (throw+ (str "defmultischema expects an even number of args (for "
-                 "value / schema pairs)")))
-  `(defmulti ~multi-name
-     (fn [& args#]
-       (let [schema-to-value# (->> ~(vec schemas)
-                                   (partition 2)
-                                   (map (comp vec reverse))
-                                   (into {}))
-             schemas# (keys schema-to-value#)
-             matching-schema# (get schema-to-value#
-                                   (first-checked-schema (vec args#) schemas#))]
-         (if (nil? matching-schema#)
-           (throw+ (str "No matching schema for multimethod "
-                        (name '~multi-name)
-                        " with args "
-                        (vec args#)))
-           matching-schema#)
-         ))))
+(s/defn old->new-session-model :- SessionAndNode
+  [session-model :- OldSessionViewModel]
+  (merge
+    (select-keys session-model [:id])
+    {:session (merge
+                (select-keys
+                  session-model
+                  [:tags :reserved :browser-name :current-url :webdriver-id])
+                (if-let [node-id (get-in session-model [:node :id])]
+                  {:node-id node-id}))
+     :node (select-keys (:node session-model) [:tags :url :id])}))
 
 (defmultischema matches-requirement
   :old (s/pair s/Any "session" OldRequirements "requirements")
   :new (s/pair s/Any "session" Requirement "requirement"))
 
 (s/defmethod matches-requirement :old :- s/Bool
-  [session-model :- {(s/optional-key :id) s/Str
-                     (s/optional-key :reserved) s/Bool
-                     (s/optional-key :tags) [s/Str]
-                     (s/optional-key :browser-name) s/Str
-                     (s/optional-key :current-url) s/Str
-                     (s/optional-key :node) {(s/optional-key :id) s/Str
-                                             (s/optional-key :url) s/Str
-                                             (s/optional-key :tags) [s/Str]}}
+  [session-model :- OldSessionViewModel
    requirements :- OldRequirements]
   (matches-requirement
-    {:id (:id session-model)
-     :webdriver-id (:webdriver-id session-model)
-     :session (merge
-                (select-keys session-model
-                           [:tags :reserved :browser-name :current-url])
-                (if-let [node-id (get-in session-model [:node :id])]
-                  {:node-id node-id}))
-     :node (select-keys (:node session-model) [:tags :url :id])}
+    (old->new-session-model session-model)
     [:and
      (vec
        (concat
@@ -155,7 +121,7 @@
               (get requirements :tags))
          (->> [:browser-name :reserved]
               (map #(vec [% (get requirements %)]))
-              (filter identity)
+              (filter (comp not nil? second))
               (into []))
          (if-let [node-id
                   (get-in requirements [:node :id])]
@@ -164,24 +130,22 @@
               (get-in requirements [:node :tags]))))]))
 
 (s/defmethod matches-requirement :new :- s/Bool
-  [session-model :- {(s/optional-key :id)    s/Str
-                     (s/optional-key :session) SessionInRedis
-                     (s/optional-key :node)    NodeInRedis}
+  [session-model :- SessionAndNode
    requirement :- Requirement]
   (let [[req-type arg] requirement
         s session-model]
     (match req-type
-      :session-tag  (some #{arg} (get-in s [:session :tags]))
-      :node-tag     (some #{arg} (get-in s [:node :tags]))
-      :id           (= arg (get-in s [:id]))
-      :webdriver-id (= arg (get-in s [:session :webdriver-id]))
-      :node-id      (= arg (get-in s [:session :node :id]))
-      :reserved     (= arg (get-in s [:session :reserved]))
-      :browser-name (= arg (get-in s [:session :browser-name]))
-      :current-url  (= arg (get-in s [:session :current-url]))
-      :not          (not     (matches-requirement s arg))
-      :and          (every? #(matches-requirement s %) arg)
-      :or           (some   #(matches-requirement s %) arg))))
+           :session-tag  (some #{arg} (get-in s [:session :tags]))
+           :node-tag     (some #{arg} (get-in s [:node :tags]))
+           :id           (= arg (get-in s [:id]))
+           :webdriver-id (= arg (get-in s [:session :webdriver-id]))
+           :node-id      (= arg (get-in s [:node :id]))
+           :reserved     (= arg (get-in s [:session :reserved]))
+           :browser-name (= arg (get-in s [:session :browser-name]))
+           :current-url  (= arg (get-in s [:session :current-url]))
+           :not          (not     (matches-requirement s arg))
+           :and          (every? #(matches-requirement s %) arg)
+           :or           (some   #(matches-requirement s %) arg))))
 
 (declare view-model view-models resume-webdriver-from-id destroy-session)
 
@@ -294,11 +258,11 @@
 
 (defn modify-session
   [id {:keys [browser-name
-                node
-                reserved
-                tags
-                current-url
-                webdriver-id]
+              node
+              reserved
+              tags
+              current-url
+              webdriver-id]
          :or {browser-name nil
               node nil
               reserved nil
@@ -344,12 +308,14 @@
     (throw
       (ex-info "All nodes are over capacity!"
                {:user-visible true :status 503})))
-  (let [node-req (if (contains? node :url)
-                   (assoc-in-fn
-                     node
-                     [:url]
-                     (comp str host-resolved-url))
-                   (or node {}))
+  (let [node-req (merge (select-keys node [:url :tags :id])
+                        (if (contains? node :url)
+                          (assoc-in-fn
+                            node
+                            [:url]
+                            (comp str host-resolved-url))
+                          (or node {})))
+
         node (nodes/get-node node-req)
         merged-reqs
         (merge {:node (select-keys node [:url :id])
@@ -519,21 +485,24 @@
            (destroy-session id)))))
    true)
 
+(def ^:private  refresh-sessions-lock {})
+
 (defn refresh-sessions [ids]
-  (with-car*
-    (debug "Refreshing sessions...")
-    (car/watch session-set-key)
-    (doall
-      (pmap refresh-session
-            (or ids (model-ids SessionInRedis))))
-    (doall
-      (->> (nodes/view-models)
-           (map :url)
-           (filter identity)
-           (pmap #(selenium/session-ids-from-node %))
-           (pmap #(if (not (model-exists? SessionInRedis %))
-                    (destroy-session %))))))
-  true)
+  (locking refresh-sessions-lock
+    (with-car*
+      (debug "Refreshing sessions...")
+      (car/watch session-set-key)
+      (doall
+        (pmap refresh-session
+              (or ids (model-ids SessionInRedis))))
+      (doall
+        (->> (nodes/view-models)
+             (map :url)
+             (filter identity)
+             (pmap #(selenium/session-ids-from-node %))
+             (pmap #(if (not (model-exists? SessionInRedis %))
+                      (destroy-session %))))))
+    true))
 
 (def view-model-defaults {:tags #{}
                           :browser-name nil

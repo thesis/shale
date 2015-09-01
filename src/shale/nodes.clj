@@ -6,7 +6,8 @@
             [shale.utils :refer :all]
             [clojure.walk :refer :all]
             [shale.configurer :refer [config]]
-            [shale.node-pools :as node-pools])
+            [shale.node-pools :as node-pools]
+            [io.aviso.ansi :refer [bold-red bold-green]] )
   (:import java.util.UUID
            [shale.node_pools DefaultNodePool AWSNodePool]))
 
@@ -76,8 +77,7 @@
         (car/return (view-model id))))))
 
 (s/defn create-node :- NodeView
-  [{:keys [url
-           tags]
+  [{:keys [url tags]
     :or {:tags []}}]
   (last
     (with-car*
@@ -103,20 +103,23 @@
 (defn ^:private to-set [s]
   (into #{} s))
 
+(def ^:private  refresh-nodes-lock {})
+
 (defn refresh-nodes
   "Syncs the node list with the backing node pool."
   []
-  (let [nodes (to-set (node-pools/get-nodes node-pool))
-        registered-nodes (to-set (map #(get % :url) (view-models)))]
-    (doall
-      (concat
-        (map #(create-node {:url %})
-             (filter identity
-                     (difference nodes registered-nodes)))
-        (map #(destroy-node ((view-model-from-url %) :id))
-             (filter identity
-                     (difference registered-nodes nodes))))))
-  true)
+  (locking refresh-nodes-lock
+    (let [nodes (to-set (node-pools/get-nodes node-pool))
+          registered-nodes (to-set (map #(get % :url) (view-models)))]
+      (doall
+        (concat
+          (map #(create-node {:url %})
+               (filter identity
+                       (difference nodes registered-nodes)))
+          (map #(destroy-node ((view-model-from-url %) :id))
+               (filter identity
+                       (difference registered-nodes nodes))))))
+    true))
 
 (def NodeRequirements
   {(s/optional-key :url)   s/Str
@@ -135,9 +138,17 @@
 (s/defn matches-requirements :- s/Bool
   [model :- NodeView
    requirements :- NodeRequirements]
-  (apply clojure.set/subset?
-         (map #(select-keys % [:url :tags])
-              [requirements model])))
+  (and
+    (if (contains? requirements :id)
+      (apply = (map :id [requirements model]))
+      true)
+    (if (contains? requirements :url)
+      (apply = (map :url [requirements model]))
+      true)
+    (if (contains? requirements :tags)
+      (apply clojure.set/subset?
+             (map :tags [requirements model]))
+      true)))
 
 (s/defn get-node :- (s/maybe NodeView)
   [requirements :- NodeRequirements]

@@ -5,7 +5,8 @@
             [shale.client :refer :all]
             [shale.handler :as handler]
             [shale.test.utils :refer [with-selenium-servers
-                                      local-port-available?]])
+                                      local-port-available?]]
+            [io.aviso.ansi :refer [bold-red bold-green]])
   (:import java.net.Socket
            java.io.IOException))
 
@@ -80,17 +81,19 @@
         (is (= 3 (session-diff
                    #(logged-in-sessions-fixture test-fn))))))
     (testing "that sessions are created on the specified node"
+
       (let [node-id (-> (shale.client/nodes)
                         first
                         (get "id"))]
-
         (dotimes [_ 3]
           (shale.client/get-or-create-session!
             {:browser-name "phantomjs"
-             :node {:id node-id}}))
+             :node {:id node-id}
+             :reserve-after-create true
+             :reserved false}))
         (is (= 3 (count
-                   (filter #(= (:id %) node-id)
-                           (shale.client/nodes)))))))))
+                   (filter #(= (get-in % ["node" "id"]) node-id)
+                           (shale.client/sessions)))))))))
 
 (deftest ^:integration test-force-create
   (testing "force create a new session"

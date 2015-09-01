@@ -4,6 +4,7 @@
             [clj-dns.core :refer [dns-lookup]]
             [org.bovinegenius  [exploding-fish :as uri]]
             [schema.core :as s]
+            [slingshot.slingshot :refer [throw+]]
             [taoensso.timbre :as timblre :refer [warn info]])
   (:import org.xbill.DNS.Type))
 
@@ -111,3 +112,49 @@
                             ~pairs)]
        (apply s/either pred-pairs#))))
 
+(defn first-checked-schema
+  "Return the first schema which validates a value. Useful as a dispatch
+  function for multimethods."
+  [value schemas]
+  (doto (->> schemas
+             (filter (fn [schema]
+                       (try
+                         (s/validate schema value)
+                         schema
+                         (catch RuntimeException e))))
+             first)))
+
+(defmacro defmultischema
+  "Dispatches multimethods based on whether their args match the provided
+  schemas.
+
+  Each schema is validated against a vector of a method's args. The first that
+  validates successfully is used as the dispatch value.
+
+  For example,
+  ```
+  (defmultischema test-method :number [s/Num] :string [s/Str])
+  (defmethod test-method :number [n]
+    (prn \"number\"))
+  (defmethod test-method :string [s]
+    (prn \"string\"))
+  ```"
+  [multi-name & schemas]
+  (if-not (even? (count schemas))
+    (throw+ (str "defmultischema expects an even number of args (for "
+                 "value / schema pairs)")))
+  `(defmulti ~multi-name
+     (fn [& args#]
+       (let [schema-to-value# (->> ~(vec schemas)
+                                   (partition 2)
+                                   (map (comp vec reverse))
+                                   (into {}))
+             schemas# (keys schema-to-value#)
+             matching-schema# (get schema-to-value#
+                                   (first-checked-schema (vec args#) schemas#))]
+         (if (nil? matching-schema#)
+           (throw+ (str "No matching schema for multimethod "
+                        (name '~multi-name)
+                        " with args "
+                        (vec args#)))
+           matching-schema#)))))

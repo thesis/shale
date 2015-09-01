@@ -21,7 +21,8 @@
                  [overtone/at-at "1.2.0"]
                  [prismatic/schema "0.3.0"]
                  [slingshot "0.12.2"]
-                 [camel-snake-kebab "0.2.5" :exclusions [org.clojure/clojure]]]
+                 [camel-snake-kebab "0.2.5" :exclusions [org.clojure/clojure]]
+                 [io.aviso/pretty "0.1.19"]]
   :scm {:name "git"
         :url "http://github.com/cardforcoin/shale"}
   :auto-clean false

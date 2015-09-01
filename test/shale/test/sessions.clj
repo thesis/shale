@@ -87,10 +87,17 @@
 
     (testing "node-id matches"
       (let [requirement [:node-id "a"]
-            s {:session {:node {:id "a"}}}]
+            s {:node {:id "a"}}]
         (is (matches-requirement s requirement))))
 
     (testing "node-id doesn't match"
       (let [requirement [:node-id "a"]
-            s {:session {:node {:id "b"}}}]
+            s {:node {:id "b"}}]
         (is (not (matches-requirement s requirement)))))))
+
+(deftest test-old-matches-requirement
+  (testing "old-matches-requirement"
+    (testing "node-id matches"
+      (let [requirement {:node {:id "a"}}
+            s {:node {:url "b" :id "a"}}]
+        (is (matches-requirement s requirement))))))
