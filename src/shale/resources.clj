@@ -54,8 +54,11 @@
   (name-keys (truth-from-str-vals (get-in context [:request :params]))))
 
 (defn parse-request-data
-  [& {:keys [context key include-boolean-params schema]
-      :or {key ::data schema s/Any}}]
+  "Parse JSON bodies in PUT and POST requests according to an optional schema.
+  If include-boolean-params is true, merge any boolean param variables into the
+  returned map as well."
+  [& {:keys [context k include-boolean-params schema]
+      :or {k ::data schema s/Any}}]
   (when (#{:put :post} (get-in context [:request :request-method]))
     (try
       (if-let [body (body-as-string context)]
@@ -65,7 +68,7 @@
               data (merge body-data params-data)]
           (if-let [schema-error (s/check schema data)]
             {:message (str schema-error)}
-            [false {key data}]))
+            [false {k data}]))
         {:message "Empty body."})
       (catch org.codehaus.jackson.JsonParseException e
         {:message "Malformed JSON."}))))
