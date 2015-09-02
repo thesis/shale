@@ -9,19 +9,19 @@
         [clojure.set :only [rename-keys]]
         shale.utils))
 
-(def sessions-url
+(def ^:private sessions-url
   (clojure.string/join "/" ["http://localhost:5000" "sessions"]))
 
-(def nodes-url
+(def ^:private nodes-url
   (clojure.string/join "/" ["http://localhost:5000" "nodes"]))
 
-(defn session-url [id]
+(defn ^:private session-url [id]
   (clojure.string/join "/" [sessions-url id]))
 
-(defn session-by-webdriver-url [webdriver-id]
+(defn ^:private session-by-webdriver-url [webdriver-id]
   (clojure.string/join "/" [sessions-url "webdriver" webdriver-id]))
 
-(defn map->session-url [m-or-id]
+(defn ^:private map->session-url [m-or-id]
   (if (map? m-or-id)
     (if (contains? m-or-id :webdriver-id)
       (session-by-webdriver-url (:webdriver-id m-or-id))
@@ -106,7 +106,8 @@
 
 (defn refresh-sessions! []
   (let [response (try+
-                   (client/post (str sessions-url "refresh") {})
+                   (client/post
+                     (clojure.string/join "/" [sessions-url "refresh"]) {})
                    (catch [:status 400] {:keys [body]} (error body) (throw+)))]
     (json/parse-string (response :body))))
 
