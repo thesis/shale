@@ -2,7 +2,7 @@
   :description "A Clojure-backed Selenium hub replacement"
   :url "https://github.com/cardforcoin/shale"
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [ring "1.3.1"]
+                 [ring "1.4.0"]
                  [javax.servlet/servlet-api "2.5"]
                  [compojure "1.1.9"]
                  [liberator "0.12.0"]
