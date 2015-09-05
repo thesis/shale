@@ -1,6 +1,6 @@
 (ns shale.test.handler
   (:require [clojure.test :refer :all]
-            [clj-json [core :as json]]
+            [cheshire [core :as json]]
             [carica.core :refer [override-config]]
             [shale.configurer :as configurer]
             [ring.mock.request :as mock]
