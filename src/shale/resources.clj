@@ -2,7 +2,7 @@
   (:require shale.sessions
             clojure.walk
             [taoensso.timbre :as timbre :refer [error]]
-            [clj-json [core :as json]]
+            [cheshire [core :as json]]
             [clojure.java.io :as io]
             [camel-snake-kebab.core :refer :all]
             [camel-snake-kebab.extras :refer [transform-keys]]
@@ -70,7 +70,7 @@
             {:message (str schema-error)}
             [false {k data}]))
         {:message "Empty body."})
-      (catch org.codehaus.jackson.JsonParseException e
+      (catch com.fasterxml.jackson.core.JsonParseException e
         {:message "Malformed JSON."}))))
 
 (defn a-href-text [text]

@@ -1,6 +1,6 @@
 (ns shale.client
   (:require [clj-http.client :as client]
-            (clj-json [core :as json])
+            (cheshire [core :as json])
             [clj-webdriver.taxi :as taxi]
             [shale.webdriver :as webdriver]
             [slingshot.slingshot :refer [try+ throw+]]

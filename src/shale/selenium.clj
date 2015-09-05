@@ -1,7 +1,7 @@
 (ns shale.selenium
   "Our own client implementation for particularly important / thorny Selenium
   node endpoints."
-  (:require [clj-json [core :as json]]
+  (:require [cheshire [core :as json]]
             [clj-http.client :as client]
             [slingshot.slingshot :refer [try+ throw+]]
             [cemerick.url :refer [url]]))

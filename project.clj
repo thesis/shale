@@ -7,7 +7,7 @@
                  [ring/ring-jetty-adapter "1.4.0"]
                  [liberator "0.12.0"]
                  [clj-http "1.1.2"]
-                 [clj-json "0.5.3"]
+                 [cheshire "5.4.0"]
                  [clj-webdriver "0.6.1"]
                  [clj-wallhack "1.0.1"]
                  [hiccup "1.0.5"]

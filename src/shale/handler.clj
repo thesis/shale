@@ -1,6 +1,6 @@
 (ns shale.handler
   (:require [ring.adapter.jetty :as jetty]
-            [clj-json [core :as json]]
+            [cheshire [core :as json]]
             [shale.periodic :as periodic]
             [shale.nodes :as nodes]
             [shale.resources :refer [assemble-routes]]
