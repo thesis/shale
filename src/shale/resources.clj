@@ -258,7 +258,8 @@
     (ANY ["/sessions/:id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
       [id]
       (session-resource id))
-    (ANY ["/sessions/webdriver/:webdriver-id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
+    (ANY ["/sessions/webdriver/:webdriver-id",
+          :webdriver-id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
       [webdriver-id]
       (session-by-webdriver-id webdriver-id))
     (ANY ["/sessions/:id/refresh", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
