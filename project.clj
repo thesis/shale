@@ -4,7 +4,7 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [ring "1.4.0"]
                  [javax.servlet/servlet-api "2.5"]
-                 [compojure "1.1.9"]
+                 [compojure "1.4.0"]
                  [liberator "0.12.0"]
                  [clj-http "1.0.1"]
                  [clj-json "0.5.3"]
