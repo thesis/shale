@@ -20,5 +20,5 @@
     (clj-webdriver.driver/init-driver wd)))
 
 (defn to-async [wd url]
-  (def js "setTimeout(function(){window.location=\"%s\";}, 10);")
-  (execute-script wd (format js url)))
+  (let [js "setTimeout(function(){window.location=\"%s\";}, 10);"]
+    (execute-script wd (format js url))))
