@@ -77,6 +77,6 @@
   "Clear Redis before and after a test. Right now, though, we're relying on
   connection state in shale.redis :/"
   [test-fn]
-  (with-car* (car/flushall))
+  (with-car* (car/flushdb))
   (test-fn)
-  (with-car* (car/flushall)))
+  (with-car* (car/flushdb)))
