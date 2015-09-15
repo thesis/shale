@@ -6,14 +6,21 @@
             [ring.mock.request :as mock]
             [shale.handler :refer :all]
             [shale.test.utils :refer [with-selenium-servers
-                                      with-custom-config]]))
+                                      with-custom-config
+                                      clean-redis]]))
 
 (def custom-config
   {:node-list ["http://localhost:4444/wd/hub"]})
 
-(use-fixtures :once
-              (compose-fixtures (with-selenium-servers [4444])
-                                (with-custom-config custom-config)))
+(def once-fixtures
+  [(with-selenium-servers [4444])
+   (with-custom-config custom-config)])
+
+(def each-fixtures
+  [clean-redis])
+
+(use-fixtures :once (join-fixtures once-fixtures))
+(use-fixtures :each (join-fixtures each-fixtures))
 
 (deftest ^:integration test-app-startup
   (testing "main route"

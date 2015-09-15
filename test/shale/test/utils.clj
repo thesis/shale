@@ -1,5 +1,7 @@
 (ns shale.test.utils
   (:require [clojure.java.io :refer [writer]]
+            [taoensso.carmine :as car]
+            [shale.redis :refer [with-car*]]
             [carica.core :refer [overrider]]
             [shale.configurer :as configurer])
   (:import [org.openqa.selenium.server
@@ -70,3 +72,11 @@
     (let [override-config (overrider configurer/config)]
       (with-redefs [configurer/config (override-config new-config)]
         (test-fn)))))
+
+(defn clean-redis
+  "Clear Redis before and after a test. Right now, though, we're relying on
+  connection state in shale.redis :/"
+  [test-fn]
+  (with-car* (car/flushall))
+  (test-fn)
+  (with-car* (car/flushall)))
