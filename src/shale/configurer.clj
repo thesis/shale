@@ -5,11 +5,11 @@
               [clojure.java.io :as io]))
 
 (def config
-  (configurer
-    (concat
-      (map io/as-url
-           (filter identity
-                   (flatten
-                     [(if-let [env-var (env :config-file)]
-                        (str "file://" env-var))
-                      (resources "config.clj")]))))))
+  (->> [(some->> (env :config-file)
+                 (str "file://"))
+        (resources "config.clj")]
+       flatten
+       (filter identity)
+       (map io/as-url)
+       concat
+       configurer))
