@@ -1,5 +1,7 @@
 (ns shale.test.utils
-  (:require [clojure.java.io :refer [writer]])
+  (:require [clojure.java.io :refer [writer]]
+            [carica.core :refer [overrider]]
+            [shale.configurer :as configurer])
   (:import [org.openqa.selenium.server
             SeleniumServer
             RemoteControlConfiguration]
@@ -57,3 +59,14 @@
       (try
         (test-fn)
         (finally (doall (pmap stop-selenium-server servers)))))))
+
+(defn with-custom-config
+  "Returns a fixture that runs tests with an overridden config.
+
+  Eg, using the fixture `(with-custom-config {:node-max-sessions 5})` you can
+  make all calls `(config :node-max-sessions)` calls in a test return `5`."
+  [new-config]
+  (fn [test-fn]
+    (let [override-config (overrider configurer/config)]
+      (with-redefs [configurer/config (override-config new-config)]
+        (test-fn)))))

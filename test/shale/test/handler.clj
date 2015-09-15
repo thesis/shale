@@ -5,11 +5,17 @@
             [shale.configurer :as configurer]
             [ring.mock.request :as mock]
             [shale.handler :refer :all]
-            [shale.test.utils :refer [with-selenium-servers]]))
+            [shale.test.utils :refer [with-selenium-servers
+                                      with-custom-config]]))
 
-(use-fixtures :once (with-selenium-servers [4444]))
+(def custom-config
+  {:node-list ["http://localhost:4444/wd/hub"]})
 
-(deftest ^:integration test-app
+(use-fixtures :once
+              (compose-fixtures (with-selenium-servers [4444])
+                                (with-custom-config custom-config)))
+
+(deftest ^:integration test-app-startup
   (testing "main route"
     (let [response (app (mock/request :get "/"))]
       (is (= (:status response) 200))))
@@ -19,10 +25,7 @@
       (is (= (:status response) 200))
       (is (= (:body response) "[]"))))
 
-  #_(testing "requesting a session with an empty node list throws a 500"
-    (with-redefs [configurer/config (override-config :node-list [])]
-      (let [response (app (-> (mock/request :post "/sessions")
-                              (mock/body "{}")))]
-        (is (= (:status response) 500))
-        (is (= (json/parse-string (:body response))
-               {"error" "No suitable node found!"}))))))
+  (testing "nodes route"
+    (let [response (app (mock/request :get "/nodes"))]
+      (is (= (:status response) 200))
+      (is (= (:body response) "[]")))))
