@@ -12,7 +12,7 @@
                                :body "{\"a\": 1}"
                                :params {"b" "c"}}}]
         (is (=
-          (parse-request-data :context context :key :xyz
+          (parse-request-data :context context :k :xyz
                               :schema {(s/required-key "a") s/Num})
           [false {:xyz {"a" 1}}]))))
 
@@ -21,20 +21,20 @@
                                :body "{\"a\": 1}"
                                :params {"b" "True" "c" "False"}}}]
         (is (=
-          (parse-request-data :context context :key :xyz
+          (parse-request-data :context context :k :xyz
                               :include-boolean-params true)
           [false {:xyz {"a" 1 "b" true "c" false}}]))))
 
     (testing "malformed json"
       (let [context {:request {:request-method :post :body "q"}}]
         (is (=
-          (parse-request-data :context context :key :xyz)
+          (parse-request-data :context context :k :xyz)
           {:message "Malformed JSON."}))))
 
     (testing "empty body"
       (let [context {:request {:request-method :post :body nil}}]
         (is (=
-          (parse-request-data :context context :key :xyz)
+          (parse-request-data :context context :k :xyz)
           {:message "Empty body."}))))
 
     (testing "schema error"
