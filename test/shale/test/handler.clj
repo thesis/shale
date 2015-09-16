@@ -22,17 +22,60 @@
 (use-fixtures :once (join-fixtures once-fixtures))
 (use-fixtures :each (join-fixtures each-fixtures))
 
-(deftest ^:integration test-app-startup
+(defn is-status [resp status]
+  (is (= (:status resp) status)))
+
+(defn is-200 [resp]
+  (is-status resp 200))
+
+(defn is-body [resp body]
+  (is (= (:body resp) body)))
+
+(defn is-json [resp]
+  (is (.contains (get-in resp [:headers "Content-Type"]) "json"))
+  (let [[parse-error? result]
+        (try
+          [false (json/parse-string (:body resp))]
+          (catch com.fasterxml.jackson.core.JsonParseException e
+            [true nil]))]
+    (is (false? parse-error?)
+        (str "Body should be valid JSON:" (:body resp)))
+    result))
+
+(deftest ^:integration basic-routes
   (testing "main route"
     (let [response (app (mock/request :get "/"))]
-      (is (= (:status response) 200))))
+      (is-200 response)))
 
   (testing "sessions route"
     (let [response (app (mock/request :get "/sessions"))]
-      (is (= (:status response) 200))
-      (is (= (:body response) "[]"))))
+      (is-200 response)
+      (is-body response "[]")))
 
   (testing "nodes route"
     (let [response (app (mock/request :get "/nodes"))]
-      (is (= (:status response) 200))
-      (is (= (:body response) "[]")))))
+      (is-200 response)
+      (is-body response "[]"))))
+
+(defn refresh-nodes []
+  (app (mock/request :post "/nodes/refresh")))
+
+(deftest ^:integration node-properties
+  (testing "refreshing nodes populates the node list"
+    (let [resp-1 (app (mock/request :get "/nodes"))
+          resp-refresh (refresh-nodes)
+          resp-2 (app (mock/request :get "/nodes"))]
+      (doto resp-1
+        (is-200)
+        (is-json)
+        (is-body "[]"))
+      (doto resp-refresh
+        (is-status 201)
+        (is-body nil))
+      (is-200 resp-2)
+      (let [parsed (is-json resp-2)
+            node-list (configurer/config :node-list)]
+        (is (= (count (set (map #(get % "url") parsed)))
+               (count (set node-list)))
+            (str "There should be the same number of uniquely configured node "
+                 "URLs as nodes."))))))
