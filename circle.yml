@@ -2,6 +2,7 @@ dependencies:
   override:
     - bash ./get_selenium.sh
     - yes | lein upgrade
+    - lein deps
   cache_directories:
     - "libs/"
     - "target/"
