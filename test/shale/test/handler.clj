@@ -78,4 +78,18 @@
         (is (= (count (set (map #(get % "url") parsed)))
                (count (set node-list)))
             (str "There should be the same number of uniquely configured node "
-                 "URLs as nodes."))))))
+                 "URLs as nodes.")))))
+  (testing "nodes have reasonable default properties"
+    (let [resp (app (mock/request :get "/nodes"))]
+      (is-200 resp)
+      (let [parsed (is-json resp)
+            is-correct (fn [node]
+                         (let [{max-sessions "max_sessions"
+                                tags "tags"}
+                               node]
+                           (is (= tags [])
+                               "Tags should be an empty list or vector.")
+                           (is (or (nil? max-sessions) (number? max-sessions))
+                               "Max sessions should be a number or nil.")))]
+        (doall
+          (map is-correct parsed))))))
