@@ -131,9 +131,10 @@
   (not (nil? (some #{id} (model-ids model-schema)))))
 
 (defn is-map-type?
-  "Unfortunately, distinguishing between maps and records isn't built-in."
+  "Unfortunately, distinguishing between maps and records isn't the default
+  behavior of map?."
   [m]
-  (and (map? m) (not (instance? clojure.lang.IRecord m))))
+  (and (map? m) (not (record? m))))
 
 (defn model
   "Return a model from a Redis key given a particular schema.
