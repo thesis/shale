@@ -1,5 +1,5 @@
 (ns shale.redis
-  (:require [taoensso.carmine :as car :refer (wcar) ]
+  (:require [taoensso.carmine :as car :refer (wcar)]
             [schema.core :as s]
             [shale.utils :refer :all]
             [shale.configurer :refer [config]]))
@@ -130,6 +130,11 @@
 (defn model-exists? [model-schema id]
   (not (nil? (some #{id} (model-ids model-schema)))))
 
+(defn is-map-type?
+  "Unfortunately, distinguishing between maps and records isn't built-in."
+  [m]
+  (and (map? m) (not (instance? clojure.lang.IRecord m))))
+
 (defn model
   "Return a model from a Redis key given a particular schema.
 
@@ -153,11 +158,12 @@
                        (keys-with-vals-matching-pred sequential?)
                        (map (comp name :k)))
         map-keys (->> model-schema
-                      (keys-with-vals-matching-pred map?)
+                      (keys-with-vals-matching-pred is-map-type?)
                       (map (comp name :k)))
         regular-keys (->> model-schema
                           (keys-with-vals-matching-pred
-                            #(not-any? identity (juxt sequential? map? set?)))
+                            #(not-any? identity
+                                       (juxt sequential? is-map-type? set?)))
                           (map (comp name :k)))
         k (model-key model-schema id)]
     (last

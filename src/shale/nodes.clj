@@ -115,7 +115,7 @@
 (defn ^:private to-set [s]
   (into #{} s))
 
-(def ^:private  refresh-nodes-lock {})
+(def ^:private refresh-nodes-lock {})
 
 (defn refresh-nodes
   "Syncs the node list with the backing node pool."
