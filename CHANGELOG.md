@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 Note: all versions before 1.0 might include breaking API changes. After 1.0,
 this project will adhere to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased][unreleased]
+## [0.2.0] - 2015-09-17
 ### Added
 - Session logging [#22]
 - Improved test coverage beyond integration tests.
@@ -51,7 +51,8 @@ exhaustion issues. [#44],[#47]
 - A number of performance issues related to poor Python's lackluster
 concurrency story.
 
-[unreleased]: https://github.com/cardforcoin/shale/compare/v0.1.1...HEAD
+[unreleased]: https://github.com/cardforcoin/shale/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/cardforcoin/shale/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/cardforcoin/shale/compare/3fc098ef45d...v0.1.1
 [0.1.0]: https://github.com/cardforcoin/shale/compare/80d62f3dcc3c...3fc098ef45d
 [#24]: https://github.com/cardforcoin/shale/issues/24
