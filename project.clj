@@ -42,4 +42,5 @@
              :aws {:dependencies [[amazonica "0.2.26" :exclusions [joda-time]]]
                    :uberjar-name "shale-aws.jar"}
              :uberjar {:aot :all}}
+  :lein-release {:deploy-via :clojars}
   :aot [#"shale\.ext\.*" #"shale\.handler"])
