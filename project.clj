@@ -1,4 +1,4 @@
-(defproject shale "0.2.0"
+(defproject shale "0.2.1-SNAPSHOT"
   :description "A Clojure-backed Selenium hub replacement"
   :url "https://github.com/cardforcoin/shale"
   :dependencies [[org.clojure/clojure "1.6.0"]
@@ -42,5 +42,4 @@
              :aws {:dependencies [[amazonica "0.2.26" :exclusions [joda-time]]]
                    :uberjar-name "shale-aws.jar"}
              :uberjar {:aot :all}}
-  :lein-release {:deploy-via :clojars}
   :aot [#"shale\.ext\.*" #"shale\.handler"])
