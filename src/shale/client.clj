@@ -9,131 +9,164 @@
         [clojure.set :only [rename-keys]]
         shale.utils))
 
+(def default-url-root "http://localhost:5000")
+
 (def ^:private sessions-url
-  (clojure.string/join "/" ["http://localhost:5000" "sessions"]))
+  (memoize
+    (fn [url-root]
+      (clojure.string/join "/" [url-root "sessions"]))))
 
 (def ^:private nodes-url
-  (clojure.string/join "/" ["http://localhost:5000" "nodes"]))
+  (memoize
+    (fn [url-root]
+      (clojure.string/join "/" [url-root "nodes"]) )))
 
-(defn ^:private session-url [id]
-  (clojure.string/join "/" [sessions-url id]))
+(defn ^:private session-url [url-root id]
+  (clojure.string/join "/" [(sessions-url url-root)id]))
 
-(defn ^:private session-by-webdriver-url [webdriver-id]
-  (clojure.string/join "/" [sessions-url "webdriver" webdriver-id]))
+(defn ^:private session-by-webdriver-url [url-root webdriver-id]
+  (clojure.string/join "/" [(sessions-url url-root) "webdriver" webdriver-id]))
 
-(defn ^:private map->session-url [m-or-id]
+(defn ^:private map->session-url [url-root m-or-id]
   (if (map? m-or-id)
     (if (contains? m-or-id :webdriver-id)
-      (session-by-webdriver-url (:webdriver-id m-or-id))
-      (session-url (or (:session-id m-or-id) (:id m-or-id))))
-    (session-url m-or-id)))
+      (session-by-webdriver-url url-root (:webdriver-id m-or-id))
+      (session-url url-root (or (:session-id m-or-id) (:id m-or-id))))
+    (session-url url-root m-or-id)))
 
-(defn sessions []
-  (let [response (try+ (client/get sessions-url)
-                       (catch [:status 400] {:keys [body]} (error body) (throw+)))]
-    (json/parse-string (response :body))))
+(defn sessions
+  ([] (sessions default-url-root))
+  ([url-root]
+   (let [response (try+
+                    (client/get (sessions-url url-root))
+                    (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+     (json/parse-string (response :body)))))
 
-(defn nodes []
-  (let [response (try+ (client/get nodes-url)
-                       (catch [:status 400] {:keys [body]} (error body) (throw+)))]
-    (json/parse-string (response :body))))
+(defn nodes
+  ([] (nodes default-url-root))
+  ([url-root]
+   (let [response (try+ (client/get (nodes-url url-root))
+                        (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+     (json/parse-string (response :body)))))
 
-(defn session [id]
-  (let [url (map->session-url id)
-        response (client/get url)]
-    (json/parse-string (response :body))))
+(defn session
+  ([id] (session default-url-root id))
+  ([url-root id]
+   (let [url (map->session-url url-root id)
+         response (client/get url)]
+     (json/parse-string (response :body)))))
 
-(defn get-or-create-session! [{:keys [browser-name
-                                      node
-                                      reserved
-                                      tags
-                                      reserve-after-create
-                                      force-create]
-                              :or {browser-name "phantomjs"
-                                   node nil
-                                   reserved nil
-                                   reserve-after-create nil
-                                   force-create nil
-                                   tags []}
-                              :as requirements}]
-  (let [body (rename-keys (select-keys requirements
-                                       [:browser-name :reserved :node :tags])
-                          {:browser-name :browser_name})
-        params (rename-keys (select-keys requirements
-                                         [:reserve-after-create :force-create])
-                            {:reserve-after-create :reserve_after_create
-                             :force-create :force_create})
-        response (try+
-                   (client/post sessions-url
-                     {:body (json/generate-string body)
-                      :content-type :json
-                      :accept :json
-                      :query-params params})
-                   (catch [:status 400] {:keys [body]} (error body) (throw+)))]
-    (json/parse-string (response :body))))
+(defn get-or-create-session!
+  ([requirements] (get-or-create-session! default-url-root requirements))
+  ([url-root {:keys [browser-name
+                     node
+                     reserved
+                     tags
+                     reserve-after-create
+                     force-create]
+              :or {browser-name "phantomjs"
+                   node nil
+                   reserved nil
+                   reserve-after-create nil
+                   force-create nil
+                   tags []}
+              :as requirements}]
+   (let [body (rename-keys (select-keys requirements
+                                        [:browser-name :reserved :node :tags])
+                           {:browser-name :browser_name})
+         params (rename-keys (select-keys requirements
+                                          [:reserve-after-create :force-create])
+                             {:reserve-after-create :reserve_after_create
+                              :force-create :force_create})
+         response (try+
+                    (client/post (sessions-url url-root)
+                                 {:body (json/generate-string body)
+                                  :content-type :json
+                                  :accept :json
+                                  :query-params params})
+                    (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+     (json/parse-string (response :body)))))
 
-(defn modify-session! [id {:keys [reserved tags]
-                           :or {reserved nil
-                                tags nil}}]
-  (let [url (map->session-url id)
-        body (merge (if (not (nil? reserved)) {:reserved reserved})
-                    (if tags {:tags tags})
-                    {})
-        response (try+
-                   (client/put url
-                               {:body (json/generate-string body)
-                                :content-type :json
-                                :accept :json})
-                   (catch [:status 400] {:keys [body]}
-                     (error body)
-                     (throw+)))]
-    (json/parse-string (response :body))))
+(defn modify-session!
+  ([id options] (modify-session! default-url-root id options))
+  ([url-root id {:keys [reserved tags]
+                 :or {reserved nil
+                      tags nil}}]
+   (let [url (map->session-url url-root id)
+         body (merge (if (not (nil? reserved)) {:reserved reserved})
+                     (if tags {:tags tags})
+                     {})
+         response (try+
+                    (client/put url
+                                {:body (json/generate-string body)
+                                 :content-type :json
+                                 :accept :json})
+                    (catch [:status 400] {:keys [body]}
+                      (error body)
+                      (throw+)))]
+     (json/parse-string (response :body)))))
 
-(defn reserve-session! [id]
-  (modify-session! id {:reserved true}))
+(defn reserve-session!
+  ([id] (reserve-session! default-url-root id))
+  ([url-root id]
+   (modify-session! url-root id {:reserved true})))
 
-(defn release-session! [id]
-  (modify-session! id {:reserved false}))
+(defn release-session!
+  ([id] (release-session! default-url-root id))
+  ([url-root id]
+   (modify-session! url-root id {:reserved false})))
 
-(defn destroy-session! [id]
-  (let [url (map->session-url id)]
-    (client/delete url))
-  nil)
+(defn destroy-session!
+  ([id] (destroy-session! default-url-root id))
+  ([url-root id]
+   (let [url (map->session-url url-root id)]
+     (client/delete url))
+   nil))
 
-(defn destroy-sessions! []
-  (client/delete sessions-url)
-  nil)
+(defn destroy-sessions!
+  ([] (destroy-sessions! default-url-root))
+  ([url-root]
+   (client/delete (sessions-url url-root))
+   nil))
 
-(defn refresh-sessions! []
-  (let [response (try+
-                   (client/post
-                     (clojure.string/join "/" [sessions-url "refresh"]) {})
-                   (catch [:status 400] {:keys [body]} (error body) (throw+)))]
-    (json/parse-string (response :body))))
+(defn refresh-sessions!
+  ([] (refresh-sessions! default-url-root))
+  ([url-root]
+   (let [response (try+
+                    (client/post
+                      (clojure.string/join "/"
+                                           [(sessions-url url-root) "refresh"])
+                      {})
+                    (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+     (json/parse-string (response :body)))))
 
-(defn get-or-create-webdriver! [{:keys [browser-name
-                                        node
-                                        reserved
-                                        tags
-                                        reserve-after-create
-                                        force-create]
-                                 :or {browser-name "phantomjs"
-                                      node nil
-                                      reserved nil
-                                      reserve-after-create nil
-                                      force-create nil
-                                      tags []}
-                                 :as requirements}]
-  (let [session (get-or-create-session! requirements)]
-    (webdriver/resume-webdriver
-      (get session "webdriver_id")
-      (get-in session ["node" "url"])
-      {"platform" "ANY"
-       "browserName" (get session "browser_name")})))
+(defn get-or-create-webdriver!
+  ([requirements] (get-or-create-webdriver! default-url-root requirements))
+  ([url-root {:keys [browser-name
+                     node
+                     reserved
+                     tags
+                     reserve-after-create
+                     force-create]
+              :or {browser-name "phantomjs"
+                   node nil
+                   reserved nil
+                   reserve-after-create nil
+                   force-create nil
+                   tags []}
+              :as requirements}]
+   (let [session (get-or-create-session! url-root requirements)]
+     (webdriver/resume-webdriver
+       (get session "webdriver_id")
+       (get-in session ["node" "url"])
+       {"platform" "ANY"
+        "browserName" (get session "browser_name")}))))
 
-(defn release-webdriver! [driver]
-  (if-let [session-id (session-id driver)]
-    (release-session! {:webdriver-id session-id})))
+(defn release-webdriver!
+  ([driver] (release-webdriver! default-url-root driver))
+  ([url-root driver]
+   (if-let [session-id (session-id driver)]
+     (release-session! url-root {:webdriver-id session-id}))))
 
 (defmacro with-webdriver*
     "Given tags and a browser name to get or create a new webdriver session,
