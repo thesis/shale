@@ -5,6 +5,7 @@
                  [compojure "1.4.0"]
                  [javax.servlet/servlet-api "2.5"]
                  [ring/ring-jetty-adapter "1.4.0"]
+                 [org.clojure/tools.nrepl "0.2.11"]
                  [liberator "0.12.0"]
                  [clj-http "1.1.2"]
                  [cheshire "5.4.0"]

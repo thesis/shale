@@ -1,13 +1,14 @@
 (ns shale.handler
   (:require [ring.adapter.jetty :as jetty]
             [cheshire [core :as json]]
+            [shale.configurer :refer [config]]
             [shale.periodic :as periodic]
             [shale.nodes :as nodes]
             [shale.resources :refer [assemble-routes]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [compojure.handler :refer [api]]
-            [liberator.dev :as dev])
-
+            [liberator.dev :as dev]
+            [clojure.tools.nrepl.server :as nrepl])
   (:gen-class))
 
 (defn ignore-trailing-slash
@@ -49,13 +50,24 @@
       api
       wrap-multipart-params))
 
+(defonce nrepl-server (atom nil))
+
 (defn init []
+  (let [nrepl-port (or (config :nrepl-port) 5001)]
+    (reset! nrepl-server
+            (nrepl/start-server :port nrepl-port)))
+  (nodes/refresh-nodes)
   ;; schedule periodic tasks
-  (periodic/schedule!)
-  (nodes/refresh-nodes))
+  (periodic/schedule!))
 
 (defn destroy []
-  (periodic/stop!))
+  (periodic/stop!)
+  (nrepl/stop-server @nrepl-server)
+  (reset! nrepl-server nil))
 
 (defn -main [& args]
-  (jetty/run-jetty app {:port 5000}))
+  (init)
+  (try
+    (jetty/run-jetty app {:port 5000})
+    (finally
+      (destroy))))
