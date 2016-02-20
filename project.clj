@@ -27,15 +27,15 @@
   :scm {:name "git"
         :url "http://github.com/cardforcoin/shale"}
   :auto-clean false
-  :main shale.handler
+  :main shale.core
   :plugins [[lein-ring "0.8.12"]
             [lein-environ "1.0.0"]]
   :test-selectors {:default (complement :integration)
                    :integration :integration
                    :all (constantly true)}
   :ring {:handler shale.handler/app
-         :init shale.handler/init
-         :destroy shale.handler/destroy
+         :init shale.core/init
+         :destroy shale.core/destroy
          :port 5000}
   :profiles {:dev
               {:dependencies [[org.clojure/tools.trace "0.7.8"]
@@ -43,4 +43,4 @@
              :aws {:dependencies [[amazonica "0.2.26" :exclusions [joda-time]]]
                    :uberjar-name "shale-aws.jar"}
              :uberjar {:aot :all}}
-  :aot [#"shale\.ext\.*" #"shale\.handler"])
+  :aot [#"shale\.ext\.*" #"shale\.core"])
