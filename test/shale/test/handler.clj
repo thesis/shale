@@ -1,25 +1,32 @@
 (ns shale.test.handler
   (:require [clojure.test :refer :all]
             [cheshire [core :as json]]
-            [carica.core :refer [override-config]]
-            [shale.configurer :as configurer]
             [ring.mock.request :as mock]
-            [shale.handler :refer :all]
+            [com.stuartsierra.component :as component]
             [shale.test.utils :refer [with-selenium-servers
-                                      with-custom-config
-                                      clean-redis]]))
+                                      with-clean-redis]]
+            [shale.core :refer [get-app-system]]))
 
-(def custom-config
-  {:node-list ["http://localhost:4444/wd/hub"]})
+; the config we'll be testing
+(def system
+  (get-app-system {:node-list ["http://localhost:4444/wd/hub"]}))
+
+(defn start-stop-system [test-fn]
+  (alter-var-root #'system component/start)
+  (try
+    (test-fn)
+    (finally
+      (alter-var-root #'system component/stop))))
 
 (def once-fixtures
   [(with-selenium-servers [4444])
-   (with-custom-config custom-config)])
+   start-stop-system])
 
 (def each-fixtures
-  [clean-redis])
+  [(with-clean-redis #'system)])
 
 (use-fixtures :once (join-fixtures once-fixtures))
+
 (use-fixtures :each (join-fixtures each-fixtures))
 
 (defn is-status [resp status]
@@ -44,26 +51,30 @@
 
 (deftest ^:integration basic-routes
   (testing "main route"
-    (let [response (app (mock/request :get "/"))]
+    (let [app (:ring-app (:app system))
+          response (app (mock/request :get "/"))]
       (is-200 response)))
 
   (testing "sessions route"
-    (let [response (app (mock/request :get "/sessions"))]
+    (let [app (:ring-app (:app system))
+          response (app (mock/request :get "/sessions"))]
       (is-200 response)
       (is-body response "[]")))
 
   (testing "nodes route"
-    (let [response (app (mock/request :get "/nodes"))]
+    (let [app (:ring-app (:app system))
+          response (app (mock/request :get "/nodes"))]
       (is-200 response)
       (is-body response "[]"))))
 
-(defn refresh-nodes []
+(defn refresh-nodes [app]
   (app (mock/request :post "/nodes/refresh")))
 
 (deftest ^:integration node-properties
   (testing "refreshing nodes populates the node list"
-    (let [resp-1 (app (mock/request :get "/nodes"))
-          resp-refresh (refresh-nodes)
+    (let [app (:ring-app (:app system))
+          resp-1 (app (mock/request :get "/nodes"))
+          resp-refresh (refresh-nodes app)
           resp-2 (app (mock/request :get "/nodes"))]
       (doto resp-1
         (is-200)
@@ -74,13 +85,14 @@
         (is-body nil))
       (is-200 resp-2)
       (let [parsed (is-json resp-2)
-            node-list (configurer/config :node-list)]
+            node-list (:node-list (:config system))]
         (is (= (count (set (map #(get % "url") parsed)))
                (count (set node-list)))
             (str "There should be the same number of uniquely configured node "
                  "URLs as nodes.")))))
   (testing "nodes have reasonable default properties"
-    (let [resp (app (mock/request :get "/nodes"))]
+    (let [app (:ring-app (:app system))
+          resp (app (mock/request :get "/nodes"))]
       (is-200 resp)
       (let [parsed (is-json resp)
             is-correct (fn [node]

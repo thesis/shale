@@ -1,7 +1,6 @@
 (ns shale.test.utils
   (:require [clojure.java.io :refer [writer]]
             [taoensso.carmine :as car]
-            [shale.redis :refer [with-car*]]
             [carica.core :refer [overrider]]
             [shale.configurer :as configurer])
   (:import [org.openqa.selenium.server
@@ -62,21 +61,21 @@
         (test-fn)
         (finally (doall (pmap stop-selenium-server servers)))))))
 
-(defn with-custom-config
-  "Returns a fixture that runs tests with an overridden config.
+(defn clear-redis
+  "Clear a Redis database given connection options."
+  [redis-conn]
+  (car/wcar redis-conn
+    (car/flushdb)))
 
-  Eg, using the fixture `(with-custom-config {:node-max-sessions 5})` you can
-  make all calls `(config :node-max-sessions)` calls in a test return `5`."
-  [new-config]
+(defn with-clean-redis
+  "Given a system variable (eg #'system), return a fixture that clears Redis
+  before and after running the test function."
+  [system-var]
   (fn [test-fn]
-    (let [override-config (overrider configurer/config)]
-      (with-redefs [configurer/config (override-config new-config)]
-        (test-fn)))))
-
-(defn clean-redis
-  "Clear Redis before and after a test. Right now, though, we're relying on
-  connection state in shale.redis :/"
-  [test-fn]
-  (with-car* (car/flushdb))
-  (test-fn)
-  (with-car* (car/flushdb)))
+    (let [system (deref system-var)
+          redis (:redis system)]
+      (clear-redis redis)
+      (try
+        (test-fn)
+        (finally
+          (clear-redis redis))))))

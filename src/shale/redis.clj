@@ -1,11 +1,7 @@
 (ns shale.redis
   (:require [taoensso.carmine :as car :refer (wcar)]
             [schema.core :as s]
-            [shale.utils :refer :all]
-            [shale.configurer :refer [config]]))
-
-(def redis-conn-opts {:pool {} :spec (config :redis)})
-(defmacro with-car* [& body] `(car/wcar redis-conn-opts ~@body))
+            [shale.utils :refer :all]))
 
 (defn hset-all [k m]
   (doseq [[a b] m]
@@ -62,7 +58,7 @@
   {:doc \"My Redis model.\"
    :name \"Model\"
    :model-name \"Model\"
-   :redis-key \"_shake/Model\"}
+   :redis-key \"_shale/Model\"}
 
   > (defmodel FancyModel
       \"My fancy model.\"
@@ -123,8 +119,8 @@
 (defn model-ids-key [model-schema]
   (:redis-key (meta model-schema)))
 
-(defn model-ids [model-schema]
-  (with-car*
+(defn model-ids [redis-conn model-schema]
+  (wcar redis-conn
     (car/smembers (model-ids-key model-schema))))
 
 (defn model-exists? [model-schema id]
@@ -151,7 +147,7 @@
   ;; stored as {\"age\" \"10\"} at \"_shale/Person/<id>\" and #{\"oli\" \"joe\"}
   ;; at \"_shale/Person/<id>/nicknames\".
   ```"
-  [model-schema id]
+  [redis-conn model-schema id]
   (let [set-keys (->> model-schema
                       (keys-with-vals-matching-pred set?)
                       (map (comp name :k)))
@@ -168,30 +164,34 @@
                           (map (comp name :k)))
         k (model-key model-schema id)]
     (last
-      (with-car*
+      (wcar redis-conn
         (car/watch k)
         (car/return
-          (let [base (vector->map (with-car* (car/hgetall k)))
+          (let [base (vector->map (wcar redis-conn
+                                    (car/hgetall k)))
                 sets (for [set-k set-keys]
                        {set-k (->> [k set-k]
                                    (clojure.string/join "/")
                                    car/smembers
-                                   with-car*
+                                   (wcar redis-conn)
                                    (into #{}))})
                 lists (for [list-k list-keys]
-                       {list-k (list (with-car* (car/lrange list-k 0 -1)))})
+                       {list-k (list
+                                 (wcar redis-conn
+                                   (car/lrange list-k 0 -1)))})
                 maps (for [map-k map-keys]
-                       {map-k (with-car* (car/hgetall map-k))})]
+                       {map-k (wcar redis-conn
+                                (car/hgetall map-k))})]
             (->> (concat sets lists maps)
                  (list* base)
                  (reduce merge))))))))
 
 (defn delete-model!
   "Delete a model from Redis."
-  [model-schema id]
+  [redis-conn model-schema id]
   (let [m-key (model-key model-schema id)
         ids-key (model-ids-key model-schema)]
-    (with-car*
+    (wcar redis-conn
       (car/watch ids-key)
       ; delete any associated keys first
       (doall
@@ -201,15 +201,15 @@
           (->> [m-key k]
                (clojure.string/join "/")
                car/del
-               with-car*)))
+               (car/wcar redis-conn))))
       ; delete the base model data
       (car/del m-key)
       (car/srem ids-key id)))
   true)
 
-(defn models [model-schema]
-  (with-car*
+(defn models [redis-conn model-schema]
+  (wcar redis-conn
     (car/return
-      (->> (model-ids model-schema)
-           (map #(model model-schema %))
+      (->> (model-ids redis-conn model-schema)
+           (map #(model redis-conn model-schema %))
            (filter identity)))))

@@ -3,33 +3,42 @@
             [ring.adapter.jetty :as jetty]
             [clj-webdriver.taxi :refer [execute-script]]
             [shale.client :refer :all]
-            [shale.handler :as handler]
             [shale.test.utils :refer [with-selenium-servers
-                                      local-port-available?]]
+                                      local-port-available?
+                                      clear-redis]]
+            [shale.nodes :refer [refresh-nodes]]
+            [shale.configurer :refer [get-config]]
+            [shale.core :refer [get-shale-system]]
+            [com.stuartsierra.component :as component]
             [io.aviso.ansi :refer [bold-red bold-green]])
   (:import java.net.Socket
            java.io.IOException))
 
-(defn server-fixture [f]
-  (let [port 5000
-        app (jetty/run-jetty handler/app {:port port :join? false})]
+(defn server-fixture
+  "Fixture that spawns a system and clears Redis. Waits for the system's Jetty
+  to boot before running tests."
+  [f]
+  (let [config (get-config)
+        system (component/start (get-shale-system config))
+        port (or (:port config) 5000)]
     ; give the app 5 seconds to start, or cry real hard
-    (pr "Waiting for the web server...")
-    (loop [tries 0]
-      (if (local-port-available? port)
-        (if (> tries 20)
-          (do
-            (pr ".")
-            (Thread/sleep 100)
-            (recur (inc tries)))
-          (do
-            (.stop app)
-            (handler/destroy)
-            (throw (ex-info "Timed out waiting for the web server." {}))))))
-    (handler/init)
-    (f)
-    (.stop app)
-    (handler/destroy)))
+    (print "Waiting for the web server...")
+    (try
+      (clear-redis (:redis system))
+      ; refresh the nodes, since we cleared redis after start
+      (refresh-nodes (:node-pool system))
+      (loop [tries 0]
+        (if (local-port-available? port)
+          (if (< tries 50)
+            (do
+              (print ".")
+              (Thread/sleep 100)
+              (recur (inc tries)))
+            (throw (ex-info "Timed out waiting for the web server." {})))))
+      (f)
+      (finally
+        (clear-redis (:redis system))
+        (component/stop system)))))
 
 (defn logged-in-sessions-fixture [f]
   (let [reqs {:browser-name "phantomjs" :tags []}]
@@ -44,9 +53,10 @@
   (f))
 
 (defn delete-sessions-fixture [f]
-  (let [test-value (f)]
-    (shale.client/destroy-sessions!)
-    test-value))
+  (try
+    (f)
+    (finally
+      (shale.client/destroy-sessions!))))
 
 (use-fixtures :once (with-selenium-servers [4443 4444]) server-fixture)
 (use-fixtures :each delete-sessions-fixture)
@@ -85,6 +95,9 @@
       (let [node-id (-> (shale.client/nodes)
                         first
                         (get "id"))]
+        ; clear all the old sessions
+        (shale.client/destroy-sessions!)
+        ; and get three new onws on this node
         (dotimes [_ 3]
           (shale.client/get-or-create-session!
             {:browser-name "phantomjs"

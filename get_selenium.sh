@@ -11,7 +11,7 @@ if [[ ! -d ./libs/$PHANTOM_DIR_NAME ]]; then
     tar -xvjf $PHANTOM_FILE_NAME -C ./libs
 fi
 [[ -h phantomjs ]] && unlink phantomjs
-ln -s ./libs/$PHANTOM_DIR_NAME phantomjs
+ln -s ./libs/$PHANTOM_DIR_NAME/bin/phantomjs phantomjs
 
 SELENIUM_VERSION='2.43'
 SELENIUM_RELEASE_VERSION="$SELENIUM_VERSION.0"

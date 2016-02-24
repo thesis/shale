@@ -83,7 +83,7 @@
                                  {:body (json/generate-string body)
                                   :content-type :json
                                   :accept :json
-                                  :query-params params})
+                                   :query-params params})
                     (catch [:status 400] {:keys [body]} (error body) (throw+)))]
      (json/parse-string (response :body)))))
 
@@ -120,13 +120,13 @@
   ([id] (destroy-session! default-url-root id))
   ([url-root id]
    (let [url (map->session-url url-root id)]
-     (client/delete url))
+     (client/delete url {:query-params {"immediately" "true"}}))
    nil))
 
 (defn destroy-sessions!
   ([] (destroy-sessions! default-url-root))
   ([url-root]
-   (client/delete (sessions-url url-root))
+   (client/delete (sessions-url url-root) {:query-params {"immediately" "true"}})
    nil))
 
 (defn refresh-sessions!

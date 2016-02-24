@@ -1,17 +1,18 @@
 (ns shale.resources
-  (:require shale.sessions
+  (:require [shale.sessions :as sessions]
+            [shale.nodes :as nodes]
             clojure.walk
             [taoensso.timbre :as timbre :refer [error]]
             [cheshire [core :as json]]
             [clojure.java.io :as io]
             [camel-snake-kebab.core :refer :all]
             [camel-snake-kebab.extras :refer [transform-keys]]
-            [schema.core :as s])
-  (:use [liberator.core :only  [defresource]]
-        [compojure.core :only  [context ANY routes]]
-        [hiccup.page :only [html5]]
-        [clojure.set :only [rename-keys]]
-        shale.utils)
+            [schema.core :as s]
+            [liberator.core :refer [defresource]]
+            [compojure.core :refer [context ANY routes]]
+            [hiccup.page :refer [html5]]
+            [clojure.set :refer [rename-keys]]
+            [shale.utils :refer :all])
   (:import [java.net URL]))
 
 (defn json-keys [m]
@@ -101,6 +102,18 @@
                     first)))
       :reserve)))
 
+(defn ->session-pool
+  [context]
+  (get-in context [:request :state :session-pool]))
+
+(defn ->node-pool
+  [context]
+  (get-in context [:request :state :node-pool]))
+
+(defn ->session-id
+  [context]
+  (or (::id context) (get-in context [:request :params :id])))
+
 (defresource sessions-resource [params]
   :allowed-methods  [:get :post :delete]
   :available-media-types  ["application/json"]
@@ -119,15 +132,20 @@
                           (s/optional-key "extra_desired_capabilities") {s/Any s/Any}
                           (s/optional-key "force_create") s/Bool})
   :handle-ok (fn [context]
-               (jsonify (shale.sessions/view-models)))
+               (jsonify (sessions/view-models (->session-pool context))))
   :handle-exception handle-exception
   :post! (fn [context]
-           {::session (shale.sessions/get-or-create-session
+           {::session (sessions/get-or-create-session
+                        (->session-pool context)
                         (->sessions-request context))})
   :delete! (fn [context]
-             (doall
-               (map #(shale.sessions/destroy-session (:id %) :immediately false)
-                    (shale.sessions/view-models))))
+             (let [immediately (get (->boolean-params-data context) "immediately")
+                   _ (prn "BOOLEAN PARAMS FOR DESTROY!" (->boolean-params-data context))
+                   destroy sessions/destroy-session
+                   session-pool (->session-pool context)]
+               (doall
+                 (map #(destroy session-pool (:id %) :immediately immediately)
+                      (sessions/view-models session-pool)))))
   :handle-created (fn [context]
                     (jsonify (get context ::session))))
 
@@ -151,16 +169,19 @@
                 (jsonify (::session context)))
    :handle-exception handle-exception
    :delete! (fn [context]
-              (shale.sessions/destroy-session
-                (or (::id context)
-                    (get-in context [:request :params :id]))
-                :immediately false)
+              (let [immediately
+                    (get (->boolean-params-data context) "immediately")]
+                (sessions/destroy-session
+                  (->session-pool context)
+                  (->session-id context)
+                  :immediately immediately))
               {::session nil})
    :put! (fn [context]
            {::session
-            (shale.sessions/modify-session (or (::id context)
-                                               (get-in context [:request :params :id]))
-                                           (clojure-keys (get context ::data)))
+            (let [session-pool (->session-pool context)
+                  id (->session-id context)
+                  modifications (clojure-keys (::data context))]
+              (sessions/modify-session session-pool id modifications))
             ::new? false})
    :respond-with-entity? (fn [context]
                            (contains? context ::session))
@@ -168,9 +189,9 @@
            (and (not (false? (::new? context)))
                 (::session context)))
    :exists? (fn [context]
-              (let [session (shale.sessions/view-model
-                              (or (::id context)
-                                  (get-in context [:request :params :id])))]
+              (let [session (sessions/view-model
+                              (->session-pool context)
+                              (->session-id context))]
                 (if-not (nil? session)
                   {::session session
                    ::id (:id session)})))})
@@ -183,7 +204,9 @@
               (build-session-url (:request context)
                                  (get-in context [::session :id])))
   :exists?  (fn [context]
-              (let [session (shale.sessions/view-model-by-webdriver-id webdriver-id)]
+              (let [pool (->session-pool context)
+                    by-webdriver-id sessions/view-model-by-webdriver-id
+                    session (by-webdriver-id pool webdriver-id)]
                 (if-not (nil? session)
                   {::session session
                    ::id (:id session)}))))
@@ -193,14 +216,15 @@
   :available-media-types ["application/json"]
   :handle-exception handle-exception
   :post! (fn [context]
-           (shale.sessions/refresh-sessions (if (nil? id) id [id]))))
+           (sessions/refresh-sessions (->session-pool context)
+                                      (if (nil? id) id [id]))))
 
 (defresource nodes-resource [params]
   :allowed-methods  [:get]
   :available-media-types  ["application/json"]
   :known-content-type? is-json-or-unspecified?
   :handle-ok (fn [context]
-               (jsonify (shale.nodes/view-models)))
+               (jsonify (nodes/view-models (->node-pool context))))
   :handle-exception handle-exception)
 
 (defresource nodes-refresh-resource []
@@ -208,7 +232,7 @@
   :available-media-types ["application/json"]
   :handle-exception handle-exception
   :post! (fn [context]
-           (shale.nodes/refresh-nodes)))
+           (nodes/refresh-nodes (->node-pool context))))
 
 (defresource node-resource [id]
   :allowed-methods [:get :put :delete]
@@ -222,13 +246,13 @@
                (jsonify (get context ::node)))
   :handle-exception handle-exception
   :delete! (fn [context]
-             (shale.nodes/destroy-node id))
+             (nodes/destroy-node (->node-pool context) id))
   :put! (fn [context]
           {::node
-           (shale.nodes/modify-node id (clojure-keys
-                                         (get context ::data)))})
+           (nodes/modify-node (->node-pool context) id (clojure-keys
+                                                         (::data context)))})
   :exists? (fn [context]
-             (let [node (shale.nodes/view-model id)]
+             (let [node (nodes/view-model (->node-pool context) id)]
                (if-not (nil? node)
                  {::node node}))))
 

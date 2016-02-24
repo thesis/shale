@@ -1,11 +1,11 @@
-(ns shale.node-pools
+(ns shale.node-providers
   (:import java.io.FileNotFoundException))
 
 (try
   (require '[amazonica.aws.ec2])
   (catch FileNotFoundException e))
 
-(defprotocol INodePool
+(defprotocol INodeProvider
   "Basic interface for choosing and managing Selenium nodes per session.
    Implementing this allows dynamic node domains- eg, by retrieving them from
    a cloud provider's API."
@@ -22,8 +22,8 @@
   (can-remove-node [this]
     "Whether this pool supports removing nodes."))
 
-(deftype DefaultNodePool [nodes]
-  INodePool
+(deftype DefaultNodeProvider [nodes]
+  INodeProvider
   ;;A simple node pool that chooses randomly from an initial list.
   (get-nodes [this]
     nodes)
@@ -40,8 +40,7 @@
   (can-remove-node [this] false))
 
 (defn ^:private describe-instances-or-throw []
-  (let [describe-instances
-            (ns-resolve 'amazonica.aws.ec2 'describe-instances)]
+  (let [describe-instances (ns-resolve 'amazonica.aws.ec2 'describe-instances)]
         (if describe-instances
           (mapcat #(get % :instances) (get (describe-instances) :reservations))
           (throw
@@ -62,8 +61,8 @@
           (get instance
                (if use-private-dns :private-dns-name :public-dns-name))))
 
-(deftype AWSNodePool [options]
-    INodePool
+(deftype AWSNodeProvider [options]
+    INodeProvider
 
     (get-nodes [this]
       (map #(instance->node-url % (get options :use-private-dns))

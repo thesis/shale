@@ -5,16 +5,14 @@
             [shale.redis :refer :all]
             [shale.utils :refer :all]
             [clojure.walk :refer :all]
-            [shale.configurer :refer [config]]
-            [shale.node-pools :as node-pools]
-            [io.aviso.ansi :refer [bold-red bold-green]] )
+            [shale.node-providers :as node-providers]
+            [com.stuartsierra.component :as component])
   (:import java.util.UUID
-           [shale.node_pools DefaultNodePool AWSNodePool]))
+           [shale.node_providers DefaultNodeProvider AWSNodeProvider]))
 
-(deftype ConfigNodePool [])
+(deftype ConfigNodeProvider [])
 
-
-(def node-pool
+(def node-provider-from-config
   "Return a node pool given a config function.
 
   The config function should expect a single keyword argument and to look up
@@ -27,25 +25,37 @@
     (fn [config-fn]
       (if (nil? (config-fn :node-pool-impl))
         (if (nil? (config-fn :node-pool-cloud-config))
-          (node-pools/DefaultNodePool. (or (config-fn :node-list)
-                                           ["http://localhost:5555/wd/hub"]))
+          (node-providers/DefaultNodeProvider. (or (config-fn :node-list)
+                                                ["http://localhost:5555/wd/hub"]))
           (if (= ((config-fn :node-pool-cloud-config) :provider) :aws)
-            (node-pools/AWSNodePool. (config :node-pool-cloud-config))
+            (node-providers/AWSNodeProvider. (config-fn :node-pool-cloud-config))
             (throw (ex-info (str "Issue with cloud config: AWS is "
                                  "the only currently supported "
                                  "provider.")
                             {:user-visible true :status 500}))))
         (do
-          (extend ConfigNodePool
-            node-pools/INodePool
+          (extend ConfigNodeProvider
+            node-providers/INodeProvider
             (config-fn :node-pool-impl))
-          (ConfigNodePool.))))))
+          (ConfigNodeProvider.))))))
 
-(def default-session-limit
-  (or (config :node-max-sessions) 3))
+(s/defrecord NodePool [config redis-conn node-provider default-session-limit]
+  component/Lifecycle
+  (start [cmp]
+    (prn "Starting the node pool...")
+    (-> cmp
+        (assoc :node-provider (node-provider-from-config config))
+        (assoc :default-session-limit (or (:node-max-sessions config) 3))))
+  (stop [cmp]
+    (prn "Stopping the node pool...")
+    (assoc cmp :node-provider nil)))
 
-(s/defn node-ids :- [s/Str] []
-  (with-car* (car/smembers node-set-key)))
+(defn new-node-pool [config]
+  (map->NodePool {:config config}))
+
+(s/defn node-ids :- [s/Str] [pool :- NodePool]
+  (car/wcar (:redis-conn pool)
+    (car/smembers node-set-key)))
 
 (def NodeView
   "A node, as presented to library users."
@@ -61,24 +71,30 @@
        keywordize-keys))
 
 (s/defn view-model :- NodeView
-  [id :- s/Str]
-  (->NodeView id (model NodeInRedis id)))
+  "Given a node pool, get a view model from Redis."
+  [pool :- NodePool
+   id   :- s/Str]
+  (let [m (model (:redis-conn pool) NodeInRedis id)]
+    (->NodeView id m)))
 
-(s/defn view-models :- [NodeView] []
-  (map view-model (node-ids)))
+(s/defn view-models :- [NodeView]
+  "Get all view models from a node pool."
+  [pool :- NodePool]
+  (map #(view-model pool %) (node-ids pool)))
 
 (s/defn view-model-from-url :- NodeView
-  [url :- s/Str]
-  (first (filter #(= (% :url) url) (view-models))))
+  [pool :- NodePool
+   url  :- s/Str]
+  (first (filter #(= (% :url) url) (view-models pool))))
 
 (s/defn modify-node :- NodeView
   "Modify a node's url or tags in Redis. Any provided url that's host isn't an
   IP address will be resolved before storing."
-  [id {:keys [url tags]
-       :or {:url nil
-            :tags nil}}]
+  [pool id {:keys [url tags]
+            :or {:url nil
+                 :tags nil}}]
   (last
-    (with-car*
+    (car/wcar (:redis-conn pool)
       (let [node-key (node-key id)
             node-tags-key (node-tags-key id)]
         (if url (->> url
@@ -86,26 +102,29 @@
                      str
                      (car/hset node-key :url)))
         (if tags (sset-all node-tags-key tags))
-        (car/return (view-model id))))))
+        (car/return (view-model pool id))))))
 
 (s/defn create-node :- NodeView
-  [{:keys [url tags]
-    :or {:tags []}}]
+  "Create a node in a given pool."
+  [pool {:keys [url tags]
+         :or {:tags []}}]
   (last
-    (with-car*
+    (car/wcar (:redis-conn pool)
       (let [id (gen-uuid)
             node-key (node-key id)]
         (car/sadd node-set-key id)
-        (modify-node id {:url url :tags tags})
-        (car/return (view-model id))))))
+        (modify-node pool id {:url url :tags tags})
+        (car/return (view-model pool id))))))
 
-(s/defn destroy-node [id :- s/Str]
-  (with-car*
+(s/defn destroy-node
+  [pool :- NodePool
+   id   :- s/Str]
+  (car/wcar (:redis-conn pool)
     (car/watch node-set-key)
     (try
-      (let [url (get (view-model id) :url)]
-        (if (some #{url} (node-pools/get-nodes (node-pool config)))
-          (node-pools/remove-node (node-pool config) url)))
+      (let [url (get (view-model pool id) :url)]
+        (if (some #{url} (node-providers/get-nodes (:node-provider pool)))
+          (node-providers/remove-node (:node-provider pool) url)))
       (finally
         (car/srem node-set-key id)
         (car/del (node-key id))
@@ -117,18 +136,18 @@
 
 (def ^:private refresh-nodes-lock {})
 
-(defn refresh-nodes
-  "Syncs the node list with the backing node pool."
-  []
+(s/defn refresh-nodes
+  "Syncs the node list with the backing node provider."
+  [pool :- NodePool]
   (locking refresh-nodes-lock
-    (let [nodes (to-set (node-pools/get-nodes (node-pool config)))
-          registered-nodes (to-set (map #(get % :url) (view-models)))]
+    (let [nodes (to-set (node-providers/get-nodes (:node-provider pool)))
+          registered-nodes (to-set (map #(get % :url) (view-models pool)))]
       (doall
         (concat
-          (map #(create-node {:url %})
+          (map #(create-node pool {:url %})
                (filter identity
                        (difference nodes registered-nodes)))
-          (map #(destroy-node ((view-model-from-url %) :id))
+          (map #(destroy-node pool ((view-model-from-url pool %) :id))
                (filter identity
                        (difference registered-nodes nodes))))))
     true))
@@ -138,14 +157,18 @@
    (s/optional-key :tags) [s/Str]
    (s/optional-key :id)    s/Str})
 
-(s/defn session-count [node-id :- s/Str]
-  (->> (models SessionInRedis)
+(s/defn session-count [node-id :- s/Str
+                       pool    :- NodePool]
+  (->> (models (:redis-conn pool) SessionInRedis)
        (filter #(= node-id (:node-id %)))
        count))
 
-(s/defn nodes-under-capacity []
-  (filter #(< (session-count (:id %)) default-session-limit)
-          (view-models)))
+(s/defn nodes-under-capacity
+  "Nodes with available capacity."
+  [pool :- NodePool]
+  (let [session-limit (:default-session-limit pool)]
+    (filter #(< (session-count pool (:id %)) session-limit)
+            (view-models pool))))
 
 (s/defn matches-requirements :- s/Bool
   [model :- NodeView
@@ -163,9 +186,10 @@
       true)))
 
 (s/defn get-node :- (s/maybe NodeView)
-  [requirements :- NodeRequirements]
+  [pool         :- NodePool
+   requirements :- NodeRequirements]
   (try
     (rand-nth
       (filter #(matches-requirements % requirements)
-              (nodes-under-capacity)))
+              (nodes-under-capacity pool)))
     (catch IndexOutOfBoundsException e)))
