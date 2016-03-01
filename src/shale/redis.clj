@@ -45,6 +45,9 @@
 (defn node-tags-key [id]
   (format node-tags-key-template id))
 
+(def soft-delete-sub-key
+  (apply str (interpose "/" [redis-key-prefix "deleting"])))
+
 ;; model schemas
 (defmacro defmodel
   "A wrapper around schema's `defschema` to attach additional model metadata.
@@ -119,7 +122,7 @@
 (defn model-ids-key [model-schema]
   (:redis-key (meta model-schema)))
 
-(defn model-ids [redis-conn model-schema]
+(defn ^:private model-ids [redis-conn model-schema]
   (wcar redis-conn
     (car/smembers (model-ids-key model-schema))))
 
@@ -184,10 +187,25 @@
                                 (car/hgetall map-k))})]
             (->> (concat sets lists maps)
                  (list* base)
-                 (reduce merge))))))))
+                 (reduce merge)
+                 ; remove internal keys
+                 (filter #(.startsWith (key %) redis-key-prefix))
+                 (into {})
+                 (merge {:id id}))))))))
+
+(defn soft-delete-model!
+  "Add a flag to a Redis model to signify a \"soft delete\".
+
+  Soft-deleted models won't show up when listing a model unless specified."
+  [redis-conn model-schema id]
+  (let [m-key (model-key model-schema id)
+        ids-key (model-ids-key model-schema)]
+    (wcar redis-conn
+      (car/watch ids-key)
+      (car/hset m-key soft-delete-sub-key true))))
 
 (defn delete-model!
-  "Delete a model from Redis."
+  "Hard delete a model from Redis."
   [redis-conn model-schema id]
   (let [m-key (model-key model-schema id)
         ids-key (model-ids-key model-schema)]
@@ -207,9 +225,12 @@
       (car/srem ids-key id)))
   true)
 
-(defn models [redis-conn model-schema]
+(defn models [redis-conn model-schema & {:keys [include-soft-deleted?]
+                                         :or {include-soft-deleted? false}}]
   (wcar redis-conn
     (car/return
       (->> (model-ids redis-conn model-schema)
            (map #(model redis-conn model-schema %))
+           (filter #(or (not (get % soft-delete-sub-key))
+                        include-soft-deleted?))
            (filter identity)))))

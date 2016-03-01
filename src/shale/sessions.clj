@@ -164,7 +164,8 @@
            :and          (every? #(matches-requirement s %) arg)
            :or           (some   #(matches-requirement s %) arg))))
 
-(declare view-model view-models resume-webdriver-from-id destroy-session)
+(declare view-model view-models view-model-ids resume-webdriver-from-id
+         destroy-session)
 
 (defn start-webdriver!
   "Create a webdriver. Optionally specify a timeout in milliseconds.
@@ -288,7 +289,7 @@
                  webdriver-id nil}
             :as modifications}]
   (info (format "Modifying session %s, %s" id (str modifications)))
-  (when (some #{id} (model-ids (:redis-conn pool) SessionInRedis))
+  (when (some #{id} (view-model-ids (:redis-conn pool) SessionInRedis))
     (if (or (not current-url)
             (session-go-to-url-or-destroy-session id current-url))
       (save-session-diff-to-redis
@@ -457,11 +458,10 @@
   (car/wcar (:redis-conn pool)
     (info (format "Destroying sessions %s..." id))
     (car/watch session-set-key)
-    (let [sess-key (session-key id)
-          sess-tags-key (session-tags-key id)
-          session (view-model pool id)
+    (let [session (view-model pool id)
           webdriver-id (:webdriver-id session)
           node-url (get-in session [:node :url])
+          _ (soft-delete-model! (:redis-conn pool) SessionInRedis id)
           deleted-future (future
                            (if webdriver-id
                              (try+
@@ -485,10 +485,12 @@
                                    (format (str "Error connecting to node %s"
                                                 " to delete session %s.")
                                            node-url
-                                           id))))))]
+                                           id)))
+                               (finally
+                                 (delete-model!
+                                   (:redis-conn pool) SessionInRedis id)))))]
       (if immediately
-        (deref deleted-future))
-      (delete-model! (:redis-conn pool) SessionInRedis id)))
+        (deref deleted-future))))
   true)
 
 (s/defn refresh-session
@@ -524,7 +526,7 @@
         (car/watch session-set-key)
         (doall
           (pmap refresh-session
-                (or ids (model-ids redis-conn SessionInRedis))))
+                (or ids (view-model-ids redis-conn SessionInRedis))))
         (doall
           (->> (nodes/view-models node-pool)
                (map :url)
@@ -541,19 +543,28 @@
                           :current-url nil
                           :webdriver-id nil})
 
+(s/defn model->view-model :- SessionView
+  [model :- SessionInRedis]
+  (some->> model
+           keywordize-keys
+           (merge view-model-defaults)))
+
 (s/defn view-model :- SessionView
   [pool :- SessionPool
    id   :- s/Str]
-  (if-let [m (->> (model (:redis-conn pool) SessionInRedis id)
-                  keywordize-keys)]
-    (merge view-model-defaults {:id id} m)))
+  (-> (model (:redis-conn pool) SessionInRedis id)
+      model->view-model))
 
 (s/defn view-models :- [SessionView]
   [pool :- SessionPool]
   (let [redis-conn (:redis-conn pool)]
     (car/wcar redis-conn
       (car/return
-        (map #(view-model pool %) (model-ids redis-conn SessionInRedis))))))
+        (map model->view-model (models redis-conn SessionInRedis))))))
+
+(s/defn view-model-ids
+  [pool :- SessionPool]
+  (map :id (view-models pool)))
 
 (s/defn view-model-by-webdriver-id :- SessionView
   "Return a view model with the corresponding webdriver id."
