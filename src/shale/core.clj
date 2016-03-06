@@ -62,7 +62,7 @@
              :nrepl (if-let [nrepl-port (or (conf :nrepl-port) 5001)]
                       (new-repl-server nrepl-port))])))
 
-(def shale-system (get-shale-system (get-config)))
+(def shale-system nil)
 
 (defn run []
   (alter-var-root #'shale-system component/start))
@@ -71,6 +71,7 @@
   (alter-var-root #'shale-system component/stop))
 
 (defn init []
+  (set! shale-system (get-shale-system (get-config)))
   (.addShutdownHook (Runtime/getRuntime) (Thread. destroy)))
 
 (defn -main [& args]
