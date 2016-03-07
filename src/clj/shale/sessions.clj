@@ -526,7 +526,7 @@
         (car/watch session-set-key)
         (doall
           (pmap refresh-session
-                (or ids (view-model-ids redis-conn SessionInRedis))))
+                (or ids (view-model-ids redis-conn))))
         (doall
           (->> (nodes/view-models node-pool)
                (map :url)

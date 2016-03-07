@@ -9,8 +9,9 @@
             [camel-snake-kebab.extras :refer [transform-keys]]
             [schema.core :as s]
             [liberator.core :refer [defresource]]
-            [compojure.core :refer [context ANY routes]]
-            [hiccup.page :refer [html5]]
+            [compojure.core :refer [context ANY GET routes]]
+            [compojure.route :refer [resources not-found]]
+            [hiccup.page :refer [include-js include-css html5]]
             [clojure.set :refer [rename-keys]]
             [shale.utils :refer :all])
   (:import [java.net URL]))
@@ -255,27 +256,41 @@
                (if-not (nil? node)
                  {::node node}))))
 
-(defresource index
-  :available-media-types ["text/html" "application/json"]
-  :handle-ok (fn [context]
-               (let [media-type (get-in context [:representation :media-type])]
-                 (condp = media-type
-                   "text/html"
-                   (html5 [:head [:title "Shale"]]
-                     [:body
-                       [:h1 "Shale - Selenium Manager / Hub Replacement"]
-                       [:ul
-                         [:li (a-href-text "/sessions")
-                              "Active Selenium sessions."]
-                         [:li (a-href-text "/sessions/:id")
-                              (str "A session identified by id."
-                                   "Accepts GET, PUT, & DELETE.")]
-                         [:li (a-href-text "/sessions/refresh")
-                              "POST to refresh all sessions."]]])))))
+(def mount-target
+  [:div#app
+      [:h3 "ClojureScript has not been compiled!"]
+      [:p "please run "
+       [:b "lein figwheel"]
+       " in order to start the compiler"]])
+
+(def loading-page
+  (html5
+   [:head
+     [:meta {:charset "utf-8"}]
+     [:meta {:name "viewport"
+             :content "width=device-width, initial-scale=1"}]
+     (include-css "/css/site.css")]
+    [:body
+     mount-target
+     (include-js "/js/app.js")]))
+
+(def docs
+  (html5 [:head [:title "Shale"]]
+           [:body
+            [:h1 "Shale - Selenium Manager / Hub Replacement"]
+            [:ul
+             [:li (a-href-text "/sessions")
+              "Active Selenium sessions."]
+             [:li (a-href-text "/sessions/:id")
+              (str "A session identified by id."
+                   "Accepts GET, PUT, & DELETE.")]
+             [:li (a-href-text "/sessions/refresh")
+              "POST to refresh all sessions."]]]))
 
 (defn assemble-routes []
   (routes
-    (ANY "/" [] index)
+    (GET "/" [] loading-page)
+    (GET "/docs" [] docs)
     (ANY "/sessions" {params :params} sessions-resource)
     (ANY "/sessions/refresh" [] (sessions-refresh-resource nil))
     (ANY ["/sessions/:id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
@@ -292,4 +307,6 @@
     (ANY "/nodes/refresh" [] (nodes-refresh-resource))
     (ANY ["/nodes/:id", :id #"(?:[a-zA-Z0-9\-])+"]
       [id]
-      (node-resource id))))
+      (node-resource id))
+    (resources "/")
+    (not-found "Not Found")))
