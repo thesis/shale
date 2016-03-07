@@ -101,19 +101,30 @@
 (defmodel SessionInRedis
   "A session, as represented in redis."
   :model-name "sessions"
-  {(s/optional-key :webdriver-id) s/Str
-   (s/optional-key :tags)       #{s/Str}
-   (s/optional-key :reserved)     s/Bool
-   (s/optional-key :current-url)  s/Str
-   (s/optional-key :browser-name) s/Str
-   (s/optional-key :node-id)      s/Str})
+  {(s/optional-key :webdriver-id)   s/Str
+   (s/optional-key :tags)         #{s/Str}
+   (s/optional-key :reserved)       s/Bool
+   (s/optional-key :current-url)    s/Str
+   (s/optional-key :browser-name)   s/Str
+   (s/optional-key :node-id)        s/Str})
 
 (defmodel NodeInRedis
   "A node, as represented in redis."
   :model-name "nodes"
-  {(s/optional-key :url)          s/Str
-   (s/optional-key :max-sessions) s/Int
-   (s/optional-key :tags)       #{s/Str}})
+  {(s/optional-key :url)            s/Str
+   (s/optional-key :max-sessions)   s/Int
+   (s/optional-key :tags)         #{s/Str}})
+
+(s/defschema IPAddress
+  (s/pred #(re-matches #"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" %)))
+
+(defmodel ProxyInRedis
+  "A proxy, as represented in redis."
+  :model-name "proxies"
+  {(s/optional-key :public-ip) IPAddress
+   :type                       (s/enum :socks5 :http)
+   :private-host-and-port      s/Str
+   (s/optional-key :active)    s/Bool})
 
 ;; model fetching
 (defn model-key [model-schema id]
