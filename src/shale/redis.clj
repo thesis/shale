@@ -189,7 +189,7 @@
                  (list* base)
                  (reduce merge)
                  ; remove internal keys
-                 (filter #(.startsWith (key %) redis-key-prefix))
+                 (filter #(not (.startsWith (key %) redis-key-prefix)))
                  (into {})
                  (merge {:id id}))))))))
 

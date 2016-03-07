@@ -289,7 +289,7 @@
                  webdriver-id nil}
             :as modifications}]
   (info (format "Modifying session %s, %s" id (str modifications)))
-  (when (some #{id} (view-model-ids (:redis-conn pool) SessionInRedis))
+  (when (some #{id} (view-model-ids (:redis-conn pool)))
     (if (or (not current-url)
             (session-go-to-url-or-destroy-session id current-url))
       (save-session-diff-to-redis

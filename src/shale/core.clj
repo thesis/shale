@@ -71,7 +71,7 @@
   (alter-var-root #'shale-system component/stop))
 
 (defn init []
-  (set! shale-system (get-shale-system (get-config)))
+  (alter-var-root #'shale-system (fn [s] (get-shale-system (get-config))))
   (.addShutdownHook (Runtime/getRuntime) (Thread. destroy)))
 
 (defn -main [& args]
