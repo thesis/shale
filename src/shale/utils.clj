@@ -1,16 +1,23 @@
 (ns shale.utils
   (:require [clojure.walk]
             [clojure.string :as string]
+            [clojure.pprint :refer [pprint]]
             [clj-dns.core :refer [dns-lookup]]
             [org.bovinegenius  [exploding-fish :as uri]]
             [schema.core :as s]
             [slingshot.slingshot :refer [throw+]]
             [taoensso.timbre :as timblre :refer [warn info]])
-  (:import org.xbill.DNS.Type))
+  (:import org.xbill.DNS.Type
+           java.io.StringWriter))
 
 (defn prn-tee
   ([obj] (prn-tee nil obj ))
   ([prefix obj] (if prefix (prn prefix)) (prn obj) obj))
+
+(defn pretty [x]
+  (let [w (StringWriter.)]
+    (pprint x w)
+    (.toString w)))
 
 (defn assoc-fn [m k f]
   (assoc m k (f (get m k))))

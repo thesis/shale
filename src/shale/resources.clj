@@ -140,7 +140,6 @@
                         (->sessions-request context))})
   :delete! (fn [context]
              (let [immediately (get (->boolean-params-data context) "immediately")
-                   _ (prn "BOOLEAN PARAMS FOR DESTROY!" (->boolean-params-data context))
                    destroy sessions/destroy-session
                    session-pool (->session-pool context)]
                (doall

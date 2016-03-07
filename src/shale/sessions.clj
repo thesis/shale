@@ -29,14 +29,14 @@
   [config node-pool webdriver-timeout start-webdriver-timeout]
   component/Lifecycle
   (start [cmp]
-    (prn "Starting session pool...")
+    (info "Starting session pool...")
     (-> cmp
         (assoc :webdriver-timeout
                (or (:webdriver-timeout config) 1000))
         (assoc :start-webdriver-timeout
                (or (:start-webdriver-timeout config) 1000))))
   (stop [cmp]
-    (prn "Stopping session pool...")
+    (info "Stopping session pool...")
     cmp))
 
 (defn new-session-pool [config]

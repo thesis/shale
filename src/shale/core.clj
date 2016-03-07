@@ -5,6 +5,7 @@
             [shale.nodes :as nodes]
             [shale.sessions :as sessions]
             [shale.handler :as handler]
+            [taoensso.timbre :as timbre :refer [info]]
             [com.stuartsierra.component :as component]
             [system.components.repl-server :refer [new-repl-server]])
   (:gen-class))
@@ -12,13 +13,13 @@
 (defrecord Jetty [config app actors server]
   component/Lifecycle
   (start [cmp]
-    (prn "Starting Jetty...")
+    (info "Starting Jetty...")
     (let [port (or (:port config) 5000)
           server (jetty/run-jetty (:ring-app app) {:port port :join? false})]
       (assoc cmp :server server)))
   (stop [cmp]
     (when (:server cmp)
-      (prn "Stopping Jetty...")
+      (info "Stopping Jetty...")
       (.stop (:server cmp)))
     (assoc cmp :server nil)))
 

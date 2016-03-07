@@ -3,7 +3,9 @@
     (:require [carica.core :refer [resources]]
               [environ.core :refer [env]]
               [clojure.java.io :as io]
-              clojure.edn))
+              clojure.edn
+              [taoensso.timbre :as timbre :refer [info]]
+              [shale.utils :refer [pretty]]))
 
 (defn get-config
   "Get the config file. Path can either be specified by a CONFIG_FILE
@@ -15,5 +17,7 @@
                           flatten
                           (filter identity)
                           (map io/as-url)
-                          concat)]
-    (clojure.edn/read-string (slurp (first config-paths)))))
+                          concat)
+        config (clojure.edn/read-string (slurp (first config-paths)))]
+    (info "Loaded shale config...\n" (pretty config))
+    config))

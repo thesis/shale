@@ -5,8 +5,9 @@
             [shale.redis :refer :all]
             [shale.utils :refer :all]
             [clojure.walk :refer :all]
-            [shale.node-providers :as node-providers]
-            [com.stuartsierra.component :as component])
+            [taoensso.timbre :as timbre :refer [info]]
+            [com.stuartsierra.component :as component]
+            [shale.node-providers :as node-providers])
   (:import java.util.UUID
            [shale.node_providers DefaultNodeProvider AWSNodeProvider]))
 
@@ -42,12 +43,12 @@
 (s/defrecord NodePool [config redis-conn node-provider default-session-limit]
   component/Lifecycle
   (start [cmp]
-    (prn "Starting the node pool...")
+    (info "Starting the node pool...")
     (-> cmp
         (assoc :node-provider (node-provider-from-config config))
         (assoc :default-session-limit (or (:node-max-sessions config) 3))))
   (stop [cmp]
-    (prn "Stopping the node pool...")
+    (info "Stopping the node pool...")
     (assoc cmp :node-provider nil)))
 
 (defn new-node-pool [config]

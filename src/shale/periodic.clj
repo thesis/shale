@@ -2,6 +2,7 @@
   (:require [overtone.at-at :refer :all]
             [shale.sessions :as sessions]
             [shale.nodes :as nodes]
+            [taoensso.timbre :as timbre :refer [info]]
             [com.stuartsierra.component :as component]))
 
 (defn schedule! [thread-pool node-refresh-delay session-refresh-delay]
@@ -14,9 +15,9 @@
 (defrecord Scheduler [config thread-pool]
   component/Lifecycle
   (start [cmp]
-    (prn "Starting scheduler...")
+    (info "Starting scheduler...")
     (try
-      (prn "Starting thread pool...")
+      (info "Starting thread pool...")
       (let [thread-pool (mk-pool)
             node-refresh-delay (or (:node-refresh-delay config) 1000)
             session-refresh-delay (or (:session-refresh-delay config) 200)]
@@ -26,7 +27,7 @@
         (stop! thread-pool)
         (throw e))))
   (stop [cmp]
-    (prn "Stopping scheduler...")
+    (info "Stopping scheduler...")
     (if-not (nil? thread-pool)
       (stop! thread-pool))
     (assoc cmp :thread-pool nil)))
