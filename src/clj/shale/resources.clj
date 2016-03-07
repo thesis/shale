@@ -75,9 +75,6 @@
       (catch com.fasterxml.jackson.core.JsonParseException e
         {:message "Malformed JSON."}))))
 
-(defn a-href-text [text]
-  [:a {:href text} text])
-
 (defn handle-exception [context]
   (let [exc (:exception context)
         _ (error exc)
@@ -269,28 +266,17 @@
      [:meta {:charset "utf-8"}]
      [:meta {:name "viewport"
              :content "width=device-width, initial-scale=1"}]
-     (include-css "/css/site.css")]
+     (include-css "/css/site.css")
+     (include-css "/lib/bootstrap-3.3.6/css/bootstrap.min.css")]
     [:body
      mount-target
      (include-js "/js/app.js")]))
 
-(def docs
-  (html5 [:head [:title "Shale"]]
-           [:body
-            [:h1 "Shale - Selenium Manager / Hub Replacement"]
-            [:ul
-             [:li (a-href-text "/sessions")
-              "Active Selenium sessions."]
-             [:li (a-href-text "/sessions/:id")
-              (str "A session identified by id."
-                   "Accepts GET, PUT, & DELETE.")]
-             [:li (a-href-text "/sessions/refresh")
-              "POST to refresh all sessions."]]]))
-
 (defn assemble-routes []
   (routes
     (GET "/" [] loading-page)
-    (GET "/docs" [] docs)
+    (GET "/manage" [] loading-page)
+    (GET "/docs" [] loading-page)
     (ANY "/sessions" {params :params} sessions-resource)
     (ANY "/sessions/refresh" [] (sessions-refresh-resource nil))
     (ANY ["/sessions/:id", :id #"(?:[a-zA-Z0-9]{4,}-)*[a-zA-Z0-9]{4,}"]
