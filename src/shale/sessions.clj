@@ -368,7 +368,7 @@
         _ (if (nil? node-url)
             (throw
               (ex-info "No suitable node found!"
-                       {:user-visible true :status 500})))
+                       {:user-visible true :status 503})))
         id (gen-uuid)
         wd (start-webdriver!
           node-url
@@ -476,8 +476,8 @@
                                (catch #(or (instance? ConnectTimeoutException %)
                                            (instance? SocketTimeoutException %)) e
                                  (error
-                                   (format (str "Timeout connecting to node %s to "
-                                                "delete session %s.")
+                                   (format (str "Timeout connecting to node %s"
+                                                " to delete session %s.")
                                            node-url
                                            id)))
                                (catch ConnectException e
