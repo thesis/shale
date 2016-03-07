@@ -116,7 +116,7 @@
    (s/optional-key :tags)         #{s/Str}})
 
 (s/defschema IPAddress
-  (s/pred #(re-matches #"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" %)))
+  (s/pred is-ip?))
 
 (defmodel ProxyInRedis
   "A proxy, as represented in redis."
