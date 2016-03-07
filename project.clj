@@ -39,6 +39,7 @@
          :init shale.core/init
          :destroy shale.core/destroy
          :port 5000}
+  :source-paths ["src/clj" "src/cljc"]
   :profiles {:dev
               {:dependencies [[org.clojure/tools.trace "0.7.8"]
                               [ring-mock "0.1.5"]]}
