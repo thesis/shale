@@ -3,7 +3,25 @@
               [reagent.session :as session]
               [secretary.core :as secretary :include-macros true]
               [accountant.core :as accountant]
-              [ajax.core :refer [GET]]))
+              [ajax.core :refer [GET DELETE PUT]]))
+
+;; -------------------------
+;; Data
+
+(defn delete-session [session-id]
+  (DELETE (str "/sessions/" session-id)))
+
+(defn get-nodes [success-fn]
+  (GET "/nodes" {:handler success-fn}))
+
+(defn get-sessions [success-fn]
+  (GET "/sessions" {:handler success-fn}))
+
+(defn set-session-reservation [session-id reserved finally-fn]
+  (PUT (str "/sessions/" session-id)
+       {:format :json
+        :params {"reserved" reserved}
+        :finally finally-fn}))
 
 ;; -------------------------
 ;; Components
@@ -15,12 +33,12 @@
   (let [url (get node "url")
         id (get node "id")]
     ^{:key id} [:div.btn-group
-      [:a.btn.btn-default {:href (str "/manage/node/" id)}
+      [:a.node.btn.btn-default {:href (str "/manage/node/" id)}
         [:i.fa.fa-share-alt] url]]))
 
 (defn node-list-component []
   (let [nodes (atom [])
-        load-nodes (fn [] (GET "/nodes" {:handler #(reset! nodes %)}))]
+        load-nodes (fn [] (get-nodes #(reset! nodes %)))]
     (load-nodes)
     (js/setInterval load-nodes 5000)
     (fn []
@@ -34,29 +52,52 @@
     "firefox" [:i.fa.fa-firefox {:title browser}]
     [:i.fa.fa-laptop {:title browser}]))
 
-(defn delete-session [session-id]
-  (DELETE (str "/sessions/" session-id)))
+(defn reserve-button-component [session reserving reserve-fn]
+  (let [id (get session "id")
+        reserved (get session "reserved")
+        title (if reserved "Unreserve session" "Reserve session")]
+    [:button.btn.btn-default {:title title
+                              :on-click #(reserve-fn (not (boolean reserved)))}
+     (if (some #{id} reserving)
+      [:i.fa.fa-spinner.fa-spin]
+       (if reserved
+         [:i.fa.fa-lock]
+         [:i.fa.fa-unlock]))]))
+
+(defn destroy-button-component [session deleting delete-fn]
+  (let [id (get session "id")]
+    [:button.btn.btn-default {:title "Destroy session"
+                              :on-click delete-fn}
+      (if (some #{id} deleting)
+        [:i.fa.fa-spinner.fa-spin]
+        [:i.fa.fa-remove])]))
 
 (defn session-component [session]
-  (let [deleting (atom [])]
+  (let [deleting (atom [])
+        reserving (atom [])]
     (fn [session]
       (let [id (get session "id")
-            browser (get session "browser_name")]
+            browser (get session "browser_name")
+            delete-fn (fn []
+                        (swap! deleting #(conj % id))
+                        (delete-session id))
+            remove-from-reserving! (fn []
+                                     (swap! reserving
+                                            #(filter (complement #{id}) %)))
+            reserve-fn (fn [reserve]
+                         (swap! reserving #(conj % id))
+                         (set-session-reservation
+                           id reserve remove-from-reserving!))]
         ^{:key id} [:div.btn-group
           [:a.session.btn.btn-default {:href (str "/manage/session/" id)}
             [browser-icon-component browser]
             [:span id]]
-          [:button.btn.btn-default {:title "Destroy session"
-                                    :on-click #(do
-                                                 (delete-session id)
-                                                 (swap! deleting #(conj % id)))}
-            (if (some #{id} @deleting)
-              [:i.fa.fa-spinner.fa-spin]
-              [:i.fa.fa-remove])]]))))
+          [reserve-button-component session @reserving reserve-fn]
+          [destroy-button-component session @deleting delete-fn]]))))
 
 (defn session-list-component []
   (let [sessions (atom [])
-        load-sessions (fn [] (GET "/sessions" {:handler #(reset! sessions %)}))]
+        load-sessions (fn [] (get-sessions #(reset! sessions %)))]
     (load-sessions)
     (js/setInterval load-sessions 5000)
     (fn []
@@ -87,10 +128,10 @@
 
 (defn management-page []
   [:div [:h2.text-center "Shale Management Console"]
-    [:div.col-md-4
+    [:div.col-md-3
       [:h3 "Nodes"]
       [node-list-component]]
-    [:div.col-md-4
+    [:div.col-md-5
       [:h3 "Sessions"]
       [session-list-component]]])
 

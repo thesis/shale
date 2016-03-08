@@ -10,6 +10,10 @@ a > i.fa {
     margin-right: 5px;
 }
 
+a.session, a.node {
+    font-family:Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace;
+}
+
 ul.session-list, ul.node-list {
     list-style-type: none;
     padding: 0;
