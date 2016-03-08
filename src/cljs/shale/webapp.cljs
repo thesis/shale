@@ -6,10 +6,66 @@
               [ajax.core :refer [GET]]))
 
 ;; -------------------------
-;; Views
+;; Components
 
 (defn a-href-text [text]
   [:a {:href text} text])
+
+(defn node-component [node]
+  (let [url (get node "url")
+        id (get node "id")]
+    ^{:key id} [:div.btn-group
+      [:a.btn.btn-default {:href (str "/manage/node/" id)}
+        [:i.fa.fa-share-alt] url]]))
+
+(defn node-list-component []
+  (let [nodes (atom [])
+        load-nodes (fn [] (GET "/nodes" {:handler #(reset! nodes %)}))]
+    (load-nodes)
+    (js/setInterval load-nodes 5000)
+    (fn []
+      [:ul.node-list
+       (for [node @nodes]
+         [:li [node-component node]])])))
+
+(defn browser-icon-component [browser]
+  (case browser
+    "chrome" [:i.fa.fa-chrome {:title browser}]
+    "firefox" [:i.fa.fa-firefox {:title browser}]
+    [:i.fa.fa-laptop {:title browser}]))
+
+(defn delete-session [session-id]
+  (DELETE (str "/sessions/" session-id)))
+
+(defn session-component [session]
+  (let [deleting (atom [])]
+    (fn [session]
+      (let [id (get session "id")
+            browser (get session "browser_name")]
+        ^{:key id} [:div.btn-group
+          [:a.session.btn.btn-default {:href (str "/manage/session/" id)}
+            [browser-icon-component browser]
+            [:span id]]
+          [:button.btn.btn-default {:title "Destroy session"
+                                    :on-click #(do
+                                                 (delete-session id)
+                                                 (swap! deleting #(conj % id)))}
+            (if (some #{id} @deleting)
+              [:i.fa.fa-spinner.fa-spin]
+              [:i.fa.fa-remove])]]))))
+
+(defn session-list-component []
+  (let [sessions (atom [])
+        load-sessions (fn [] (GET "/sessions" {:handler #(reset! sessions %)}))]
+    (load-sessions)
+    (js/setInterval load-sessions 5000)
+    (fn []
+      [:ul.session-list
+       (for [session @sessions]
+         [:li [session-component session]])])))
+
+;; -------------------------
+;; Pages
 
 (defn home-page []
   [:div [:h2 "Shale"]
@@ -28,42 +84,6 @@
              "Accepts GET, PUT, & DELETE.")]
       [:li (a-href-text "/sessions/refresh")
         "POST to refresh all sessions."]]])
-
-(defn node-list-component []
-  (let [nodes (atom [])
-        load-nodes (fn [] (GET "/nodes" {:handler #(reset! nodes %)}))]
-    (load-nodes)
-    (js/setInterval load-nodes 5000)
-    (fn []
-      [:ul.node-list
-       (for [node @nodes]
-         [:li.node (get node "url")])])))
-
-(defn browser-icon-component [browser]
-  (case browser
-    "chrome" [:i.fa.fa-chrome {:title browser}]
-    "firefox" [:i.fa.fa-firefox {:title browser}]
-    [:i.fa.fa-laptop {:title browser}]))
-
-(defn session-component [session]
-  (let [id (get session "id")
-        browser (get session "browser_name")]
-    [:div.btn-group
-      [:a.session.btn.btn-default {:href (str "/manage/session/" id)}
-        [browser-icon-component browser]
-        [:span id]]
-      [:button.btn.btn-default {:title "Destroy session"}
-        [:i.fa.fa-remove]]]))
-
-(defn session-list-component []
-  (let [sessions (atom [])
-        load-sessions (fn [] (GET "/sessions" {:handler #(reset! sessions %)}))]
-    (load-sessions)
-    (js/setInterval load-sessions 5000)
-    (fn []
-      [:ul.session-list
-       (for [session @sessions]
-         [:li (session-component session)])])))
 
 (defn management-page []
   [:div [:h2.text-center "Shale Management Console"]

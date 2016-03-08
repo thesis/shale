@@ -1,12 +1,21 @@
 i.deactivated {
-    color: red;
+    color: darkred;
+}
+
+i.activated {
+    color: lightgreen;
 }
 
 a > i.fa {
     margin-right: 5px;
 }
 
-ul.session-list {
+ul.session-list, ul.node-list {
     list-style-type: none;
     padding: 0;
+}
+
+.btn {
+    margin-top: 4px;
+    margin-bottom: 4px;
 }
