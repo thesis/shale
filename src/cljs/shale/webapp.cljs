@@ -135,20 +135,36 @@
       [:h3 "Sessions"]
       [session-list-component]]])
 
+(defn node-page [id]
+  [:div [:h2.text-center "Shale Management Console"]
+    [:div.col-md-6.col-md-offset-3
+      [:h3.text-center (str "Node " id)]]])
+
+(defn session-page [id]
+  [:div [:h2.text-center "Shale Management Console"]
+    [:div.col-md-6.col-md-offset-3
+      [:h3.text-center (str "Session " id)]]])
+
 (defn current-page []
-  [:div [(session/get :current-page)]])
+  (session/get :current-page))
 
 ;; -------------------------
 ;; Routes
 
 (secretary/defroute "/" []
-  (session/put! :current-page #'home-page))
+  (session/put! :current-page [#'home-page]))
 
 (secretary/defroute "/manage" []
-  (session/put! :current-page #'management-page))
+  (session/put! :current-page [#'management-page]))
+
+(secretary/defroute "/manage/node/:id" [id]
+  (session/put! :current-page [#'node-page id]))
+
+(secretary/defroute "/manage/session/:id" {id :id}
+  (session/put! :current-page [#'session-page id]))
 
 (secretary/defroute "/docs" []
-  (session/put! :current-page #'docs-page))
+  (session/put! :current-page [#'docs-page]))
 
 ;; -------------------------
 ;; Initialize app

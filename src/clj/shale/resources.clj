@@ -277,6 +277,8 @@
   (routes
     (GET "/" [] loading-page)
     (GET "/manage" [] loading-page)
+    (GET ["/manage/node/:id", :id #"(?:[a-zA-Z0-9\-])+"] [] loading-page)
+    (GET ["/manage/session/:id", :id #"(?:[a-zA-Z0-9\-])+"] [] loading-page)
     (GET "/docs" [] loading-page)
     (ANY "/sessions" {params :params} sessions-resource)
     (ANY "/sessions/refresh" [] (sessions-refresh-resource nil))
