@@ -13,11 +13,13 @@
 
 (defn home-page []
   [:div [:h2 "Shale"]
-    [:div [:a {:href "/"} "go to the home page"]]])
+    [:nav
+      [:ul
+        [:li [:a {:href "/manage"} "Management Console"]]
+        [:li [:a {:href "/docs"} "API Docs"]]]]])
 
 (defn docs-page []
-  [:body
-    [:h1 "Shale - Selenium Manager / Hub Replacement"]
+  [:div [:h2 "Shale"]
     [:ul
       [:li (a-href-text "/sessions")
         "Active Selenium sessions."]
@@ -28,20 +30,20 @@
         "POST to refresh all sessions."]]])
 
 (defn nodes-component []
-  (let [nodes (atom [])]
-    (js/setInterval
-      (fn [] (GET "/nodes" {:handler #(reset! nodes %)}))
-      5000)
+  (let [nodes (atom [])
+        load-nodes (fn [] (GET "/nodes" {:handler #(reset! nodes %)}))]
+    (load-nodes)
+    (js/setInterval load-nodes 5000)
     (fn []
       [:ul
        (for [node @nodes]
          [:li (get node "url")])])))
 
 (defn session-component []
-  (let [sessions (atom [])]
-    (js/setInterval
-      (fn [] (GET "/sessions" {:handler #(reset! sessions %)}))
-      5000)
+  (let [sessions (atom [])
+        load-sessions (fn [] (GET "/sessions" {:handler #(reset! sessions %)}))]
+    (load-sessions)
+    (js/setInterval load-sessions 5000)
     (fn []
       [:ul
        (for [session @sessions]
