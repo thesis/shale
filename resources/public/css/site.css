@@ -1,0 +1,12 @@
+i.deactivated {
+    color: red;
+}
+
+a > i.fa {
+    margin-right: 5px;
+}
+
+ul.session-list {
+    list-style-type: none;
+    padding: 0;
+}

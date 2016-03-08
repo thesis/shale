@@ -29,34 +29,50 @@
       [:li (a-href-text "/sessions/refresh")
         "POST to refresh all sessions."]]])
 
-(defn nodes-component []
+(defn node-list-component []
   (let [nodes (atom [])
         load-nodes (fn [] (GET "/nodes" {:handler #(reset! nodes %)}))]
     (load-nodes)
     (js/setInterval load-nodes 5000)
     (fn []
-      [:ul
+      [:ul.node-list
        (for [node @nodes]
-         [:li (get node "url")])])))
+         [:li.node (get node "url")])])))
 
-(defn session-component []
+(defn browser-icon-component [browser]
+  (case browser
+    "chrome" [:i.fa.fa-chrome {:title browser}]
+    "firefox" [:i.fa.fa-firefox {:title browser}]
+    [:i.fa.fa-laptop {:title browser}]))
+
+(defn session-component [session]
+  (let [id (get session "id")
+        browser (get session "browser_name")]
+    [:div.btn-group
+      [:a.session.btn.btn-default {:href (str "/manage/session/" id)}
+        [browser-icon-component browser]
+        [:span id]]
+      [:button.btn.btn-default {:title "Destroy session"}
+        [:i.fa.fa-remove]]]))
+
+(defn session-list-component []
   (let [sessions (atom [])
         load-sessions (fn [] (GET "/sessions" {:handler #(reset! sessions %)}))]
     (load-sessions)
     (js/setInterval load-sessions 5000)
     (fn []
-      [:ul
+      [:ul.session-list
        (for [session @sessions]
-         [:li (get session "id")])])))
+         [:li (session-component session)])])))
 
 (defn management-page []
   [:div [:h2.text-center "Shale Management Console"]
     [:div.col-md-4
       [:h3 "Nodes"]
-      [nodes-component]]
+      [node-list-component]]
     [:div.col-md-4
       [:h3 "Sessions"]
-      [session-component]]])
+      [session-list-component]]])
 
 (defn current-page []
   [:div [(session/get :current-page)]])
@@ -75,7 +91,6 @@
 
 ;; -------------------------
 ;; Initialize app
-
 
 (defn mount-root []
   (reagent/render [current-page] (.getElementById js/document "app")))

@@ -267,7 +267,8 @@
      [:meta {:name "viewport"
              :content "width=device-width, initial-scale=1"}]
      (include-css "/css/site.css")
-     (include-css "/lib/bootstrap-3.3.6/css/bootstrap.min.css")]
+     (include-css "/lib/bootstrap-3.3.6/css/bootstrap.min.css")
+     (include-css "/lib/font-awesome-4.5.0/css/font-awesome.css")]
     [:body
      mount-target
      (include-js "/js/app.js")]))
