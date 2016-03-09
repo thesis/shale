@@ -3,7 +3,8 @@
               [reagent.session :as session]
               [secretary.core :as secretary :include-macros true]
               [accountant.core :as accountant]
-              [ajax.core :refer [GET DELETE PUT]]))
+              [ajax.core :refer [GET DELETE PUT]]
+              [cemerick.url :refer [url]]))
 
 ;; -------------------------
 ;; Data
@@ -11,8 +12,14 @@
 (defn delete-session [session-id]
   (DELETE (str "/sessions/" session-id)))
 
+(defn get-node [id success-fn]
+  (GET (str "/nodes/" id) {:handler success-fn}))
+
 (defn get-nodes [success-fn]
   (GET "/nodes" {:handler success-fn}))
+
+(defn get-session [id success-fn]
+  (GET (str "/sessions/" id) {:handler success-fn}))
 
 (defn get-sessions [success-fn]
   (GET "/sessions" {:handler success-fn}))
@@ -29,12 +36,26 @@
 (defn a-href-text [text]
   [:a {:href text} text])
 
+(defn host-port [s]
+  (->> ((juxt :host :port) (url s))
+       (clojure.string.join ":")))
+
 (defn node-component [node]
   (let [url (get node "url")
         id (get node "id")]
     ^{:key id} [:div.btn-group
       [:a.node.btn.btn-default {:href (str "/manage/node/" id)}
-        [:i.fa.fa-share-alt] url]]))
+        [:i.fa.fa-share-alt] (host-port url)]]))
+
+(defn node-detail-component [node]
+  [:table.table
+    [:tbody
+      [:tr
+        [:td "URL"]
+        [:td (a-href-text (get node "url"))]]
+      [:tr
+        [:td "Tags"]
+        [:td (clojure.string/join "," (get node "tags"))]]]])
 
 (defn node-list-component []
   (let [nodes (atom [])
@@ -95,6 +116,28 @@
           [reserve-button-component session @reserving reserve-fn]
           [destroy-button-component session @deleting delete-fn]]))))
 
+(defn session-detail-component [session]
+  [:table.table
+    [:tbody
+      [:tr
+        [:td "Webdriver ID"]
+        [:td (get session "webdriver_id")]]
+      [:tr
+        [:td "Browser"]
+        [:td (get session "browser_name")]]
+      [:tr
+        [:td "Reserved"]
+        [:td (if (get session "reserved")
+               [:i.fa.fa-check])]]
+      [:tr
+        [:td "Tags"]
+        [:td (clojure.string/join "," (get session "tags"))]]
+      [:tr
+        [:td "Node"]
+        [:td
+          [:a {:href (get-in session ["node" "id"])}
+            (host-port (get-in session ["node" "url"]))]]]]])
+
 (defn session-list-component []
   (let [sessions (atom [])
         load-sessions (fn [] (get-sessions #(reset! sessions %)))]
@@ -104,6 +147,10 @@
       [:ul.session-list
        (for [session @sessions]
          [:li [session-component session]])])))
+
+(defn management-page-header [& body]
+  [:div [:h2.text-center "Shale Management Console"]
+    body])
 
 ;; -------------------------
 ;; Pages
@@ -127,7 +174,7 @@
         "POST to refresh all sessions."]]])
 
 (defn management-page []
-  [:div [:h2.text-center "Shale Management Console"]
+  [management-page-header
     [:div.col-md-3
       [:h3 "Nodes"]
       [node-list-component]]
@@ -136,14 +183,22 @@
       [session-list-component]]])
 
 (defn node-page [id]
-  [:div [:h2.text-center "Shale Management Console"]
-    [:div.col-md-6.col-md-offset-3
-      [:h3.text-center (str "Node " id)]]])
+  (let [node (atom {:id id})]
+    (get-node id #(reset! node %))
+    (fn [id]
+      [management-page-header
+        [:div.col-md-6.col-md-offset-3
+          [:h3.text-center (str "Node " id)]
+          [node-detail-component @node]]])))
 
 (defn session-page [id]
-  [:div [:h2.text-center "Shale Management Console"]
-    [:div.col-md-6.col-md-offset-3
-      [:h3.text-center (str "Session " id)]]])
+  (let [session (atom {:id id})]
+    (get-session id #(reset! session %))
+    (fn [id]
+      [management-page-header
+       [:div.col-md-6.col-md-offset-3
+        [:h3.text-center (str "Session " id)]
+        [session-detail-component @session]]])))
 
 (defn current-page []
   (session/get :current-page))
