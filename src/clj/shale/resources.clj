@@ -31,8 +31,9 @@
             m))
 
 (defn jsonify [m]
-  (json/generate-string
-    (json-keys m)))
+  (-> (json-keys m)
+      json/generate-string
+      (str "\n")))
 
 (defn is-json-content? [context]
   (if (#{:put :post} (get-in context [:request :request-method]))
