@@ -137,8 +137,8 @@
   (wcar redis-conn
     (car/smembers (model-ids-key model-schema))))
 
-(defn model-exists? [model-schema id]
-  (not (nil? (some #{id} (model-ids model-schema)))))
+(defn model-exists? [redis-conn model-schema id]
+  (not (nil? (some #{id} (model-ids redis-conn model-schema)))))
 
 (defn is-map-type?
   "Unfortunately, distinguishing between maps and records isn't the default

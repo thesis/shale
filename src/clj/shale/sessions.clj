@@ -20,10 +20,12 @@
             [com.stuartsierra.component :as component]
             [io.aviso.ansi :refer [bold-red bold-green bold-blue]])
   (:import org.openqa.selenium.WebDriverException
+           org.openqa.selenium.remote.UnreachableBrowserException
            org.xbill.DNS.Type
            org.apache.http.conn.ConnectTimeoutException
            java.net.ConnectException
-           java.net.SocketTimeoutException))
+           java.net.SocketTimeoutException
+           java.util.concurrent.ExecutionException))
 
 (s/defrecord SessionPool
   [config node-pool webdriver-timeout start-webdriver-timeout]
@@ -456,7 +458,7 @@
 (defn destroy-session
   [pool id & {:keys [immediately] :or [immediately true]}]
   (car/wcar (:redis-conn pool)
-    (info (format "Destroying sessions %s..." id))
+    (info (format "Destroying session %s..." id))
     (car/watch session-set-key)
     (let [session (view-model pool id)
           webdriver-id (:webdriver-id session)
@@ -474,7 +476,8 @@
                                            node-url)))
 
                                (catch #(or (instance? ConnectTimeoutException %)
-                                           (instance? SocketTimeoutException %)) e
+                                           (instance? SocketTimeoutException %)
+                                           (instance? UnreachableBrowserException %)) e
                                  (error
                                    (format (str "Timeout connecting to node %s"
                                                 " to delete session %s.")
@@ -503,11 +506,17 @@
       (car/watch sess-key)
       (try+
         (if-let [wd (resume-webdriver-from-id
+                      pool
                       id
                       :timeout (:webdriver-timeout pool))]
           (car/hset sess-key :current-url (current-url wd))
           (destroy-session pool id))
-        (catch WebDriverException e
+        (catch (or (instance? WebDriverException %)
+                   (instance? UnreachableBrowserException %)
+                   (instance? ExecutionException %)
+                   (instance? ConnectTimeoutException %)
+                   (instance? SocketTimeoutException %)
+                   (instance? ConnectException %)) e
           (destroy-session pool id))
         (catch :timeout e
           (destroy-session pool id)))))
@@ -525,15 +534,15 @@
         (debug "Refreshing sessions...")
         (car/watch session-set-key)
         (doall
-          (pmap refresh-session
+          (pmap (partial refresh-session pool)
                 (or ids (view-model-ids redis-conn))))
         (doall
           (->> (nodes/view-models node-pool)
                (map :url)
                (filter identity)
                (pmap #(selenium/session-ids-from-node %))
-               (pmap #(if (not (model-exists? SessionInRedis %))
-                        (destroy-session %)))))))
+               (pmap #(if (not (model-exists? redis-conn SessionInRedis %))
+                        (destroy-session pool %)))))))
     true))
 
 (def view-model-defaults {:tags #{}
