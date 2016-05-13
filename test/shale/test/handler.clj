@@ -59,13 +59,13 @@
     (let [app (:ring-app (:app system))
           response (app (mock/request :get "/sessions"))]
       (is-200 response)
-      (is-body response "[]")))
+      (is-body response "[]\n")))
 
   (testing "nodes route"
     (let [app (:ring-app (:app system))
           response (app (mock/request :get "/nodes"))]
       (is-200 response)
-      (is-body response "[]"))))
+      (is-body response "[]\n"))))
 
 (defn refresh-nodes [app]
   (app (mock/request :post "/nodes/refresh")))
@@ -79,7 +79,7 @@
       (doto resp-1
         (is-200)
         (is-json)
-        (is-body "[]"))
+        (is-body "[]\n"))
       (doto resp-refresh
         (is-status 201)
         (is-body nil))
