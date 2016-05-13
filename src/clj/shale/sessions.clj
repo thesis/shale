@@ -65,7 +65,7 @@
 (def Requirement
   "A schema for a session requirement."
   (any-pair
-    :id          s/Str
+    :id            s/Str
     :session-id    s/Str
     :session-tag   s/Str
     :node-tag      s/Str
@@ -131,6 +131,10 @@
 (s/defmethod matches-requirement :old :- s/Bool
   [session-model :- OldSessionViewModel
    requirements :- OldRequirements]
+  (debug
+    (format "Testing session %s against requirements %s."
+            session-model
+            requirements))
   (matches-requirement
     (old->new-session-model session-model)
     [:and
@@ -151,6 +155,10 @@
 (s/defmethod matches-requirement :new :- s/Bool
   [session-model :- SessionAndNode
    requirement :- Requirement]
+  (debug
+    (format "Testing session %s against requirement %s."
+            session-model
+            requirement))
   (let [[req-type arg] requirement
         s session-model]
     (match req-type
@@ -166,8 +174,8 @@
            :and          (every? #(matches-requirement s %) arg)
            :or           (some   #(matches-requirement s %) arg))))
 
-(declare view-model view-models view-model-ids resume-webdriver-from-id
-         destroy-session)
+(declare view-model view-model-exists? view-models view-model-ids
+         resume-webdriver-from-id destroy-session)
 
 (defn start-webdriver!
   "Create a webdriver. Optionally specify a timeout in milliseconds.
@@ -291,7 +299,7 @@
                  webdriver-id nil}
             :as modifications}]
   (info (format "Modifying session %s, %s" id (str modifications)))
-  (when (some #{id} (view-model-ids (:redis-conn pool)))
+  (when (view-model-exists? pool id)
     (if (or (not current-url)
             (session-go-to-url-or-destroy-session id current-url))
       (save-session-diff-to-redis
@@ -312,14 +320,13 @@
                 node
                 tags
                 extra-desired-capabilities
-                reserve-after-create
+                reserved
                 current-url]
          :or {browser-name "firefox"
               node nil
               reserved false
               tags []
               extra-desired-capabilities nil
-              reserve-after-create nil
               current-url nil}
          :as requirements}]
   (s/validate (s/maybe NodeView) node)
@@ -345,23 +352,13 @@
                             [:browser-name
                              :tags
                              :current-url
-                             :reserved
-                             :reserve-after-create]))
-        resolved-node-reqs
+                             :reserved]))
+        defaulted-reqs
         (if (get-in merged-reqs [:node :url])
           (assoc-in-fn merged-reqs
                        [:node :url]
                        (comp str host-resolved-url))
           merged-reqs)
-        defaulted-reqs
-        (assoc-fn resolved-node-reqs
-                  :reserved
-                  (fn [v]
-                    (or
-                      (first
-                        (filter #(not (nil? %))
-                                [(resolved-node-reqs :reserve-after-create) v]))
-                        false)))
         capabilities
         (transform-keys ->camelCaseString
                         (merge {:browser-name browser-name}
@@ -388,14 +385,14 @@
                                  defaulted-reqs)))))))
 
 (def OldGetOrCreateArg
-  {(s/optional-key :browser-name)   s/Str
-   (s/optional-key :reserved)       s/Bool
-   (s/optional-key :tags)          [s/Str]
-   (s/optional-key :node)          {(s/optional-key :url)   s/Str
-                                    (s/optional-key :id)    s/Str
-                                    (s/optional-key :tags) [s/Str]}
-   (s/optional-key :current-url)    s/Str
-   (s/optional-key :reserve-after-create)       s/Bool
+  {(s/optional-key :browser-name)               s/Str
+   (s/optional-key :reserved)                   s/Bool
+   (s/optional-key :tags)                       [s/Str]
+   (s/optional-key :node)                       {(s/optional-key :url)   s/Str
+                                                 (s/optional-key :id)    s/Str
+                                                 (s/optional-key :tags) [s/Str]}
+   (s/optional-key :current-url)                s/Str
+   (s/optional-key :reserve)                    s/Bool
    (s/optional-key :extra-desired-capabilities) Capabilities
    (s/optional-key :force-create)               s/Bool})
 
@@ -414,31 +411,38 @@
 (s/defn get-or-create-session
   [pool :- SessionPool
    arg]
-  (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))]
+  (debug (format "Getting or creating a new session.\nRequirements %s" arg))
+  (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))
+
+        ]
     (car/wcar (:redis-conn pool)
       (car/return
         (or
-          (if (arg :force-create)
-            (->> (rename-keys arg {:reserve-after-create :reserve-after-create})
-                 (create-session pool)))
-          (if-let [candidate (->> (view-models pool)
-                                  (filter
-                                    (fn [session-model]
-                                      (matches-requirement
-                                        session-model
-                                        (dissoc arg :reserve-after-create))))
-                                  first)]
-            (if (or (arg :reserve-after-create) (arg :current-url))
-              (modify-session (get candidate :id)
-                              pool
-                              (rename-keys
-                                (select-keys arg
-                                             [:reserve-after-create
-                                              :current-url
-                                              :tags])
-                                {:reserve-after-create :reserved}))
-              candidate))
-          (create-session pool arg))))))
+          (if-not (:force-create arg)
+            (if-let [candidate (->> (view-models pool)
+                                    (filter
+                                      (fn [session-model]
+                                        (matches-requirement
+                                          session-model
+                                          (dissoc arg :reserve))))
+                                    first)]
+              (if (or (:reserve arg)
+                      (:current-url arg))
+                (modify-session pool
+                                (get candidate :id)
+                                (rename-keys
+                                  (select-keys arg
+                                               [:reserve
+                                                :current-url
+                                                :tags])
+                                  {:reserve :reserved}))
+                candidate)))
+          (let [reserved (or (:reserve arg)
+                             (:reserved arg))
+                create-req (-> arg
+                               (dissoc :reserve)
+                               (assoc :reserved reserved))]
+            (create-session pool create-req)))))))
 
 (s/defn destroy-webdriver!
   [pool         :- SessionPool
@@ -496,6 +500,49 @@
         (deref deleted-future))))
   true)
 
+(def view-model-defaults {:tags #{}
+                          :browser-name nil
+                          :reserved false
+                          :node {}
+                          :current-url nil
+                          :webdriver-id nil})
+
+(s/defn model->view-model :- SessionView
+  [model :- SessionInRedis]
+  (some->> model
+           keywordize-keys
+           (merge view-model-defaults)))
+
+(s/defn view-model-exists? :- s/Bool
+  [pool :- SessionPool
+   id   :- s/Str]
+  (model-exists? (:redis-conn pool) SessionInRedis id))
+
+(s/defn view-model :- SessionView
+  [pool :- SessionPool
+   id   :- s/Str]
+  (-> (model (:redis-conn pool) SessionInRedis id)
+      model->view-model))
+
+(s/defn view-models :- [SessionView]
+  [pool :- SessionPool]
+  (let [redis-conn (:redis-conn pool)]
+    (car/wcar redis-conn
+      (car/return
+        (map model->view-model (models redis-conn SessionInRedis))))))
+
+(s/defn view-model-ids
+  [pool :- SessionPool]
+  (map :id (view-models pool)))
+
+(s/defn view-model-by-webdriver-id :- SessionView
+  "Return a view model with the corresponding webdriver id."
+  [pool         :- SessionPool
+   webdriver-id :- s/Str]
+  (->> (view-models pool)
+       (filter #(= (:webdriver-id %) webdriver-id))
+       first))
+
 (s/defn refresh-session
   [pool :- SessionPool
    id   :- s/Str]
@@ -535,50 +582,13 @@
         (car/watch session-set-key)
         (doall
           (pmap (partial refresh-session pool)
-                (or ids (view-model-ids redis-conn))))
+                (or ids (view-model-ids pool))))
         (doall
           (->> (nodes/view-models node-pool)
                (map :url)
                (filter identity)
                (pmap #(selenium/session-ids-from-node %))
-               (pmap #(if (not (model-exists? redis-conn SessionInRedis %))
+               (pmap #(if (not (view-model-exists? pool %))
                         (destroy-session pool %)))))))
     true))
 
-(def view-model-defaults {:tags #{}
-                          :browser-name nil
-                          :reserved false
-                          :node {}
-                          :current-url nil
-                          :webdriver-id nil})
-
-(s/defn model->view-model :- SessionView
-  [model :- SessionInRedis]
-  (some->> model
-           keywordize-keys
-           (merge view-model-defaults)))
-
-(s/defn view-model :- SessionView
-  [pool :- SessionPool
-   id   :- s/Str]
-  (-> (model (:redis-conn pool) SessionInRedis id)
-      model->view-model))
-
-(s/defn view-models :- [SessionView]
-  [pool :- SessionPool]
-  (let [redis-conn (:redis-conn pool)]
-    (car/wcar redis-conn
-      (car/return
-        (map model->view-model (models redis-conn SessionInRedis))))))
-
-(s/defn view-model-ids
-  [pool :- SessionPool]
-  (map :id (view-models pool)))
-
-(s/defn view-model-by-webdriver-id :- SessionView
-  "Return a view model with the corresponding webdriver id."
-  [pool         :- SessionPool
-   webdriver-id :- s/Str]
-  (->> (view-models pool)
-       (filter #(= (:webdriver-id %) webdriver-id))
-       first))

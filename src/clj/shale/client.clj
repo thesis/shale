@@ -62,22 +62,20 @@
                      node
                      reserved
                      tags
-                     reserve-after-create
+                     reserve
                      force-create]
               :or {browser-name "phantomjs"
                    node nil
                    reserved nil
-                   reserve-after-create nil
+                   reserve nil
                    force-create nil
                    tags []}
               :as requirements}]
    (let [body (rename-keys (select-keys requirements
                                         [:browser-name :reserved :node :tags])
                            {:browser-name :browser_name})
-         params (rename-keys (select-keys requirements
-                                          [:reserve-after-create :force-create])
-                             {:reserve-after-create :reserve_after_create
-                              :force-create :force_create})
+         params (rename-keys (select-keys requirements [:reserve :force-create])
+                             {:force-create :force_create})
          response (try+
                     (client/post (sessions-url url-root)
                                  {:body (json/generate-string body)
@@ -146,12 +144,12 @@
                      node
                      reserved
                      tags
-                     reserve-after-create
+                     reserve
                      force-create]
               :or {browser-name "phantomjs"
                    node nil
                    reserved nil
-                   reserve-after-create nil
+                   reserve nil
                    force-create nil
                    tags []}
               :as requirements}]
@@ -188,7 +186,7 @@
            submit))"
   [options & body]
    (let [options-with-defaults (merge {:reserved false
-                                       :reserve-after-create true} options)]
+                                       :reserve true} options)]
      `(binding [~'clj-webdriver.taxi/*driver*
                 (get-or-create-webdriver! ~options-with-defaults)]
         (try

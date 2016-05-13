@@ -89,17 +89,8 @@
   "Convert context to a sessions request. Merge the `reserve-after-create`
   and deprecated `reserve` keys for older clients."
   [context]
-  (let [data (clojure-keys (get context ::data))]
-    (dissoc
-      (if (nil? (:reserve data))
-        data
-        (assoc data
-               :reserve-after-create
-               (->> [:reserve-after-create :reserve]
-                    (map #(data %) )
-                    (filter boolean )
-                    first)))
-      :reserve)))
+  (doto (clojure-keys (get context ::data))
+    (prn "SESSION REQUEST!")))
 
 (defn ->session-pool
   [context]
@@ -125,7 +116,6 @@
                           (s/optional-key "node") {(s/optional-key "id")    s/Str
                                                    (s/optional-key "url")   s/Str
                                                    (s/optional-key "tags") [s/Str]}
-                          (s/optional-key "reserve_after_create") s/Bool
                           (s/optional-key "reserve") s/Bool
                           (s/optional-key "reserved") s/Bool
                           (s/optional-key "extra_desired_capabilities") {s/Any s/Any}

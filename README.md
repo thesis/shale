@@ -114,7 +114,7 @@ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 
 ```bash
 curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
-     -XPOST http://localhost:5000/sessions/?reserve_after_create=True \
+     -XPOST http://localhost:5000/sessions/?reserve=True \
      --header "Content-Type:application/json"
 ```
 
