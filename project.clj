@@ -42,7 +42,8 @@
   :auto-clean false
   :main shale.core
   :plugins [[lein-ring "0.8.12"]
-            [lein-environ "1.0.0"]]
+            [lein-environ "1.0.0"]
+            [lein-cljsbuild "1.1.3"]]
   :test-selectors {:default (complement :integration)
                    :integration :integration
                    :all (constantly true)}
@@ -58,7 +59,7 @@
   {:assets
    {"resources/public/css/site.min.css" "resources/public/css/site.css"}}
 
-  :cljsbuild {:builds {:app {:source-paths ["src/cljs" "src/cljc"]
+  :cljsbuild {:builds {:app {:source-paths ["src/cljs"] ; "src/cljc"
                              :compiler {:output-to "target/cljsbuild/public/js/app.js"
                                         :output-dir "target/cljsbuild/public/js/out"
                                         :asset-path   "/js/out"
