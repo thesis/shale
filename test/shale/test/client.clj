@@ -49,7 +49,7 @@
 
 (defn reserved-session-fixture [f]
   (shale.client/get-or-create-session! {:browser-name "phantomjs"
-                                        :reserve-after-create true})
+                                        :reserve true})
   (f))
 
 (defn delete-sessions-fixture [f]
@@ -102,7 +102,7 @@
           (shale.client/get-or-create-session!
             {:browser-name "phantomjs"
              :node {:id node-id}
-             :reserve-after-create true
+             :reserve true
              :reserved false}))
         (is (= 3 (count
                    (filter #(= (get-in % ["node" "id"]) node-id)
@@ -141,7 +141,7 @@
 
   (testing "reserving after creating a new session"
     (let [session (shale.client/get-or-create-session!
-                    {:reserve-after-create true
+                    {:reserve true
                      :browser-name "phantomjs"})]
       (is (get session "reserved")))))
 
