@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 Note: all versions before 1.0 might include breaking API changes. After 1.0,
 this project will adhere to [Semantic Versioning](http://semver.org/).
 
+## [0.2.2] - 2016-05-17
+### Added
+- Optionally run an nrepl server.
+- Added a simple management interface to for sessions and nodes. Currently
+sessions can be reserved, unreserved, and destroyed.
+
+### Changed
+- Upgraded to Clojure 1.7.
+- Refactored to manage lifecycle with [component].
+- Soft delete sessions so they don't hang.
+- Use the `reserve` param to reserve sessions (instead of `reserve_after_create`)
+
 ## [0.2.1] - 2015-09-20
 ### Changed
 - Optionally accept a URL root for all shale client functions.
@@ -55,8 +67,9 @@ exhaustion issues. [#44],[#47]
 - A number of performance issues related to poor Python's lackluster
 concurrency story.
 
-[unreleased]: https://github.com/cardforcoin/shale/compare/v0.2.1...HEAD
-[0.2.0]: https://github.com/cardforcoin/shale/compare/v0.2.0...v0.2.1
+[unreleased]: https://github.com/cardforcoin/shale/compare/shale-0.2.2...HEAD
+[0.2.2]: https://github.com/cardforcoin/shale/compare/shale-0.2.1...shale-0.2.2
+[0.2.1]: https://github.com/cardforcoin/shale/compare/v0.2.0...shale-0.2.1
 [0.2.0]: https://github.com/cardforcoin/shale/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/cardforcoin/shale/compare/3fc098ef45d...v0.1.1
 [0.1.0]: https://github.com/cardforcoin/shale/compare/80d62f3dcc3c...3fc098ef45d
@@ -70,3 +83,4 @@ concurrency story.
 [#44]: https://github.com/cardforcoin/shale/issues/44
 [#47]: https://github.com/cardforcoin/shale/issues/47
 [node-race]: https://github.com/cardforcoin/shale/commit/4ab8b417d0c724f0af269e34b8d4c611a31c6c09
+[component]: https://github.com/stuartsierra/component
