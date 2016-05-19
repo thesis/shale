@@ -158,14 +158,14 @@
    (s/optional-key :tags) [s/Str]
    (s/optional-key :id)    s/Str})
 
-(s/defn raw-sessions-with-node [node-id :- s/Str
-                                pool    :- NodePool]
+(s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
+                                                 node-id :- s/Str]
   (->> (models (:redis-conn pool) SessionInRedis :include-soft-deleted? true)
        (filter #(= node-id (:node-id %)))))
 
-(s/defn raw-session-count [node-id :- s/Str
-                           pool    :- NodePool]
-  (count (raw-sessions-with-node node-id pool)))
+(s/defn ^:always-validate raw-session-count [pool    :- NodePool
+                                            node-id :- s/Str]
+  (count (raw-sessions-with-node pool node-id)))
 
 (s/defn nodes-under-capacity
   "Nodes with available capacity."
@@ -175,7 +175,7 @@
             (view-models pool))))
 
 (s/defn matches-requirements :- s/Bool
-  [model :- NodeView
+  [model        :- NodeView
    requirements :- NodeRequirements]
   (and
     (if (contains? requirements :id)

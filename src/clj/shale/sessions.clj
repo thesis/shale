@@ -408,13 +408,11 @@
    (s/optional-key :create) CreateArg     ; how to create, if creating
    (s/optional-key :modify) [ModifyArg]}) ; modifications to perform always
 
-(s/defn get-or-create-session
+(s/defn ^:always-validate get-or-create-session
   [pool :- SessionPool
    arg]
   (debug (format "Getting or creating a new session.\nRequirements %s" arg))
-  (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))
-
-        ]
+  (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))]
     (car/wcar (:redis-conn pool)
       (car/return
         (or
