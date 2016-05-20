@@ -28,21 +28,20 @@
            java.util.concurrent.ExecutionException))
 
 (s/defrecord SessionPool
-  [config node-pool webdriver-timeout start-webdriver-timeout]
+  [redis-conn node-pool webdriver-timeout start-webdriver-timeout]
   component/Lifecycle
   (start [cmp]
     (info "Starting session pool...")
-    (-> cmp
-        (assoc :webdriver-timeout
-               (or (:webdriver-timeout config) 1000))
-        (assoc :start-webdriver-timeout
-               (or (:start-webdriver-timeout config) 1000))))
+    cmp)
   (stop [cmp]
     (info "Stopping session pool...")
     cmp))
 
 (defn new-session-pool [config]
-  (map->SessionPool {:config config}))
+  (map->SessionPool {:start-webdriver-timeout
+                     (or (:start-webdriver-timeout config) 1000)
+                     :webdriver-timeout
+                     (or (:webdriver-timeout config) 1000)}))
 
 (def Capabilities {s/Any s/Any})
 

@@ -40,19 +40,18 @@
             (config-fn :node-pool-impl))
           (ConfigNodeProvider.))))))
 
-(s/defrecord NodePool [config redis-conn node-provider default-session-limit]
+(s/defrecord NodePool [redis-conn node-provider default-session-limit]
   component/Lifecycle
   (start [cmp]
     (info "Starting the node pool...")
-    (-> cmp
-        (assoc :node-provider (node-provider-from-config config))
-        (assoc :default-session-limit (or (:node-max-sessions config) 3))))
+    cmp)
   (stop [cmp]
     (info "Stopping the node pool...")
     (assoc cmp :node-provider nil)))
 
 (defn new-node-pool [config]
-  (map->NodePool {:config config}))
+  (map->NodePool {:node-provider (node-provider-from-config config)
+                  :default-session-limit (or (:node-max-sessions config) 3)}))
 
 (s/defn node-ids :- [s/Str] [pool :- NodePool]
   (car/wcar (:redis-conn pool)
@@ -159,12 +158,12 @@
    (s/optional-key :id)    s/Str})
 
 (s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
-                                                 node-id :- s/Str]
+                                                  node-id :- s/Str]
   (->> (models (:redis-conn pool) SessionInRedis :include-soft-deleted? true)
        (filter #(= node-id (:node-id %)))))
 
 (s/defn ^:always-validate raw-session-count [pool    :- NodePool
-                                            node-id :- s/Str]
+                                             node-id :- s/Str]
   (count (raw-sessions-with-node pool node-id)))
 
 (s/defn nodes-under-capacity

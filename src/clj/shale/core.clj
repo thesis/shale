@@ -6,9 +6,17 @@
             [shale.sessions :as sessions]
             [shale.handler :as handler]
             [taoensso.timbre :as timbre :refer [info]]
+            [io.aviso.exception :as pretty]
             [com.stuartsierra.component :as component]
             [system.components.repl-server :refer [new-repl-server]])
+  (:import clojure.lang.IPersistentMap
+           clojure.lang.IRecord)
   (:gen-class))
+
+; workaround so timbre won't crash when logging an exception involving
+; a schema from plumatic/schema. kudos to the onyx project for the idea
+; (https://github.com/onyx-platform/onyx, onyx.static.logging-configuration)
+(prefer-method pretty/exception-dispatch IPersistentMap IRecord)
 
 (defrecord Jetty [config app actors server]
   component/Lifecycle
