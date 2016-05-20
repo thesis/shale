@@ -111,7 +111,7 @@
    (s/optional-key :session) SessionInRedis
    (s/optional-key :node)    NodeInRedis})
 
-(s/defn old->new-session-model :- SessionAndNode
+(s/defn ^:always-validate old->new-session-model :- SessionAndNode
   [session-model :- OldSessionViewModel]
   (merge
     (select-keys session-model [:id])
@@ -240,7 +240,7 @@
   (try (do (to-async wd url) nil)
     (catch WebDriverException e :webdriver-is-dead)))
 
-(s/defn session-go-to-url
+(s/defn ^:always-validate session-go-to-url
   [pool :- SessionPool
    id   :- s/Str
    url  :- s/Str]
@@ -263,14 +263,14 @@
     :go-to-url s/Str
     :reserve s/Bool))
 
-(s/defn save-session-tags-to-redis
+(s/defn ^:always-validate save-session-tags-to-redis
   [pool :- SessionPool
    id :- s/Str
    tags]
   (car/wcar (:redis-conn pool)
     (sset-all (session-tags-key id) tags)))
 
-(s/defn save-session-diff-to-redis
+(s/defn ^:always-validate save-session-diff-to-redis
   [pool :- SessionPool
    id   :- s/Str
    session]
@@ -297,6 +297,7 @@
                  current-url nil
                  webdriver-id nil}
             :as modifications}]
+  (s/validate SessionPool pool)
   (info (format "Modifying session %s, %s" id (str modifications)))
   (when (view-model-exists? pool id)
     (if (or (not current-url)
@@ -328,6 +329,7 @@
               extra-desired-capabilities nil
               current-url nil}
          :as requirements}]
+  (s/validate SessionPool pool)
   (s/validate (s/maybe NodeView) node)
   (info (format "Creating a new session.\nRequirements: %s"
                 (str requirements)))
@@ -441,7 +443,7 @@
                                (assoc :reserved reserved))]
             (create-session pool create-req)))))))
 
-(s/defn destroy-webdriver!
+(s/defn ^:always-validate destroy-webdriver!
   [pool         :- SessionPool
    webdriver-id :- s/Str
    node-url     :- s/Str]
@@ -458,6 +460,8 @@
 
 (defn destroy-session
   [pool id & {:keys [immediately] :or [immediately true]}]
+  (s/validate SessionPool pool)
+  (s/validate s/Str id)
   (car/wcar (:redis-conn pool)
     (info (format "Destroying session %s..." id))
     (car/watch session-set-key)
@@ -504,35 +508,35 @@
                           :current-url nil
                           :webdriver-id nil})
 
-(s/defn model->view-model :- SessionView
+(s/defn ^:always-validate model->view-model :- SessionView
   [model :- SessionInRedis]
   (some->> model
            keywordize-keys
            (merge view-model-defaults)))
 
-(s/defn view-model-exists? :- s/Bool
+(s/defn ^:always-validate view-model-exists? :- s/Bool
   [pool :- SessionPool
    id   :- s/Str]
   (model-exists? (:redis-conn pool) SessionInRedis id))
 
-(s/defn view-model :- SessionView
+(s/defn ^:always-validate view-model :- SessionView
   [pool :- SessionPool
    id   :- s/Str]
   (-> (model (:redis-conn pool) SessionInRedis id)
       model->view-model))
 
-(s/defn view-models :- [SessionView]
+(s/defn ^:always-validate view-models :- [SessionView]
   [pool :- SessionPool]
   (let [redis-conn (:redis-conn pool)]
     (car/wcar redis-conn
       (car/return
         (map model->view-model (models redis-conn SessionInRedis))))))
 
-(s/defn view-model-ids
+(s/defn ^:always-validate view-model-ids :- [s/Str]
   [pool :- SessionPool]
   (map :id (view-models pool)))
 
-(s/defn view-model-by-webdriver-id :- SessionView
+(s/defn ^:always-validate view-model-by-webdriver-id :- SessionView
   "Return a view model with the corresponding webdriver id."
   [pool         :- SessionPool
    webdriver-id :- s/Str]
@@ -540,7 +544,7 @@
        (filter #(= (:webdriver-id %) webdriver-id))
        first))
 
-(s/defn refresh-session
+(s/defn ^:always-validate refresh-session
   [pool :- SessionPool
    id   :- s/Str]
   (car/wcar (:redis-conn pool)
@@ -568,7 +572,7 @@
 
 (def ^:private  refresh-sessions-lock {})
 
-(s/defn refresh-sessions
+(s/defn ^:always-validate refresh-sessions
   [pool :- SessionPool
    ids  :- [s/Str]]
   (locking refresh-sessions-lock
@@ -585,7 +589,8 @@
                (map :url)
                (filter identity)
                (pmap #(selenium/session-ids-from-node %))
-               (pmap #(if (not (view-model-exists? pool %))
+               (apply concat)
+               (pmap #(when-not (view-model-exists? pool %)
                         (destroy-session pool %)))))))
     true))
 
