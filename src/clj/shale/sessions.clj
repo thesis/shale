@@ -43,25 +43,25 @@
                      :webdriver-timeout
                      (or (:webdriver-timeout config) 1000)}))
 
-(def Capabilities {s/Any s/Any})
+(s/defschema Capabilities {s/Any s/Any})
 
-(def SessionView
+(s/defschema SessionView
   "A session, as presented to library users."
-  {(s/required-key :id)            s/Str
-   (s/required-key :webdriver-id)  s/Str
-   (s/required-key :tags)         [s/Str]
-   (s/required-key :reserved)      s/Bool
-   (s/required-key :current-url)   s/Str
-   (s/required-key :browser-name)  s/Str
-   (s/required-key :node)          NodeView})
+  {(s/required-key :id)             s/Str
+   (s/required-key :webdriver-id)   s/Str
+   (s/required-key :tags)         #{s/Str}
+   (s/required-key :reserved)       s/Bool
+   (s/required-key :current-url)   (s/maybe s/Str)
+   (s/required-key :browser-name)   s/Str
+   (s/required-key :node)           NodeView})
 
-(def TagChange
+(s/defschema TagChange
   "Add/remove a session/node tag"
   {:resource (s/either (literal-pred :session) (literal-pred :node))
    :action   (s/either (literal-pred :add) (literal-pred :remove))
    :tag      s/Str})
 
-(def Requirement
+(s/defschema Requirement
   "A schema for a session requirement."
   (any-pair
     :id            s/Str
@@ -79,34 +79,35 @@
 (defn maybe-bigdec [x]
   (try (bigdec x) (catch NumberFormatException e nil)))
 
-(def DecString
+(s/defschema DecString
   "A schema for a string that is convertable to bigdec."
   (s/pred #(boolean (maybe-bigdec %)) 'decimal-string))
 
-(def Score
+(s/defschema Score
   "A schema for a session score rule."
   {:weight  DecString
    :require Requirement})
 
-(def OldRequirements
+(s/defschema OldRequirements
   {(s/optional-key :browser-name)  s/Str
    (s/optional-key :reserved)      s/Bool
    (s/optional-key :tags)          [s/Str]
-   (s/optional-key :node)          {(s/optional-key :id)   s/Str
-                                    (s/optional-key :url)  s/Str
+   (s/optional-key :node)          {(s/optional-key :id)    s/Str
+                                    (s/optional-key :url)   s/Str
                                     (s/optional-key :tags) [s/Str]}})
 
-(def OldSessionViewModel
-  {(s/optional-key :id) s/Str
+(s/defschema OldSessionViewModel
+  {:id s/Str
+   (s/optional-key :webdriver-id) s/Str
    (s/optional-key :reserved) s/Bool
-   (s/optional-key :tags) [s/Str]
+   (s/optional-key :tags) #{s/Str}
    (s/optional-key :browser-name) s/Str
-   (s/optional-key :current-url) s/Str
+   (s/optional-key :current-url) (s/maybe s/Str)
    (s/optional-key :node) {(s/optional-key :id) s/Str
                            (s/optional-key :url) s/Str
                            (s/optional-key :tags) [s/Str]}})
 
-(def SessionAndNode
+(s/defschema SessionAndNode
   {(s/optional-key :id)      s/Str
    (s/optional-key :session) SessionInRedis
    (s/optional-key :node)    NodeInRedis})
@@ -115,12 +116,9 @@
   [session-model :- OldSessionViewModel]
   (merge
     (select-keys session-model [:id])
-    {:session (merge
-                (select-keys
-                  session-model
-                  [:tags :reserved :browser-name :current-url :webdriver-id])
-                (if-let [node-id (get-in session-model [:node :id])]
-                  {:node-id node-id}))
+    {:session (select-keys
+                session-model
+                [:tags :reserved :browser-name :current-url :webdriver-id])
      :node (select-keys (:node session-model) [:tags :url :id])}))
 
 (defmultischema matches-requirement
@@ -270,6 +268,13 @@
   (car/wcar (:redis-conn pool)
     (sset-all (session-tags-key id) tags)))
 
+(s/defn ^:always-validate save-session-node-to-redis
+  [pool :- SessionPool
+   id :- s/Str
+   node]
+  (car/wcar (:redis-conn pool)
+    (hset-all (session-node-key id) node)))
+
 (s/defn ^:always-validate save-session-diff-to-redis
   [pool :- SessionPool
    id   :- s/Str
@@ -279,9 +284,11 @@
     (hset-all
       (session-key id)
       (select-keys session
-        [:webdriver-id :reserved :current-url :browser-name :node]))
+        [:webdriver-id :reserved :current-url :browser-name]))
     (if (contains? session :tags)
-      (save-session-tags-to-redis pool id (session :tags)))))
+      (save-session-tags-to-redis pool id (:tags session)))
+    (if (contains? session :node)
+      (save-session-node-to-redis pool id (:node session)))))
 
 (defn modify-session
   [pool id {:keys [browser-name
@@ -298,7 +305,8 @@
                  webdriver-id nil}
             :as modifications}]
   (s/validate SessionPool pool)
-  (info (format "Modifying session %s, %s" id (str modifications)))
+  (s/validate s/Str id)
+  (info (format "Modifying session %s, %s" id modifications))
   (when (view-model-exists? pool id)
     (if (or (not current-url)
             (session-go-to-url-or-destroy-session id current-url))
@@ -446,17 +454,55 @@
 (s/defn ^:always-validate destroy-webdriver!
   [pool         :- SessionPool
    webdriver-id :- s/Str
-   node-url     :- s/Str]
-  (try+
-    (let [timeout (:webdriver-timeout pool)
-          session-url (->> webdriver-id
-                           (format "./session/%s")
-                           (url node-url)
-                           str)]
-      (client/delete session-url
-                     {:socket-timeout timeout
-                      :conn-timeout timeout}))
-    (catch [:status 404] _)))
+   node-url     :- s/Str
+   immediately  :- s/Bool
+   callback     :- (s/maybe (s/pred fn? "callback"))]
+  (let [timeout (:webdriver-timeout pool)
+        session-url (->> webdriver-id
+                         (format "./session/%s")
+                         (url node-url)
+                         str)
+        deferred (future
+                   (try+
+                     (client/delete session-url
+                                    {:socket-timeout timeout
+                                     :conn-timeout timeout})
+                     (info (format "Destroyed webdriver %s on node %s."
+                                   webdriver-id
+                                   node-url))
+                     (catch [:status 404] _
+                       (error
+                         (format (str "Got a 404 attempting to delete"
+                                      " webdriver %s from node %s.")
+                                 webdriver-id
+                                 node-url)))
+                     (catch [:status 500] _
+                       (error
+                         (format (str "Got a 500 attempting to delete"
+                                      " webdriver %s from node %s.")
+                                 webdriver-id
+                                 node-url)))
+
+                     (catch #(any-instance?
+                               [ConnectTimeoutException
+                                SocketTimeoutException
+                                UnreachableBrowserException]) e
+                       (error
+                         (format (str "Timeout connecting to node %s"
+                                      " to delete webdriver %s.")
+                                 node-url
+                                 webdriver-id)))
+                     (catch ConnectException e
+                       (error
+                         (format (str "Error connecting to node %s"
+                                      " to delete session %s.")
+                                 node-url
+                                 webdriver-id)))
+                     (finally
+                       (when-not (nil? callback)
+                         (callback)))))]
+    (when immediately
+      (deref deferred))))
 
 (defn destroy-session
   [pool id & {:keys [immediately] :or [immediately true]}]
@@ -465,40 +511,17 @@
   (car/wcar (:redis-conn pool)
     (info (format "Destroying session %s..." id))
     (car/watch session-set-key)
-    (let [session (view-model pool id)
-          webdriver-id (:webdriver-id session)
-          node-url (get-in session [:node :url])
-          _ (soft-delete-model! (:redis-conn pool) SessionInRedis id)
-          deleted-future (future
-                           (if webdriver-id
-                             (try+
-                               (destroy-webdriver! pool webdriver-id node-url)
-                               (catch [:status 500] _
-                                 (error
-                                   (format (str "Got a 500 attempting to delete"
-                                                " session %s from node %s.")
-                                           id
-                                           node-url)))
-
-                               (catch #(or (instance? ConnectTimeoutException %)
-                                           (instance? SocketTimeoutException %)
-                                           (instance? UnreachableBrowserException %)) e
-                                 (error
-                                   (format (str "Timeout connecting to node %s"
-                                                " to delete session %s.")
-                                           node-url
-                                           id)))
-                               (catch ConnectException e
-                                 (error
-                                   (format (str "Error connecting to node %s"
-                                                " to delete session %s.")
-                                           node-url
-                                           id)))
-                               (finally
-                                 (delete-model!
-                                   (:redis-conn pool) SessionInRedis id)))))]
-      (if immediately
-        (deref deleted-future))))
+    (when (view-model-exists? pool id)
+      (let [session (view-model pool id)
+            webdriver-id (:webdriver-id session)
+            node-url (get-in session [:node :url])
+            _ (soft-delete-model! (:redis-conn pool) SessionInRedis id)
+            hard-delete #(delete-model! (:redis-conn pool) SessionInRedis id)]
+        (destroy-webdriver! pool
+                            webdriver-id
+                            node-url
+                            (boolean immediately)
+                            hard-delete))))
   true)
 
 (def view-model-defaults {:tags #{}
@@ -509,9 +532,8 @@
                           :webdriver-id nil})
 
 (s/defn ^:always-validate model->view-model :- SessionView
-  [model :- SessionInRedis]
+  [model :- (s/maybe SessionInRedis)]
   (some->> model
-           keywordize-keys
            (merge view-model-defaults)))
 
 (s/defn ^:always-validate view-model-exists? :- s/Bool
@@ -559,12 +581,12 @@
                       :timeout (:webdriver-timeout pool))]
           (car/hset sess-key :current-url (current-url wd))
           (destroy-session pool id))
-        (catch (or (instance? WebDriverException %)
-                   (instance? UnreachableBrowserException %)
-                   (instance? ExecutionException %)
-                   (instance? ConnectTimeoutException %)
-                   (instance? SocketTimeoutException %)
-                   (instance? ConnectException %)) e
+        (catch (any-instance? [WebDriverException
+                               UnreachableBrowserException
+                               ExecutionException
+                               ConnectTimeoutException
+                               SocketTimeoutException
+                               ConnectException] %)  e
           (destroy-session pool id))
         (catch :timeout e
           (destroy-session pool id)))))
@@ -584,13 +606,21 @@
         (doall
           (pmap (partial refresh-session pool)
                 (or ids (view-model-ids pool))))
-        (doall
-          (->> (nodes/view-models node-pool)
-               (map :url)
-               (filter identity)
-               (pmap #(selenium/session-ids-from-node %))
-               (apply concat)
-               (pmap #(when-not (view-model-exists? pool %)
-                        (destroy-session pool %)))))))
+        ; destroy any webdrivers on managed nodes that we don't have records for
+        (let [known-webdrivers (->> (view-models pool)
+                                    (map :webdriver-id)
+                                    (into #{}))]
+          (doall
+            (->> (nodes/view-models node-pool)
+                 (map :url)
+                 (filter identity)
+                 (pmap #(vector % (selenium/session-ids-from-node %)))
+                 (map #(map (fn [id] [(first %) id]) (second %)))
+                 (apply concat)
+                 (pmap #(when-not (known-webdrivers (second %))
+                          (destroy-webdriver! pool
+                                              (second %)
+                                              (first %)
+                                              false
+                                              nil))))))))
     true))
-

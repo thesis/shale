@@ -99,5 +99,5 @@
   (testing "old-matches-requirement"
     (testing "node-id matches"
       (let [requirement {:node {:id "a"}}
-            s {:node {:url "b" :id "a"}}]
+            s {:id "d" :node {:url "b" :id "a"}}]
         (is (matches-requirement s requirement))))))

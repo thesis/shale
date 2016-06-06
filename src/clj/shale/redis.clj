@@ -1,5 +1,6 @@
 (ns shale.redis
-  (:require [taoensso.carmine :as car :refer (wcar)]
+  (:require [clojure.walk :refer [keywordize-keys]]
+            [taoensso.carmine :as car :refer (wcar)]
             [schema.core :as s]
             [shale.utils :refer :all]))
 
@@ -24,11 +25,17 @@
 (def session-tags-key-template
   (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "tags"])))
 
+(def session-node-key-template
+  (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "node"])))
+
 (defn session-key [session-id]
   (format session-key-template session-id))
 
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
+
+(defn session-node-key [session-id]
+  (format session-node-key-template session-id))
 
 (def node-set-key
   (apply str (interpose "/" [redis-key-prefix "nodes"])))
@@ -101,17 +108,20 @@
 (defmodel SessionInRedis
   "A session, as represented in redis."
   :model-name "sessions"
-  {(s/optional-key :webdriver-id)   s/Str
-   (s/optional-key :tags)         #{s/Str}
+  {(s/optional-key :id)             s/Str
+   (s/optional-key :webdriver-id)   (s/maybe s/Str)
+   (s/optional-key :tags)           #{s/Str}
    (s/optional-key :reserved)       s/Bool
-   (s/optional-key :current-url)    s/Str
+   (s/optional-key :current-url)    (s/maybe s/Str)
    (s/optional-key :browser-name)   s/Str
-   (s/optional-key :node-id)        s/Str})
+   (s/optional-key :node)           {:id s/Str
+                                     s/Any s/Any}})
 
 (defmodel NodeInRedis
   "A node, as represented in redis."
   :model-name "nodes"
-  {(s/optional-key :url)            s/Str
+  {(s/optional-key :id)             s/Str
+   (s/optional-key :url)            s/Str
    (s/optional-key :max-sessions)   s/Int
    (s/optional-key :tags)         #{s/Str}})
 
@@ -171,11 +181,6 @@
         map-keys (->> model-schema
                       (keys-with-vals-matching-pred is-map-type?)
                       (map (comp name :k)))
-        regular-keys (->> model-schema
-                          (keys-with-vals-matching-pred
-                            #(not-any? identity
-                                       (juxt sequential? is-map-type? set?)))
-                          (map (comp name :k)))
         k (model-key model-schema id)]
     (last
       (wcar redis-conn
@@ -192,16 +197,21 @@
                 lists (for [list-k list-keys]
                        {list-k (list
                                  (wcar redis-conn
-                                   (car/lrange list-k 0 -1)))})
+                                   (-> (clojure.string/join "/" [k list-k])
+                                       (car/lrange 0 -1))))})
                 maps (for [map-k map-keys]
-                       {map-k (wcar redis-conn
-                                (car/hgetall map-k))})]
+                       {map-k (->> [k map-k]
+                                   (clojure.string/join "/")
+                                   car/hgetall
+                                   (wcar redis-conn)
+                                   (apply hash-map))})]
             (->> (concat sets lists maps)
                  (list* base)
                  (reduce merge)
                  ; remove internal keys
                  (filter #(not (.startsWith (key %) redis-key-prefix)))
                  (into {})
+                 keywordize-keys
                  (merge {:id id}))))))))
 
 (defn soft-delete-model!

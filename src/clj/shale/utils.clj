@@ -52,10 +52,15 @@
   (let [u (if (string? url) (uri/uri url) url)]
     (assoc u :host (resolve-host (uri/host u)))))
 
+(s/defn any-instance?
+  [ps :- [Class]
+   v  :- s/Any]
+  (some (map #(instance? % v)) ps))
+
 (defn vector->map [v]
   (->> v
        (s/validate (s/pred #(even? (count %))))
-       (partition 2 )
+       (partition 2)
        (map vec )
        (into {})))
 
