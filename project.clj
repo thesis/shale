@@ -41,8 +41,7 @@
         :url "http://github.com/cardforcoin/shale"}
   :auto-clean false
   :main shale.core
-  :plugins [[lein-ring "0.8.12"]
-            [lein-environ "1.0.0"]
+  :plugins [[lein-environ "1.0.0"]
             [lein-cljsbuild "1.1.3"]]
   :test-selectors {:default (complement :integration)
                    :integration :integration
