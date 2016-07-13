@@ -1,3 +1,5 @@
 {:node-list ["http://localhost:4444/wd/hub" "http://localhost:4443/wd/hub"]
  :node-max-sessions 6
- :port 5000}
+ :port 5000
+ :webdriver-timeout 3000
+ :start-webdriver-timeout 5000}
