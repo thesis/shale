@@ -22,3 +22,13 @@
 (defn to-async [wd url]
   (let [js "setTimeout(function(){window.location=\"%s\";}, 10);"]
     (execute-script wd (format js url))))
+
+(defn webdriver-capabilities
+  "Get the actual capabilities map from a webdriver."
+  [wd]
+  (->> wd
+       :webdriver
+       .getCapabilities
+       .asMap
+       (map #(vector (keyword (key %)) (val %)))
+       (into {})))

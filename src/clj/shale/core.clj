@@ -7,10 +7,12 @@
             [shale.handler :as handler]
             [taoensso.timbre :as timbre :refer [info]]
             [io.aviso.exception :as pretty]
+            [cheshire.generate :refer [add-encoder encode-str]]
             [com.stuartsierra.component :as component]
             [system.components.repl-server :refer [new-repl-server]])
   (:import clojure.lang.IPersistentMap
-           clojure.lang.IRecord)
+           clojure.lang.IRecord
+           org.openqa.selenium.Platform)
   (:gen-class))
 
 ; workaround so timbre won't crash when logging an exception involving
@@ -79,9 +81,14 @@
 (defn stop []
   (alter-var-root #'shale-system component/stop))
 
+(defn init-cheshire []
+  ; unfortunately, cheshire has a global encoders list
+  (add-encoder org.openqa.selenium.Platform encode-str))
+
 (defn init []
   (alter-var-root #'shale-system (fn [s] (get-shale-system (get-config))))
-  (.addShutdownHook (Runtime/getRuntime) (Thread. stop)))
+  (.addShutdownHook (Runtime/getRuntime) (Thread. stop))
+  (init-cheshire))
 
 (defn -main [& args]
   (try

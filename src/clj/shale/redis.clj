@@ -28,6 +28,9 @@
 (def session-node-key-template
   (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "node"])))
 
+(def session-capabilities-key-template
+  (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "capabilities"])))
+
 (defn session-key [session-id]
   (format session-key-template session-id))
 
@@ -36,6 +39,9 @@
 
 (defn session-node-key [session-id]
   (format session-node-key-template session-id))
+
+(defn session-capabilities-key [session-id]
+  (format session-capabilities-key-template session-id))
 
 (def node-set-key
   (apply str (interpose "/" [redis-key-prefix "nodes"])))
@@ -115,7 +121,8 @@
    (s/optional-key :current-url)    (s/maybe s/Str)
    (s/optional-key :browser-name)   s/Str
    (s/optional-key :node)           {:id s/Str
-                                     s/Any s/Any}})
+                                     s/Any s/Any}
+   (s/optional-key :capabilities)   {s/Keyword s/Any}})
 
 (defmodel NodeInRedis
   "A node, as represented in redis."

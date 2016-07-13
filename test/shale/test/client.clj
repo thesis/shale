@@ -8,7 +8,7 @@
                                       clear-redis]]
             [shale.nodes :refer [refresh-nodes]]
             [shale.configurer :refer [get-config]]
-            [shale.core :refer [get-shale-system]]
+            [shale.core :refer [get-shale-system init-cheshire]]
             [com.stuartsierra.component :as component]
             [io.aviso.ansi :refer [bold-red bold-green]])
   (:import java.net.Socket
@@ -19,6 +19,7 @@
   to boot before running tests."
   [f]
   (let [config (get-config)
+        _ (init-cheshire)
         system (component/start (get-shale-system config))
         port (or (:port config) 5000)]
     ; give the app 5 seconds to start, or cry real hard

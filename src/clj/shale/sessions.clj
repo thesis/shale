@@ -16,7 +16,10 @@
             [shale.utils :refer :all]
             [shale.redis :refer :all]
             [shale.selenium :as selenium]
-            [shale.webdriver :refer [new-webdriver resume-webdriver to-async]]
+            [shale.webdriver :refer [new-webdriver
+                                     resume-webdriver
+                                     to-async
+                                     webdriver-capabilities]]
             [com.stuartsierra.component :as component]
             [io.aviso.ansi :refer [bold-red bold-green bold-blue]])
   (:import org.openqa.selenium.WebDriverException
@@ -53,7 +56,8 @@
    (s/required-key :reserved)       s/Bool
    (s/required-key :current-url)   (s/maybe s/Str)
    (s/required-key :browser-name)   s/Str
-   (s/required-key :node)           NodeView})
+   (s/required-key :node)           NodeView
+   (s/required-key :capabilities)   {s/Keyword s/Any}})
 
 (s/defschema TagChange
   "Add/remove a session/node tag"
@@ -105,7 +109,8 @@
    (s/optional-key :current-url) (s/maybe s/Str)
    (s/optional-key :node) {(s/optional-key :id) s/Str
                            (s/optional-key :url) s/Str
-                           (s/optional-key :tags) [s/Str]}})
+                           (s/optional-key :tags) [s/Str]}
+   (s/optional-key :capabilities) {s/Keyword s/Any}})
 
 (s/defschema SessionAndNode
   {(s/optional-key :id)      s/Str
@@ -271,9 +276,16 @@
 (s/defn ^:always-validate save-session-node-to-redis
   [pool :- SessionPool
    id :- s/Str
-   node]
+   node :- {s/Any s/Any}]
   (car/wcar (:redis-conn pool)
     (hset-all (session-node-key id) node)))
+
+(s/defn ^:always-validate save-session-capabilities-to-redis
+  [pool :- SessionPool
+   id :- s/Str
+   capabilities :- {s/Keyword s/Any}]
+  (car/wcar (:redis-conn pool)
+    (hset-all (session-capabilities-key id) capabilities)))
 
 (s/defn ^:always-validate save-session-diff-to-redis
   [pool :- SessionPool
@@ -288,7 +300,9 @@
     (if (contains? session :tags)
       (save-session-tags-to-redis pool id (:tags session)))
     (if (contains? session :node)
-      (save-session-node-to-redis pool id (:node session)))))
+      (save-session-node-to-redis pool id (:node session)))
+    (if (contains? session :capabilities)
+      (save-session-capabilities-to-redis pool id (:capabilities session)))))
 
 (defn modify-session
   [pool id {:keys [browser-name
@@ -296,13 +310,15 @@
                    reserved
                    tags
                    current-url
-                   webdriver-id]
+                   webdriver-id
+                   capabilities]
             :or {browser-name nil
                  node nil
                  reserved nil
                  tags nil
                  current-url nil
-                 webdriver-id nil}
+                 webdriver-id nil
+                 capabilities {}}
             :as modifications}]
   (s/validate SessionPool pool)
   (s/validate s/Str id)
@@ -314,7 +330,8 @@
         pool
         id
         (select-keys modifications
-          [:reserved :current-url :webdriver-id :browser-name :node :tags])))
+          [:reserved :current-url :webdriver-id :browser-name :node :tags
+           :capabilities])))
     (view-model pool id)))
 
 (def CreateArg
@@ -383,14 +400,17 @@
           capabilities
           :timeout (:start-webdriver-timeout pool))
         webdriver-id
-        (remote-webdriver/session-id wd)]
+        (remote-webdriver/session-id wd)
+        actual-capabilities
+        (webdriver-capabilities wd)]
     (last
       (car/wcar (:redis-conn pool)
         (car/sadd session-set-key id)
         (car/return
           (modify-session pool
                           id
-                          (merge {:webdriver-id webdriver-id}
+                          (merge {:webdriver-id webdriver-id
+                                  :capabilities actual-capabilities}
                                  defaulted-reqs)))))))
 
 (def OldGetOrCreateArg
