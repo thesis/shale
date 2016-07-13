@@ -73,19 +73,19 @@
 
 (def shale-system nil)
 
-(defn run []
+(defn start []
   (alter-var-root #'shale-system component/start))
 
-(defn destroy []
+(defn stop []
   (alter-var-root #'shale-system component/stop))
 
 (defn init []
   (alter-var-root #'shale-system (fn [s] (get-shale-system (get-config))))
-  (.addShutdownHook (Runtime/getRuntime) (Thread. destroy)))
+  (.addShutdownHook (Runtime/getRuntime) (Thread. stop)))
 
 (defn -main [& args]
   (try
     (init)
-    (run)
+    (start)
     (catch Exception e
-      (destroy))))
+      (stop))))

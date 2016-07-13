@@ -30,14 +30,27 @@ git clone git@github.com:cardforcoin/shale.git
 In development, you can run the service with `lein`.
 
 ```sh
-lein ring server
+lein run
+# OR, run it in a REPL
+lein repl
+> (init)
+> (start)
+INFO [shale.configurer] Loaded shale config...
+{:node-list ["http://localhost:4444/wd/hub" "http://localhost:4443/wd/hub"],
+ :node-max-sessions 6,
+ :port 5000,
+ :webdriver-timeout 3000,
+ :start-webdriver-timeout 5000}
+INFO [shale.nodes] - Starting the node pool...
+INFO [shale.sessions] - Starting session pool...
+INFO [shale.core] - Starting Jetty...
 ```
 
 To deploy the service, make a jar and run that.
 
 ```sh
 lein uberjar
-java -jar target/shale-0.1.0-SNAPSHOT-standalone.jar
+java -jar target/shale-0.3.0-SNAPSHOT-standalone.jar
 ```
 
 ## Configuration
