@@ -1,0 +1,18 @@
+selenium-1:
+    image: 'selenium/standalone-chrome-debug:2.53.0'
+    ports: ['4444:4444', '5900:5900']
+
+selenium-2:
+    image: 'selenium/standalone-chrome-debug:2.53.0'
+    ports: ['4445:4444', '5901:5900']
+
+redis:
+    image: 'redis:3.2.1'
+
+shale:
+    image: 'cardforcoin/shale'
+    ports: ['5000:5000']
+    links:
+        - selenium-1
+        - selenium-2
+        - redis
