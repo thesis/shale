@@ -288,10 +288,10 @@
     (hset-all (session-capabilities-key id) capabilities)))
 
 (s/defn ^:always-validate save-session-diff-to-redis
+  "For any key present in the session arg, write that value to redis."
   [pool :- SessionPool
    id   :- s/Str
    session]
-  "For any key present in the session arg, write that value to redis."
   (car/wcar (:redis-conn pool)
     (hset-all
       (session-key id)
@@ -612,21 +612,18 @@
           (destroy-session pool id)))))
   true)
 
-(def ^:private  refresh-sessions-lock {})
+(def ^:private unmanaged-session-lock {})
 
-(s/defn ^:always-validate refresh-sessions
-  [pool :- SessionPool
-   ids  :- [s/Str]]
-  (locking refresh-sessions-lock
+(s/defn ^:always-validate destroy-unmanaged-sessions!
+  "Destroy any webdrivers on managed nodes without backing Redis records."
+  [pool :- SessionPool]
+  (locking unmanaged-session-lock
     (let [redis-conn (:redis-conn pool)
           node-pool (:node-pool pool)]
       (car/wcar redis-conn
-        (debug "Refreshing sessions...")
+        (debug "Destroying unmanaged sessions...")
         (car/watch session-set-key)
-        (doall
-          (pmap (partial refresh-session pool)
-                (or ids (view-model-ids pool))))
-        ; destroy any webdrivers on managed nodes that we don't have records for
+
         (let [known-webdrivers (->> (view-models pool)
                                     (map :webdriver-id)
                                     (into #{}))]
@@ -642,5 +639,17 @@
                                               (second %)
                                               (first %)
                                               false
-                                              nil))))))))
-    true))
+                                              nil))))))))))
+
+(s/defn ^:always-validate refresh-sessions
+  [pool :- SessionPool
+   ids  :- [s/Str]]
+  (let [redis-conn (:redis-conn pool)]
+    (car/wcar redis-conn
+              (debug "Refreshing sessions...")
+              (car/watch session-set-key)
+              (doall
+                (pmap (partial refresh-session pool)
+                      (or ids (view-model-ids pool))))
+              (destroy-unmanaged-sessions! pool)))
+  true)
