@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 Note: all versions before 1.0 might include breaking API changes. After 1.0,
 this project will adhere to [Semantic Versioning](http://semver.org/).
 
+## 0.3.0-SNAPSHOT
+### Changed
+- Moved scheduled refreshes to happen continuously, avoiding "refresh pauses"
+ [#68].
+
+### Fixed
+- Bug that required nodes to be manually refreshed on startup [#67].
+
+
 ## [0.2.2] - 2016-05-17
 ### Added
 - Optionally run an nrepl server.
@@ -82,5 +91,7 @@ concurrency story.
 [#26]: https://github.com/cardforcoin/shale/issues/26
 [#44]: https://github.com/cardforcoin/shale/issues/44
 [#47]: https://github.com/cardforcoin/shale/issues/47
+[#68]: https://github.com/cardforcoin/shale/issues/68
+[#67]: https://github.com/cardforcoin/shale/issues/67
 [node-race]: https://github.com/cardforcoin/shale/commit/4ab8b417d0c724f0af269e34b8d4c611a31c6c09
 [component]: https://github.com/stuartsierra/component
