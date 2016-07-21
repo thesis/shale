@@ -69,7 +69,8 @@
   (keyvals->system
     (concat (get-app-system-keyvals conf)
             (get-http-system-keyvals conf)
-            [:scheduler (periodic/new-scheduler conf)
+            [:scheduler (component/using (periodic/new-scheduler conf)
+                                         [:session-pool :node-pool])
              :nrepl (if-let [nrepl-port (or (conf :nrepl-port) 5001)]
                       (new-repl-server nrepl-port))])))
 
