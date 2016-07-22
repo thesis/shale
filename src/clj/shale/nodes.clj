@@ -144,14 +144,23 @@
   "Syncs the node list with the backing node provider."
   [pool :- NodePool]
   (locking refresh-nodes-lock
-    (let [nodes (to-set (node-providers/get-nodes (:node-provider pool)))
-          registered-nodes (to-set (map #(get % :url) (view-models pool)))]
+    (logging/debug "Refreshing nodes...")
+    (let [nodes (->> (:node-provider pool)
+                     node-providers/get-nodes
+                     to-set)
+          registered-nodes (->> (view-models pool)
+                                (map :url)
+                                to-set)]
+      (logging/debug "Live nodes:")
+      (logging/debug nodes)
+      (logging/debug "Nodes in Redis:")
+      (logging/debug registered-nodes)
       (doall
         (concat
           (map #(create-node pool {:url %})
                (filter identity
                        (difference nodes registered-nodes)))
-          (map #(destroy-node pool ((view-model-from-url pool %) :id))
+          (map #(destroy-node pool (:id (view-model-from-url pool %)))
                (filter identity
                        (difference registered-nodes nodes))))))
     true))
