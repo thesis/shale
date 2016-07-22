@@ -10,8 +10,8 @@
             [schema.core :as s]
             [camel-snake-kebab.core :refer :all]
             [camel-snake-kebab.extras :refer [transform-keys]]
-            [taoensso.timbre :as timbre :refer [info warn error debug]]
             [slingshot.slingshot :refer [try+ throw+]]
+            [shale.logging :as logging]
             [shale.nodes :as nodes :refer [NodeView]]
             [shale.utils :refer :all]
             [shale.redis :refer :all]
@@ -31,13 +31,17 @@
            java.util.concurrent.ExecutionException))
 
 (s/defrecord SessionPool
-  [redis-conn node-pool webdriver-timeout start-webdriver-timeout]
+  [redis-conn
+   node-pool
+   logger
+   webdriver-timeout
+   start-webdriver-timeout]
   component/Lifecycle
   (start [cmp]
-    (info "Starting session pool...")
+    (logging/info "Starting session pool...")
     cmp)
   (stop [cmp]
-    (info "Stopping session pool...")
+    (logging/info "Stopping session pool...")
     cmp))
 
 (defn new-session-pool [config]
@@ -133,7 +137,7 @@
 (s/defmethod matches-requirement :old :- s/Bool
   [session-model :- OldSessionViewModel
    requirements :- OldRequirements]
-  (debug
+  (logging/debug
     (format "Testing session %s against requirements %s."
             session-model
             requirements))
@@ -157,7 +161,7 @@
 (s/defmethod matches-requirement :new :- s/Bool
   [session-model :- SessionAndNode
    requirement :- Requirement]
-  (debug
+  (logging/debug
     (format "Testing session %s against requirement %s."
             session-model
             requirement))
@@ -192,7 +196,7 @@
         (do
           (future-cancel future-wd)
           ;; TODO send to riemann
-          (warn (format
+          (logging/warn (format
                   "Timeout starting new webdriver on node %s"
                   node))
           (throw
@@ -223,7 +227,7 @@
         (do
           (future-cancel future-wd)
           ;; TODO send to riemann
-          (warn (format
+          (logging/warn (format
                   "Timeout resuming session %s after %d ms against node %s"
                   webdriver-id
                   timeout
@@ -322,7 +326,7 @@
             :as modifications}]
   (s/validate SessionPool pool)
   (s/validate s/Str id)
-  (info (format "Modifying session %s, %s" id modifications))
+  (logging/info (format "Modifying session %s, %s" id modifications))
   (when (view-model-exists? pool id)
     (if (or (not current-url)
             (session-go-to-url-or-destroy-session id current-url))
@@ -356,7 +360,7 @@
          :as requirements}]
   (s/validate SessionPool pool)
   (s/validate (s/maybe NodeView) node)
-  (info (format "Creating a new session.\nRequirements: %s"
+  (logging/info (format "Creating a new session.\nRequirements: %s"
                 (str requirements)))
 
   (if (= 0 (count (nodes/nodes-under-capacity (:node-pool pool))))
@@ -440,7 +444,7 @@
 (s/defn ^:always-validate get-or-create-session
   [pool :- SessionPool
    arg]
-  (debug (format "Getting or creating a new session.\nRequirements %s" arg))
+  (logging/debug (format "Getting or creating a new session.\nRequirements %s" arg))
   (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))]
     (car/wcar (:redis-conn pool)
       (car/return
@@ -487,17 +491,17 @@
                      (client/delete session-url
                                     {:socket-timeout timeout
                                      :conn-timeout timeout})
-                     (info (format "Destroyed webdriver %s on node %s."
+                     (logging/info (format "Destroyed webdriver %s on node %s."
                                    webdriver-id
                                    node-url))
                      (catch [:status 404] _
-                       (error
+                       (logging/error
                          (format (str "Got a 404 attempting to delete"
                                       " webdriver %s from node %s.")
                                  webdriver-id
                                  node-url)))
                      (catch [:status 500] _
-                       (error
+                       (logging/error
                          (format (str "Got a 500 attempting to delete"
                                       " webdriver %s from node %s.")
                                  webdriver-id
@@ -507,13 +511,13 @@
                                [ConnectTimeoutException
                                 SocketTimeoutException
                                 UnreachableBrowserException]) e
-                       (error
+                       (logging/error
                          (format (str "Timeout connecting to node %s"
                                       " to delete webdriver %s.")
                                  node-url
                                  webdriver-id)))
                      (catch ConnectException e
-                       (error
+                       (logging/error
                          (format (str "Error connecting to node %s"
                                       " to delete session %s.")
                                  node-url
@@ -529,7 +533,7 @@
   (s/validate SessionPool pool)
   (s/validate s/Str id)
   (car/wcar (:redis-conn pool)
-    (info (format "Destroying session %s..." id))
+    (logging/info (format "Destroying session %s..." id))
     (car/watch session-set-key)
     (when (view-model-exists? pool id)
       (let [session (view-model pool id)
@@ -590,7 +594,7 @@
   [pool :- SessionPool
    id   :- s/Str]
   (car/wcar (:redis-conn pool)
-    (debug (format "Refreshing session %s..." id))
+    (logging/debug (format "Refreshing session %s..." id))
     (car/watch session-set-key)
     (let [sess-key (format session-key-template id)]
       (car/watch sess-key)
@@ -621,7 +625,7 @@
     (let [redis-conn (:redis-conn pool)
           node-pool (:node-pool pool)]
       (car/wcar redis-conn
-        (debug "Destroying unmanaged sessions...")
+        (logging/debug "Destroying unmanaged sessions...")
         (car/watch session-set-key)
 
         (let [known-webdrivers (->> (view-models pool)
@@ -646,7 +650,7 @@
    ids  :- [s/Str]]
   (let [redis-conn (:redis-conn pool)]
     (car/wcar redis-conn
-              (debug "Refreshing sessions...")
+              (logging/debug "Refreshing sessions...")
               (car/watch session-set-key)
               (doall
                 (pmap (partial refresh-session pool)

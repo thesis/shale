@@ -2,10 +2,10 @@
   (:require [clojure.set :refer [difference]]
             [taoensso.carmine :as car :refer (wcar)]
             [schema.core :as s]
+            [shale.logging :as logging]
             [shale.redis :refer :all]
             [shale.utils :refer :all]
             [clojure.walk :refer :all]
-            [taoensso.timbre :as timbre :refer [info]]
             [com.stuartsierra.component :as component]
             [shale.node-providers :as node-providers])
   (:import java.util.UUID
@@ -40,13 +40,17 @@
             (config-fn :node-pool-impl))
           (ConfigNodeProvider.))))))
 
-(s/defrecord NodePool [redis-conn node-provider default-session-limit]
+(s/defrecord NodePool
+  [redis-conn
+   logger
+   node-provider
+   default-session-limit]
   component/Lifecycle
   (start [cmp]
-    (info "Starting the node pool...")
+    (logging/info "Starting the node pool...")
     cmp)
   (stop [cmp]
-    (info "Stopping the node pool...")
+    (logging/info "Stopping the node pool...")
     (assoc cmp :node-provider nil)))
 
 (defn new-node-pool [config]

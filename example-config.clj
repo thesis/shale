@@ -32,6 +32,13 @@
  :redis {:host "localhost"
          :port 6379
          :db 0}
+
+ ;; optionally provide logging config to use with timbre
+ ;; the provided config is merged with the default config using `merge-config!`
+ ;; details can be found at https://github.com/ptaoussanis/timbre#configuration
+ :logging {:level :info}
+ ;; port for the in-process nrepl server
+ ;; make sure it's blocked if your machine is open to
  :nrepl-port 5001
  ;; webdriver timeout, in milliseconds. this prevents shale from hanging when
  ;; a node has a memory or network issue. if not set, defaults to 1000. 0 means

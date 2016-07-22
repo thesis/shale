@@ -1,8 +1,5 @@
 (ns shale.resources
-  (:require [shale.sessions :as sessions]
-            [shale.nodes :as nodes]
-            clojure.walk
-            [taoensso.timbre :as timbre :refer [error]]
+  (:require clojure.walk
             [cheshire [core :as json]]
             [clojure.java.io :as io]
             [camel-snake-kebab.core :refer :all]
@@ -13,7 +10,10 @@
             [compojure.route :refer [resources not-found]]
             [hiccup.page :refer [include-js include-css html5]]
             [clojure.set :refer [rename-keys]]
-            [shale.utils :refer :all])
+            [shale.logging :as logging]
+            [shale.nodes :as nodes]
+            [shale.utils :refer :all]
+            [shale.sessions :as sessions])
   (:import [java.net URL]))
 
 (defn json-keys [m]
@@ -78,7 +78,7 @@
 
 (defn handle-exception [context]
   (let [exc (:exception context)
-        _ (error exc)
+        _ (logging/error exc)
         info (ex-data exc)
         message (if (:user-visible info)
                   (.getMessage exc)

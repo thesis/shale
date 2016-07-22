@@ -6,7 +6,7 @@
             [org.bovinegenius  [exploding-fish :as uri]]
             [schema.core :as s]
             [slingshot.slingshot :refer [throw+]]
-            [taoensso.timbre :as timblre :refer [warn info]])
+            [shale.logging :as logging])
   (:import org.xbill.DNS.Type
            java.io.StringWriter))
 
@@ -32,7 +32,7 @@
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
 
 (defn resolve-host [host]
-  (info (format "Resolving host %s..." host))
+  (logging/info (format "Resolving host %s..." host))
   (if (is-ip? host)
     host
     (if-let [resolved (first ((dns-lookup host Type/A) :answers))]
@@ -44,7 +44,7 @@
           (.getHostAddress resolved)
           (do
             (let [message (format "Unable to resolve host %s" host)]
-              (warn message)
+              (logging/warn message)
               (throw
                 (ex-info message {:user-visible true}))))))))
 

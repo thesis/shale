@@ -1,18 +1,20 @@
 (ns shale.core
   (:require [ring.adapter.jetty :as jetty]
+            [io.aviso.exception :as pretty]
+            [cheshire.generate :refer [add-encoder encode-str]]
+            [schema.core :as s]
+            [com.stuartsierra.component :as component]
+            [system.components.repl-server :refer [new-repl-server]]
             [shale.configurer :refer [get-config]]
             [shale.periodic :as periodic]
             [shale.nodes :as nodes]
             [shale.sessions :as sessions]
             [shale.handler :as handler]
-            [taoensso.timbre :as timbre :refer [info]]
-            [io.aviso.exception :as pretty]
-            [cheshire.generate :refer [add-encoder encode-str]]
-            [com.stuartsierra.component :as component]
-            [system.components.repl-server :refer [new-repl-server]])
+            [shale.logging :as logging])
   (:import clojure.lang.IPersistentMap
            clojure.lang.IRecord
-           org.openqa.selenium.Platform)
+           org.openqa.selenium.Platform
+           shale.logging.Logger)
   (:gen-class))
 
 ; workaround so timbre won't crash when logging an exception involving
@@ -20,16 +22,16 @@
 ; (https://github.com/onyx-platform/onyx, onyx.static.logging-configuration)
 (prefer-method pretty/exception-dispatch IPersistentMap IRecord)
 
-(defrecord Jetty [config app actors server]
+(defrecord Jetty [config app logger server]
   component/Lifecycle
   (start [cmp]
-    (info "Starting Jetty...")
+    (logging/info "Starting Jetty...")
     (let [port (or (:port config) 5000)
           server (jetty/run-jetty (:ring-app app) {:port port :join? false})]
       (assoc cmp :server server)))
   (stop [cmp]
     (when (:server cmp)
-      (info "Stopping Jetty...")
+      (logging/info "Stopping Jetty...")
       (.stop (:server cmp)))
     (assoc cmp :server nil)))
 
@@ -45,20 +47,23 @@
 (defn get-app-system-keyvals [conf]
   [:config conf
    :redis (get-redis-config conf)
+   :logger (component/using (logging/new-logger) [:config])
    :node-pool (component/using (nodes/new-node-pool conf)
-                               {:redis-conn :redis})
+                               {:redis-conn :redis
+                                :logger :logger})
    :session-pool (component/using (sessions/new-session-pool conf)
                                   {:redis-conn :redis
-                                   :node-pool :node-pool})
+                                   :node-pool :node-pool
+                                   :logger :logger})
    :app (component/using (handler/new-app)
-                         [:session-pool :node-pool])])
+                         [:session-pool :node-pool :logger])])
 
 (defn get-app-system [conf]
   (keyvals->system (get-app-system-keyvals conf)))
 
 (defn get-http-system-keyvals [conf]
   [:http (component/using (new-jetty conf)
-                          [:app])])
+                          [:app :logger])])
 
 (defn get-http-system [conf]
   (keyvals->system
@@ -70,7 +75,7 @@
     (concat (get-app-system-keyvals conf)
             (get-http-system-keyvals conf)
             [:scheduler (component/using (periodic/new-scheduler conf)
-                                         [:session-pool :node-pool])
+                                         [:session-pool :node-pool :logger])
              :nrepl (if-let [nrepl-port (or (conf :nrepl-port) 5001)]
                       (new-repl-server nrepl-port))])))
 

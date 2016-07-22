@@ -4,7 +4,7 @@
               [environ.core :refer [env]]
               [clojure.java.io :as io]
               clojure.edn
-              [taoensso.timbre :as timbre :refer [info]]
+              [shale.logging :as logging]
               [shale.utils :refer [pretty]]))
 
 (defn get-config
@@ -19,5 +19,6 @@
                           (map io/as-url)
                           concat)
         config (clojure.edn/read-string (slurp (first config-paths)))]
-    (info "Loaded shale config...\n" (pretty config))
+    (logging/info "Loaded shale config...\n")
+    (logging/info (pretty config))
     config))

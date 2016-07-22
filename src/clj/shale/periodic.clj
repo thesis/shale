@@ -1,10 +1,9 @@
 (ns shale.periodic
   (:require [clojure.set]
             [overtone.at-at :as at-at]
-            [taoensso.timbre :as timbre :refer [info]]
             [com.stuartsierra.component :as component]
             [schema.core :as s]
-            [taoensso.timbre :as timbre :refer [info error debug]]
+            [shale.logging :as logging]
             [shale.sessions :as sessions]
             [shale.nodes :as nodes])
   (:import shale.sessions.SessionPool
@@ -23,9 +22,9 @@
    session-refresh-delay :- (s/maybe s/Int)]
   component/Lifecycle
   (start [cmp]
-    (info "Starting scheduler...")
+    (logging/info "Starting scheduler...")
     (try
-      (info "Starting thread pool...")
+      (logging/info "Starting thread pool...")
       (let [thread-pool (at-at/mk-pool)
             new-cmp (-> cmp
                         (assoc :thread-pool thread-pool)
@@ -41,7 +40,7 @@
         (throw e))))
   (stop [cmp]
     (when-not (nil? thread-pool)
-      (info "Stopping scheduler...")
+      (logging/info "Stopping scheduler...")
       (stop! thread-pool))
     (-> cmp
         (assoc :thread-pool nil)
@@ -61,8 +60,8 @@
                        #(try
                           (nodes/refresh-nodes node-pool)
                           (catch Exception e
-                            (debug "Error refreshing nodes.")
-                            (debug e)
+                            (logging/debug "Error refreshing nodes.")
+                            (logging/debug e)
                             (throw e)))
                        thread-pool
                        :desc "Refreshing nodes")
@@ -79,16 +78,17 @@
   delay (< 5 seconds) to distribute refreshes."
   [scheduler :- Scheduler
    session-id :- s/Str]
-  (info (format "Starting refresh job for session %s..." session-id))
+  (logging/info (format "Starting refresh job for session %s..." session-id))
   (let [{:keys [session-pool]} scheduler
         job (at-at/interspaced (:session-refresh-delay scheduler)
                                #(try
                                   (sessions/refresh-session session-pool
                                                             session-id)
                                   (catch Exception e
-                                    (debug (format "Error refreshing sessions %s"
-                                                   session-id))
-                                    (debug e)
+                                    (logging/debug
+                                      (format "Error refreshing sessions %s"
+                                              session-id))
+                                    (logging/debug e)
                                     (throw e)))
                                (:thread-pool scheduler)
                                :initial-delay (rand-int 5000)
@@ -100,7 +100,7 @@
   "Unschedule a session's refresh job."
   [scheduler :- Scheduler
    session-id :- s/Str]
-  (info (format "Killing refresh job for session %s..." session-id))
+  (logging/info (format "Killing refresh job for session %s..." session-id))
   (let [session-jobs @(:session-job-state scheduler)
         job (get session-jobs session-id)]
     (when-not (nil? job)
