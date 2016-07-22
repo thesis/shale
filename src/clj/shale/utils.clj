@@ -32,7 +32,7 @@
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
 
 (defn resolve-host [host]
-  (logging/info (format "Resolving host %s..." host))
+  (logging/debug (format "Resolving host %s..." host))
   (if (is-ip? host)
     host
     (if-let [resolved (first ((dns-lookup host Type/A) :answers))]
