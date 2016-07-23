@@ -368,12 +368,7 @@
       (ex-info "All nodes are over capacity!"
                {:user-visible true :status 503})))
   (let [node-req (merge (select-keys node [:url :tags :id])
-                        (if (contains? node :url)
-                          (assoc-in-fn
-                            node
-                            [:url]
-                            (comp str host-resolved-url))
-                          (or node {})))
+                        (or node {}))
         node (nodes/get-node (:node-pool pool) node-req)
         merged-reqs
         (merge {:node (select-keys node [:url :id])
@@ -383,12 +378,7 @@
                              :tags
                              :current-url
                              :reserved]))
-        defaulted-reqs
-        (if (get-in merged-reqs [:node :url])
-          (assoc-in-fn merged-reqs
-                       [:node :url]
-                       (comp str host-resolved-url))
-          merged-reqs)
+        defaulted-reqs merged-reqs
         capabilities
         (transform-keys ->camelCaseString
                         (merge {:browser-name browser-name}

@@ -92,8 +92,7 @@
   (first (filter #(= (% :url) url) (view-models pool))))
 
 (s/defn modify-node :- NodeView
-  "Modify a node's url or tags in Redis. Any provided url that's host isn't an
-  IP address will be resolved before storing."
+  "Modify a node's url or tags in Redis."
   [pool id {:keys [url tags]
             :or {:url nil
                  :tags nil}}]
@@ -102,7 +101,6 @@
       (let [node-key (node-key id)
             node-tags-key (node-tags-key id)]
         (if url (->> url
-                     host-resolved-url
                      str
                      (car/hset node-key :url)))
         (if tags (sset-all node-tags-key tags))

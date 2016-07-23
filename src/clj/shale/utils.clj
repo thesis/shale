@@ -3,7 +3,7 @@
             [clojure.string :as string]
             [clojure.pprint :refer [pprint]]
             [clj-dns.core :refer [dns-lookup]]
-            [org.bovinegenius  [exploding-fish :as uri]]
+            [org.bovinegenius [exploding-fish :as uri]]
             [schema.core :as s]
             [slingshot.slingshot :refer [throw+]]
             [shale.logging :as logging])
@@ -30,27 +30,6 @@
 
 (defn is-ip? [s]
   (re-matches #"(?:\d{1,3}\.){3}\d{1,3}" s))
-
-(defn resolve-host [host]
-  (logging/debug (format "Resolving host %s..." host))
-  (if (is-ip? host)
-    host
-    (if-let [resolved (first ((dns-lookup host Type/A) :answers))]
-        (string/replace (str (.getAddress resolved)) "/" "")
-        (if-let [resolved
-                 (try
-                   (java.net.InetAddress/getByName host)
-                   (catch java.net.UnknownHostException e nil))]
-          (.getHostAddress resolved)
-          (do
-            (let [message (format "Unable to resolve host %s" host)]
-              (logging/warn message)
-              (throw
-                (ex-info message {:user-visible true}))))))))
-
-(defn host-resolved-url [url]
-  (let [u (if (string? url) (uri/uri url) url)]
-    (assoc u :host (resolve-host (uri/host u)))))
 
 (s/defn any-instance?
   [ps :- [Class]
