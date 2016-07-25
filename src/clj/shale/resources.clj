@@ -177,12 +177,12 @@
            (and (not (false? (::new? context)))
                 (::session context)))
    :exists? (fn [context]
-              (let [session (sessions/view-model
-                              (->session-pool context)
-                              (->session-id context))]
-                (if-not (nil? session)
-                  {::session session
-                   ::id (:id session)})))})
+              (let [session-pool (->session-pool context)
+                    session-id (->session-id context)]
+                (if (sessions/view-model-exists? session-pool session-id)
+                  (if-let [session (sessions/view-model session-pool session-id)]
+                    {::session session
+                     ::id (:id session)}))))})
 
 (defresource session-resource [id] shared-session-resource)
 
