@@ -26,20 +26,20 @@
         (assoc :logging-config nil)
         (assoc :old-logging-config nil))))
 
-(defn trace [obj]
-  (timbre/trace obj))
+(defmacro trace [obj]
+  `(timbre/trace ~obj))
 
-(defn debug [obj]
-  (timbre/debug obj))
+(defmacro debug [obj]
+  `(timbre/debug ~obj))
 
-(defn info [obj]
-  (timbre/info obj))
+(defmacro info [obj]
+  `(timbre/info ~obj))
 
-(defn warn [obj]
-  (timbre/warn obj))
+(defmacro warn [obj]
+  `(timbre/warn ~obj))
 
-(defn error [obj]
-  (timbre/error obj))
+(defmacro error [obj]
+  `(timbre/error ~obj))
 
 (s/defn ^:always-validate new-logger :- Logger
   []
