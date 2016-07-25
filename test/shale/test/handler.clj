@@ -3,6 +3,7 @@
             [cheshire [core :as json]]
             [ring.mock.request :as mock]
             [com.stuartsierra.component :as component]
+            [shale.utils :refer [gen-uuid]]
             [shale.test.utils :refer [with-selenium-servers
                                       with-clean-redis]]
             [shale.core :refer [get-app-system]]))
@@ -35,6 +36,9 @@
 (defn is-200 [resp]
   (is-status resp 200))
 
+(defn is-404 [resp]
+  (is-status resp 404))
+
 (defn is-body [resp body]
   (is (= (:body resp) body)))
 
@@ -65,7 +69,11 @@
     (let [app (:ring-app (:app system))
           response (app (mock/request :get "/nodes"))]
       (is-200 response)
-      (is-body response "[]\n"))))
+      (is-body response "[]\n")))
+  (testing "non-existent sessions 404"
+    (let [app (:ring-app (:app system))
+          response (app (mock/request :get (str "/sessions/" (gen-uuid))))])
+    (is-404 response)))
 
 (defn refresh-nodes [app]
   (app (mock/request :post "/nodes/refresh")))
