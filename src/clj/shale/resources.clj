@@ -240,9 +240,10 @@
            (nodes/modify-node (->node-pool context) id (clojure-keys
                                                          (::data context)))})
   :exists? (fn [context]
-             (let [node (nodes/view-model (->node-pool context) id)]
-               (if-not (nil? node)
-                 {::node node}))))
+             (let [node-pool (->node-pool context)]
+               (if (nodes/view-model-exists? node-pool id)
+                 (if-let [node (nodes/view-model node-pool id)]
+                   {::node node})))))
 
 (def mount-target
   [:div#app

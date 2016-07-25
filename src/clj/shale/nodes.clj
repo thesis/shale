@@ -91,6 +91,11 @@
    url  :- s/Str]
   (first (filter #(= (% :url) url) (view-models pool))))
 
+(s/defn ^:always-validate view-model-exists? :- s/Bool
+  [pool :- NodePool
+   id   :- s/Str]
+  (model-exists? (:redis-conn pool) NodeInRedis id))
+
 (s/defn modify-node :- NodeView
   "Modify a node's url or tags in Redis."
   [pool id {:keys [url tags]
