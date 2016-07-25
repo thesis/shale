@@ -72,8 +72,12 @@
       (is-body response "[]\n")))
   (testing "non-existent sessions 404"
     (let [app (:ring-app (:app system))
-          response (app (mock/request :get (str "/sessions/" (gen-uuid))))])
-    (is-404 response)))
+          response (app (mock/request :get (str "/sessions/" (gen-uuid))))]
+      (is-404 response)))
+  (testing "non-existent nodes 404"
+    (let [app (:ring-app (:app system))
+          response (app (mock/request :get (str "/nodes/" (gen-uuid))))]
+      (is-404 response))))
 
 (defn refresh-nodes [app]
   (app (mock/request :post "/nodes/refresh")))
