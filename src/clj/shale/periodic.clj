@@ -82,8 +82,12 @@
   (let [{:keys [session-pool]} scheduler
         job (at-at/interspaced (:session-refresh-delay scheduler)
                                #(try
-                                  (sessions/refresh-session session-pool
-                                                            session-id)
+                                  (if (sessions/view-model-exists? session-pool
+                                                                   session-id)
+                                    (sessions/refresh-session session-pool
+                                                              session-id)
+                                    (kill-session-refresh-job! scheduler
+                                                               session-id))
                                   (catch Exception e
                                     (logging/debug
                                       (format "Error refreshing sessions %s"
