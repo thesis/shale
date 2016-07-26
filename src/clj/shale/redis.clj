@@ -138,23 +138,37 @@
 (defmodel ProxyInRedis
   "A proxy, as represented in redis."
   :model-name "proxies"
-  {(s/optional-key :public-ip) IPAddress
-   :type                       (s/enum :socks5 :http)
-   :private-host-and-port      s/Str
-   (s/optional-key :active)    s/Bool})
+  {:id                    s/Str
+   :public-ip             (s/maybe IPAddress)
+   :type                  (s/enum "socks5" "http")
+   :private-host-and-port s/Str
+   :active                s/Bool})
 
 ;; model fetching
-(defn model-key [model-schema id]
-  (clojure.string/join "/" [(:redis-key (meta model-schema)) id]))
 
-(defn model-ids-key [model-schema]
+(s/defn ^:always-validate model-ids-key :- s/Str
+  "Return the key containing all IDs of a particular model in Redis.
+
+  This is useful, for example, to watch when we need atomicity across model
+  records."
+  [model-schema]
   (:redis-key (meta model-schema)))
 
-(defn ^:private model-ids [redis-conn model-schema]
+(s/defn ^:always-validate model-key :- s/Str
+  [model-schema
+   id :- s/Str]
+  (clojure.string/join "/" [(model-ids-key model-schema) id]))
+
+(s/defn ^:always-validate model-ids :- [s/Str]
+  "Return all "
+  [redis-conn model-schema]
   (wcar redis-conn
     (car/smembers (model-ids-key model-schema))))
 
-(defn model-exists? [redis-conn model-schema id]
+(s/defn ^:always-validate model-exists? :- s/Bool
+  [redis-conn
+   model-schema
+   id :- s/Str]
   (not (nil? (some #{id} (model-ids redis-conn model-schema)))))
 
 (defn is-map-type?
@@ -232,9 +246,11 @@
       (car/watch ids-key)
       (car/hset m-key soft-delete-sub-key true))))
 
-(defn delete-model!
+(s/defn delete-model!
   "Hard delete a model from Redis."
-  [redis-conn model-schema id]
+  [redis-conn
+   model-schema
+   id :- s/Str]
   (let [m-key (model-key model-schema id)
         ids-key (model-ids-key model-schema)]
     (wcar redis-conn

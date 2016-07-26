@@ -11,6 +11,8 @@
             [camel-snake-kebab.core :refer :all]
             [camel-snake-kebab.extras :refer [transform-keys]]
             [slingshot.slingshot :refer [try+ throw+]]
+            [com.stuartsierra.component :as component]
+            [io.aviso.ansi :refer [bold-red bold-green bold-blue]]
             [shale.logging :as logging]
             [shale.nodes :as nodes :refer [NodeView]]
             [shale.utils :refer :all]
@@ -19,9 +21,7 @@
             [shale.webdriver :refer [new-webdriver
                                      resume-webdriver
                                      to-async
-                                     webdriver-capabilities]]
-            [com.stuartsierra.component :as component]
-            [io.aviso.ansi :refer [bold-red bold-green bold-blue]])
+                                     webdriver-capabilities]])
   (:import org.openqa.selenium.WebDriverException
            org.openqa.selenium.remote.UnreachableBrowserException
            org.xbill.DNS.Type
