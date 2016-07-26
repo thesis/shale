@@ -13,6 +13,8 @@
 ; eventually, health checks that we run periodically to flag something as active / not active?
 ;; eh, that requires shale to have access to the proxies
 
+(declare modify-proxy! view-model-exists? view-model)
+
 (s/defrecord ProxyPool
   [config
    redis-conn
@@ -60,10 +62,7 @@
       (car/wcar (:redis-conn pool)
         (car/sadd (redis/model-ids-key redis/ProxyInRedis) id)
         (car/return
-          (redis/hset-all
-            (redis/model-key redis/ProxyInRedis id)
-            prox))))
-    prox))
+          (modify-proxy! pool id prox))))))
 
 (s/defn ^:always-validate delete-proxy! :- s/Bool
   [pool :- ProxyPool
@@ -77,6 +76,18 @@
           (redis/delete-model! redis-conn redis/ProxyInRedis id)
           false))
       (= "OK"))))
+
+(s/defn ^:always-validate modify-proxy! :- ProxyView
+  [pool          :- ProxyPool
+   id            :- s/Str
+   modifications :- {s/Keyword s/Any}]
+  (when (view-model-exists? pool id)
+    (car/wcar (:redis-conn pool)
+      (car/return
+          (redis/hset-all
+            (redis/model-key redis/ProxyInRedis id)
+            modifications)))
+    (view-model pool id)))
 
 (s/defn ^:always-validate model->view-model :- ProxyView
   [model :- redis/ProxyInRedis]

@@ -42,7 +42,7 @@
         (is (=
           (parse-request-data :context context
                               :schema {(s/required-key "a") s/Num})
-          {:message "{\"a\" missing-required-key}"}))))
+          {:message "{\"a\" missing-required-key}\n"}))))
 
     (testing "default key"
       (let [context {:request {:request-method :post :body "{\"a\": 1}"}}]

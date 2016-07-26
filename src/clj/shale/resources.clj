@@ -63,7 +63,7 @@
   returned map as well."
   [& {:keys [context k include-boolean-params schema]
       :or {k ::data schema s/Any}}]
-  (when (#{:put :post} (get-in context [:request :request-method]))
+  (when (#{:put :post :patch} (get-in context [:request :request-method]))
     (try
       (if-let [body (body-as-string context)]
         (let [body-data (json/parse-string body)
@@ -71,7 +71,7 @@
                             (->boolean-params-data context))
               data (merge body-data params-data)]
           (if-let [schema-error (s/check schema data)]
-            {:message (str schema-error)}
+            {:message (pretty schema-error)}
             [false {k data}]))
         {:message "Empty body."})
       (catch com.fasterxml.jackson.core.JsonParseException e
@@ -90,8 +90,7 @@
   "Convert context to a sessions request. Merge the `reserve-after-create`
   and deprecated `reserve` keys for older clients."
   [context]
-  (doto (clojure-keys (get context ::data))
-    (prn "SESSION REQUEST!")))
+  (clojure-keys (get context ::data)))
 
 (defn ->session-pool
   [context]
@@ -249,18 +248,34 @@
                (if (nodes/view-model-exists? node-pool id)
                  (if-let [node (nodes/view-model node-pool id)]
                    {::node node})))))
+
+(s/defschema ProxyCreate
+  {"active"                     s/Bool
+   (s/optional-key "public_ip") s/Str
+   "private_host_and_port"      s/Str
+   "type"                       (s/enum "socks5" "http")})
+
+(s/defschema ProxyModification
+  {(s/optional-key "active") s/Bool})
+
 (defresource proxy-resource [id]
-  :allowed-methods [:get :delete]
+  :allowed-methods [:get :delete :patch]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
+  :malformed? (fn [context]
+                (parse-request-data
+                  :context context
+                  :schema ProxyModification))
   :handle-ok (fn [context]
                (jsonify (get context ::proxy)))
   :handle-exception handle-exception
   :delete! (fn [context]
              (proxies/delete-proxy! (->proxy-pool context) id))
+  :patch! (fn [context]
+            (proxies/modify-proxy! (->proxy-pool context)
+                                   id
+                                   (clojure-keys (::data context))))
   :exists? (fn [context]
-             (prn "TRYING TO FIND PROXY!" id)
-             (prn context)
              (let [proxy-pool (->proxy-pool context)]
                (if (proxies/view-model-exists? proxy-pool id)
                  (if-let [prox (proxies/view-model proxy-pool id)]
