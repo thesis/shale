@@ -16,7 +16,7 @@
             [shale.logging :as logging]
             [shale.nodes :as nodes :refer [NodeView]]
             [shale.utils :refer :all]
-            [shale.redis :refer :all]
+            [shale.redis :as redis]
             [shale.selenium :as selenium]
             [shale.webdriver :refer [new-webdriver
                                      resume-webdriver
@@ -118,8 +118,8 @@
 
 (s/defschema SessionAndNode
   {(s/optional-key :id)      s/Str
-   (s/optional-key :session) SessionInRedis
-   (s/optional-key :node)    NodeInRedis})
+   (s/optional-key :session) redis/SessionInRedis
+   (s/optional-key :node)    redis/NodeInRedis})
 
 (s/defn ^:always-validate old->new-session-model :- SessionAndNode
   [session-model :- OldSessionViewModel]
@@ -275,21 +275,21 @@
    id :- s/Str
    tags]
   (car/wcar (:redis-conn pool)
-    (sset-all (session-tags-key id) tags)))
+    (redis/sset-all (redis/session-tags-key id) tags)))
 
 (s/defn ^:always-validate save-session-node-to-redis
   [pool :- SessionPool
    id :- s/Str
    node :- {s/Any s/Any}]
   (car/wcar (:redis-conn pool)
-    (hset-all (session-node-key id) node)))
+    (redis/hset-all (redis/session-node-key id) node)))
 
 (s/defn ^:always-validate save-session-capabilities-to-redis
   [pool :- SessionPool
    id :- s/Str
    capabilities :- {s/Keyword s/Any}]
   (car/wcar (:redis-conn pool)
-    (hset-all (session-capabilities-key id) capabilities)))
+    (redis/hset-all (redis/session-capabilities-key id) capabilities)))
 
 (s/defn ^:always-validate save-session-diff-to-redis
   "For any key present in the session arg, write that value to redis."
@@ -297,8 +297,8 @@
    id   :- s/Str
    session]
   (car/wcar (:redis-conn pool)
-    (hset-all
-      (session-key id)
+    (redis/hset-all
+      (redis/model-key redis/SessionInRedis id)
       (select-keys session
         [:webdriver-id :reserved :current-url :browser-name]))
     (if (contains? session :tags)
@@ -399,7 +399,7 @@
         (webdriver-capabilities wd)]
     (last
       (car/wcar (:redis-conn pool)
-        (car/sadd session-set-key id)
+        (car/sadd (redis/model-ids-key redis/SessionInRedis) id)
         (car/return
           (modify-session pool
                           id
@@ -524,13 +524,18 @@
   (s/validate s/Str id)
   (car/wcar (:redis-conn pool)
     (logging/info (format "Destroying session %s..." id))
-    (car/watch session-set-key)
+    (car/watch (redis/model-ids-key redis/SessionInRedis))
     (when (view-model-exists? pool id)
       (let [session (view-model pool id)
+            redis-conn (:redis-conn pool)
             webdriver-id (:webdriver-id session)
             node-url (get-in session [:node :url])
-            _ (soft-delete-model! (:redis-conn pool) SessionInRedis id)
-            hard-delete #(delete-model! (:redis-conn pool) SessionInRedis id)]
+            _ (redis/soft-delete-model! redis-conn
+                                        redis/SessionInRedis
+                                        id)
+            hard-delete #(redis/delete-model! redis-conn
+                                              redis/SessionInRedis
+                                              id)]
         (destroy-webdriver! pool
                             webdriver-id
                             node-url
@@ -546,19 +551,19 @@
                           :webdriver-id nil})
 
 (s/defn ^:always-validate model->view-model :- SessionView
-  [model :- (s/maybe SessionInRedis)]
+  [model :- (s/maybe redis/SessionInRedis)]
   (some->> model
            (merge view-model-defaults)))
 
 (s/defn ^:always-validate view-model-exists? :- s/Bool
   [pool :- SessionPool
    id   :- s/Str]
-  (model-exists? (:redis-conn pool) SessionInRedis id))
+  (redis/model-exists? (:redis-conn pool) redis/SessionInRedis id))
 
 (s/defn ^:always-validate view-model :- SessionView
   [pool :- SessionPool
    id   :- s/Str]
-  (-> (model (:redis-conn pool) SessionInRedis id)
+  (-> (redis/model (:redis-conn pool) redis/SessionInRedis id)
       model->view-model))
 
 (s/defn ^:always-validate view-models :- [SessionView]
@@ -566,7 +571,8 @@
   (let [redis-conn (:redis-conn pool)]
     (car/wcar redis-conn
       (car/return
-        (map model->view-model (models redis-conn SessionInRedis))))))
+        (map model->view-model
+             (redis/models redis-conn redis/SessionInRedis))))))
 
 (s/defn ^:always-validate view-model-ids :- [s/Str]
   [pool :- SessionPool]
@@ -585,8 +591,8 @@
    id   :- s/Str]
   (car/wcar (:redis-conn pool)
     (logging/debug (format "Refreshing session %s..." id))
-    (car/watch session-set-key)
-    (let [sess-key (format session-key-template id)]
+    (car/watch (redis/model-ids-key redis/SessionInRedis))
+    (let [sess-key (redis/model-key redis/SessionInRedis id)]
       (car/watch sess-key)
       (try+
         (if-let [wd (resume-webdriver-from-id
@@ -616,7 +622,7 @@
           node-pool (:node-pool pool)]
       (car/wcar redis-conn
         (logging/debug "Destroying unmanaged sessions...")
-        (car/watch session-set-key)
+        (car/watch (redis/model-ids-key redis/SessionInRedis))
 
         (let [known-webdrivers (->> (view-models pool)
                                     (map :webdriver-id)
@@ -641,7 +647,7 @@
   (let [redis-conn (:redis-conn pool)]
     (car/wcar redis-conn
               (logging/debug "Refreshing sessions...")
-              (car/watch session-set-key)
+              (car/watch (redis/model-ids-key redis/SessionInRedis))
               (doall
                 (pmap (partial refresh-session pool)
                       (or ids (view-model-ids pool))))

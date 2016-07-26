@@ -2,12 +2,12 @@
   (:require [clojure.set :refer [difference]]
             [taoensso.carmine :as car :refer (wcar)]
             [schema.core :as s]
-            [shale.logging :as logging]
-            [shale.redis :refer :all]
-            [shale.utils :refer :all]
             [clojure.walk :refer :all]
             [com.stuartsierra.component :as component]
-            [shale.node-providers :as node-providers])
+            [shale.logging :as logging]
+            [shale.node-providers :as node-providers]
+            [shale.redis :as redis]
+            [shale.utils :refer :all])
   (:import java.util.UUID
            [shale.node_providers DefaultNodeProvider AWSNodeProvider]))
 
@@ -59,17 +59,18 @@
 
 (s/defn node-ids :- [s/Str] [pool :- NodePool]
   (car/wcar (:redis-conn pool)
-    (car/smembers node-set-key)))
+    (car/smembers (redis/model-ids-key redis/NodeInRedis))))
 
-(def NodeView
+(s/defschema NodeView
   "A node, as presented to library users."
   {(s/optional-key :id)           s/Str
    (s/optional-key :url)          s/Str
    (s/optional-key :tags)        [s/Str]
    (s/optional-key :max-sessions) s/Int})
 
-(s/defn ->NodeView [id :- s/Str
-                    from-redis :- NodeInRedis]
+(s/defn ->NodeView :- NodeView
+  [id :- s/Str
+   from-redis :- redis/NodeInRedis]
   (->> from-redis
        (merge {:id id})
        keywordize-keys))
@@ -78,7 +79,7 @@
   "Given a node pool, get a view model from Redis."
   [pool :- NodePool
    id   :- s/Str]
-  (let [m (model (:redis-conn pool) NodeInRedis id)]
+  (let [m (redis/model (:redis-conn pool) redis/NodeInRedis id)]
     (->NodeView id m)))
 
 (s/defn view-models :- [NodeView]
@@ -94,7 +95,7 @@
 (s/defn ^:always-validate view-model-exists? :- s/Bool
   [pool :- NodePool
    id   :- s/Str]
-  (model-exists? (:redis-conn pool) NodeInRedis id))
+  (redis/model-exists? (:redis-conn pool) redis/NodeInRedis id))
 
 (s/defn modify-node :- NodeView
   "Modify a node's url or tags in Redis."
@@ -103,12 +104,12 @@
                  :tags nil}}]
   (last
     (car/wcar (:redis-conn pool)
-      (let [node-key (node-key id)
-            node-tags-key (node-tags-key id)]
+      (let [node-key (redis/model-key redis/NodeInRedis id)
+            node-tags-key (redis/node-tags-key id)]
         (if url (->> url
                      str
                      (car/hset node-key :url)))
-        (if tags (sset-all node-tags-key tags))
+        (if tags (redis/sset-all node-tags-key tags))
         (car/return (view-model pool id))))))
 
 (s/defn create-node :- NodeView
@@ -118,8 +119,8 @@
   (last
     (car/wcar (:redis-conn pool)
       (let [id (gen-uuid)
-            node-key (node-key id)]
-        (car/sadd node-set-key id)
+            node-key (redis/model-key redis/NodeInRedis id)]
+        (car/sadd (redis/model-ids-key redis/NodeInRedis) id)
         (modify-node pool id {:url url :tags tags})
         (car/return (view-model pool id))))))
 
@@ -127,15 +128,14 @@
   [pool :- NodePool
    id   :- s/Str]
   (car/wcar (:redis-conn pool)
-    (car/watch node-set-key)
+    (car/watch (redis/model-ids-key redis/NodeInRedis))
     (try
-      (let [url (get (view-model pool id) :url)]
+      (let [url (:url (view-model pool id))]
         (if (some #{url} (node-providers/get-nodes (:node-provider pool)))
           (node-providers/remove-node (:node-provider pool) url)))
       (finally
-        (car/srem node-set-key id)
-        (car/del (node-key id))
-        (car/del (node-tags-key id)))))
+        (redis/delete-model! redis/NodeInRedis id)
+        (car/del (redis/node-tags-key id)))))
   true)
 
 (defn ^:private to-set [s]
@@ -175,8 +175,11 @@
 
 (s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
                                                   node-id :- s/Str]
-  (->> (models (:redis-conn pool) SessionInRedis :include-soft-deleted? true)
-       (filter #(= node-id (:node-id %)))))
+  (let [redis-conn (:redis-conn pool)]
+    (->> (redis/models redis-conn
+                       redis/SessionInRedis
+                       :include-soft-deleted? true)
+         (filter #(= node-id (:node-id %))))))
 
 (s/defn ^:always-validate raw-session-count [pool    :- NodePool
                                              node-id :- s/Str]

@@ -16,12 +16,6 @@
 ;; in-database models
 (def redis-key-prefix "_shale")
 
-(def session-set-key
-  (apply str (interpose "/" [redis-key-prefix "sessions"])))
-
-(def session-key-template
-  (apply str (interpose "/" [redis-key-prefix "sessions" "%s"])))
-
 (def session-tags-key-template
   (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "tags"])))
 
@@ -30,9 +24,6 @@
 
 (def session-capabilities-key-template
   (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "capabilities"])))
-
-(defn session-key [session-id]
-  (format session-key-template session-id))
 
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
@@ -43,17 +34,8 @@
 (defn session-capabilities-key [session-id]
   (format session-capabilities-key-template session-id))
 
-(def node-set-key
-  (apply str (interpose "/" [redis-key-prefix "nodes"])))
-
-(def node-key-template
-  (apply str (interpose "/" [redis-key-prefix "nodes" "%s"])))
-
 (def node-tags-key-template
   (apply str (interpose "/" [redis-key-prefix "nodes" "%s" "tags"])))
-
-(defn node-key [id]
-  (format node-key-template id))
 
 (defn node-tags-key [id]
   (format node-tags-key-template id))
