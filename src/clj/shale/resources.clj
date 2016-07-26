@@ -249,6 +249,22 @@
                (if (nodes/view-model-exists? node-pool id)
                  (if-let [node (nodes/view-model node-pool id)]
                    {::node node})))))
+(defresource proxy-resource [id]
+  :allowed-methods [:get :delete]
+  :available-media-types ["application/json"]
+  :known-content-type? is-json-or-unspecified?
+  :handle-ok (fn [context]
+               (jsonify (get context ::proxy)))
+  :handle-exception handle-exception
+  :delete! (fn [context]
+             (proxies/delete-proxy! (->proxy-pool context) id))
+  :exists? (fn [context]
+             (prn "TRYING TO FIND PROXY!" id)
+             (prn context)
+             (let [proxy-pool (->proxy-pool context)]
+               (if (proxies/view-model-exists? proxy-pool id)
+                 (if-let [prox (proxies/view-model proxy-pool id)]
+                   {::proxy prox})))))
 
 (defresource proxies-resource [params]
   :allowed-methods [:get]
@@ -303,5 +319,8 @@
       [id]
       (node-resource id))
     (ANY "/proxies" {params :params} proxies-resource)
+    (ANY ["/proxies/:id", :id #"(?:[a-zA-Z0-9\-])+"]
+         [id]
+         (proxy-resource id))
     (resources "/")
     (not-found "Not Found")))

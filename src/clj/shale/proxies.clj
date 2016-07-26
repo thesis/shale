@@ -34,7 +34,7 @@
 (def SharedProxySchema
   {(s/optional-key :public-ip) (s/maybe redis/IPAddress)
    :type                       (s/enum :socks5 :http)
-   :private-ip-and-port        s/Str})
+   :private-host-and-port      s/Str})
 
 (s/defschema ProxySpec
   "Spec for creating a new proxy record"
@@ -62,7 +62,8 @@
         (car/return
           (redis/hset-all
             (redis/model-key redis/ProxyInRedis id)
-            prox))))))
+            prox))))
+    prox))
 
 (s/defn ^:always-validate delete-proxy! :- s/Bool
   [pool :- ProxyPool
@@ -77,14 +78,19 @@
           false))
       (= "OK"))))
 
-(s/defn model->view-model :- ProxyView
+(s/defn ^:always-validate model->view-model :- ProxyView
   [model :- redis/ProxyInRedis]
   (update-in model [:type] keyword))
+
+(s/defn ^:always-validate view-model :- (s/maybe ProxyView)
+  [pool :- ProxyPool
+   id   :- s/Str]
+  (model->view-model (redis/model (:redis-conn pool) redis/ProxyInRedis id)))
 
 (s/defn ^:always-validate view-model-exists? :- s/Bool
   [pool :- ProxyPool
    id   :- s/Str]
-  (redis/model-exists? (:redis-conn pool) redis/SessionInRedis id))
+  (redis/model-exists? (:redis-conn pool) redis/ProxyInRedis id))
 
 (s/defn ^:always-validate view-models :- [ProxyView]
   [pool :- ProxyPool]
