@@ -10,9 +10,10 @@
             [compojure.route :refer [resources not-found]]
             [hiccup.page :refer [include-js include-css html5]]
             [clojure.set :refer [rename-keys]]
+            [shale.utils :refer :all]
             [shale.logging :as logging]
             [shale.nodes :as nodes]
-            [shale.utils :refer :all]
+            [shale.proxies :as proxies]
             [shale.sessions :as sessions])
   (:import [java.net URL]))
 
@@ -99,6 +100,10 @@
 (defn ->node-pool
   [context]
   (get-in context [:request :state :node-pool]))
+
+(defn ->proxy-pool
+  [context]
+  (get-in context [:request :state :proxy-pool]))
 
 (defn ->session-id
   [context]
@@ -245,6 +250,14 @@
                  (if-let [node (nodes/view-model node-pool id)]
                    {::node node})))))
 
+(defresource proxies-resource [params]
+  :allowed-methods [:get]
+  :available-media-types  ["application/json"]
+  :known-content-type? is-json-or-unspecified?
+  :handle-ok (fn [context]
+               (jsonify (proxies/view-models (->proxy-pool context))))
+  :handle-exception handle-exception)
+
 (def mount-target
   [:div#app
       [:h3 "ClojureScript has not been compiled!"]
@@ -289,5 +302,6 @@
     (ANY ["/nodes/:id", :id #"(?:[a-zA-Z0-9\-])+"]
       [id]
       (node-resource id))
+    (ANY "/proxies" {params :params} proxies-resource)
     (resources "/")
     (not-found "Not Found")))

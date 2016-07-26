@@ -81,6 +81,11 @@
   [model :- redis/ProxyInRedis]
   (update-in model [:type] keyword))
 
+(s/defn ^:always-validate view-model-exists? :- s/Bool
+  [pool :- ProxyPool
+   id   :- s/Str]
+  (redis/model-exists? (:redis-conn pool) redis/SessionInRedis id))
+
 (s/defn ^:always-validate view-models :- [ProxyView]
   [pool :- ProxyPool]
   (let [redis-conn (:redis-conn pool)]
