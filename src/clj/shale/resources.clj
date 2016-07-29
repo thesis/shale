@@ -86,12 +86,6 @@
                   "Internal server error.")]
     (jsonify {:error message})))
 
-(defn ->sessions-request
-  "Convert context to a sessions request. Merge the `reserve-after-create`
-  and deprecated `reserve` keys for older clients."
-  [context]
-  (clojure-keys (get context ::data)))
-
 (defn ->session-pool
   [context]
   (get-in context [:request :state :session-pool]))
@@ -130,7 +124,7 @@
   :post! (fn [context]
            {::session (sessions/get-or-create-session
                         (->session-pool context)
-                        (->sessions-request context))})
+                        (clojure-keys (::data context)))})
   :delete! (fn [context]
              (let [immediately (get (->boolean-params-data context) "immediately")
                    destroy sessions/destroy-session
@@ -250,10 +244,11 @@
                    {::node node})))))
 
 (s/defschema ProxyCreate
-  {"active"                     s/Bool
-   (s/optional-key "public_ip") s/Str
-   "private_host_and_port"      s/Str
-   "type"                       (s/enum "socks5" "http")})
+  {(s/optional-key "active")                s/Bool
+   (s/optional-key "public_ip")             s/Str
+   (s/optional-key "shared")                s/Bool
+   (s/required-key "private_host_and_port") s/Str
+   (s/required-key "type")                  (s/enum "socks5" "http")})
 
 (s/defschema ProxyModification
   {(s/optional-key "active") s/Bool})
@@ -282,9 +277,26 @@
                    {::proxy prox})))))
 
 (defresource proxies-resource [params]
-  :allowed-methods [:get]
-  :available-media-types  ["application/json"]
+  :allowed-methods [:get :post]
+  :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
+  :malformed? (fn [context]
+                (parse-request-data
+                  :context context
+                  :schema ProxyCreate))
+  :respond-with-entity? (fn [context]
+                          (contains? context ::proxy))
+  :post! (fn [context]
+           (let [prox-spec (-> (::data context)
+                               clojure-keys
+                               (update-in [:type]
+                                          #(if-not (nil? %)
+                                             (keyword %))))]
+             {::proxy (proxies/create-proxy!
+                        (->proxy-pool context)
+                        prox-spec)}))
+  :handle-created (fn [context]
+                    (jsonify (::proxy context)))
   :handle-ok (fn [context]
                (jsonify (proxies/view-models (->proxy-pool context))))
   :handle-exception handle-exception)

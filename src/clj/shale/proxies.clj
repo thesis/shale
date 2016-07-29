@@ -40,13 +40,15 @@
 
 (s/defschema ProxySpec
   "Spec for creating a new proxy record"
-  SharedProxySchema)
+  (merge SharedProxySchema
+         {(s/optional-key :shared) s/Bool}))
 
 (s/defschema ProxyView
   "A proxy, as presented to library users"
   (merge SharedProxySchema
          {:id     s/Str
-          :active s/Bool}))
+          :active s/Bool
+          :shared s/Bool}))
 
 (s/defn ^:always-validate create-proxy! :- (s/maybe ProxyView)
   [pool :- ProxyPool
@@ -54,10 +56,10 @@
   (logging/info (format "Recording new proxy: %s"
                         spec))
   (let [id (gen-uuid)
-        public-ip (get spec :public-ip)
         prox (merge spec {:active true
+                          :shared (not (false? (:shared spec)))
                           :id id
-                          :public-ip public-ip})]
+                          :public-ip (:public-ip spec)})]
     (last
       (car/wcar (:redis-conn pool)
         (car/sadd (redis/model-ids-key redis/ProxyInRedis) id)
