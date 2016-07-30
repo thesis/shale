@@ -124,7 +124,8 @@
    :public-ip             (s/maybe IPAddress)
    :type                  (s/enum "socks5" "http")
    :private-host-and-port s/Str
-   :active                s/Bool})
+   :active                s/Bool
+   :shared                s/Bool})
 
 ;; model fetching
 
