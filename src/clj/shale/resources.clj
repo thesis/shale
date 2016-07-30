@@ -251,7 +251,8 @@
    (s/required-key "type")                  (s/enum "socks5" "http")})
 
 (s/defschema ProxyModification
-  {(s/optional-key "active") s/Bool})
+  {(s/optional-key "active") s/Bool
+   (s/optional-key "shared") s/Bool})
 
 (defresource proxy-resource [id]
   :allowed-methods [:get :delete :patch]

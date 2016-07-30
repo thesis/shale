@@ -2,9 +2,11 @@
   (:require [clj-http.client :as client]
             (cheshire [core :as json])
             [clj-webdriver.taxi :as taxi]
-            [shale.webdriver :as webdriver]
             [slingshot.slingshot :refer [try+ throw+]]
-            [taoensso.timbre :as timbre :refer [error]])
+            [taoensso.timbre :as timbre :refer [error]]
+            [camel-snake-kebab.core :refer [->snake_case_string]]
+            [camel-snake-kebab.extras :refer [transform-keys]]
+            [shale.webdriver :as webdriver])
   (:use [clj-webdriver.remote.driver :only [session-id]]
         [clojure.set :only [rename-keys]]
         shale.utils))
@@ -21,8 +23,19 @@
     (fn [url-root]
       (clojure.string/join "/" [url-root "nodes"]) )))
 
+(def ^:private proxies-url
+  (memoize
+    (fn [url-root]
+      (clojure.string/join "/" [url-root "proxies"]) )))
+
+(defn ^:private proxy-url [url-root id]
+  (clojure.string/join "/" [(proxies-url url-root) id]))
+
+(defn ^:private node-url [url-root id]
+  (clojure.string/join "/" [(nodes-url url-root) id]))
+
 (defn ^:private session-url [url-root id]
-  (clojure.string/join "/" [(sessions-url url-root)id]))
+  (clojure.string/join "/" [(sessions-url url-root) id]))
 
 (defn ^:private session-by-webdriver-url [url-root webdriver-id]
   (clojure.string/join "/" [(sessions-url url-root) "webdriver" webdriver-id]))
@@ -47,6 +60,64 @@
   ([url-root]
    (let [response (try+ (client/get (nodes-url url-root))
                         (catch [:status 400] {:keys [body]} (error body) (throw+)))]
+     (json/parse-string (response :body)))))
+
+(defn proxies
+  ([] (proxies default-url-root))
+  ([url-root]
+   (let [response (try+ (client/get (proxies-url url-root))
+                        (catch [:status 400] {:keys [body]}
+                          (error body)
+                          (throw+)))]
+     (json/parse-string (response :body)))))
+
+(defn create-proxy!
+  ([requirements] (create-proxy! default-url-root
+                                 requirements))
+  ([url-root {:keys [proxy-type
+                     host-and-port
+                     public-ip
+                     shared
+                     active]
+              :or {proxy-type "socks5"
+                   shared true
+                   active true
+                   public-ip nil}
+              :as requirements}]
+   (let [body (->> (rename-keys requirements
+                                {:host-and-port :private-host-and-port
+                                 :proxy-type :type})
+                   (transform-keys ->snake_case_string))
+         response (try+
+                    (client/post (proxies-url url-root)
+                                 {:body (json/generate-string body)
+                                  :content-type :json
+                                  :accept :json})
+                    (catch [:status 400] {:keys [body]}
+                      (error body)
+                      (throw+)))]
+     (json/parse-string (response :body)))))
+
+(defn modify-proxy!
+  ([id options] (modify-proxy! default-url-root id options))
+  ([url-root id {:keys [shared active]
+                 :or {shared nil
+                      active nil}
+                 :as modifications}]
+
+   (let [url (proxy-url url-root id)
+         body (->> modifications
+                   (filter #(not (nil? (val %))))
+                   (into {})
+                   (transform-keys ->snake_case_string))
+         response (try+
+                    (client/patch url
+                                  {:body (json/generate-string body)
+                                   :content-type :json
+                                   :accept :json})
+                    (catch [:status 400] {:keys [body]}
+                      (error body)
+                      (throw+)))]
      (json/parse-string (response :body)))))
 
 (defn session
