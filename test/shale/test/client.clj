@@ -146,6 +146,18 @@
                      :browser-name "phantomjs"})]
       (is (get session "reserved")))))
 
+(deftest ^:integration test-proxies
+  (testing "creating a proxy"
+    (let [host-and-port "127.0.0.1:6789"
+          prox (shale.client/create-proxy!
+                 {:host-and-port host-and-port
+                  :type "socks5"})]
+      (is (= host-and-port (get prox "private_host_and_port")))
+      (is (= [prox] (->> (shale.client/proxies)
+                         (filter #(= (get % "id")
+                                     (get prox "id")))
+                         vec))))))
+
 (deftest ^:integration test-webdriver-macro
   (testing "that the with-webdriver* macro properly releases its session"
     (shale.client/with-webdriver* {:browser-name "phantomjs"}

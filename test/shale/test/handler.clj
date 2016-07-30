@@ -70,13 +70,26 @@
           response (app (mock/request :get "/nodes"))]
       (is-200 response)
       (is-body response "[]\n")))
+
+  (testing "proxies route"
+    (let [app (:ring-app (:app system))
+          response (app (mock/request :get "/proxies"))]
+      (is-200 response)
+      (is-body response "[]\n")))
+
   (testing "non-existent sessions 404"
     (let [app (:ring-app (:app system))
           response (app (mock/request :get (str "/sessions/" (gen-uuid))))]
       (is-404 response)))
+
   (testing "non-existent nodes 404"
     (let [app (:ring-app (:app system))
           response (app (mock/request :get (str "/nodes/" (gen-uuid))))]
+      (is-404 response)))
+
+  (testing "non-existent proxies 404"
+    (let [app (:ring-app (:app system))
+          response (app (mock/request :get (str "/proxies/" (gen-uuid))))]
       (is-404 response))))
 
 (defn refresh-nodes [app]
