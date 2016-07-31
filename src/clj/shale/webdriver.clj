@@ -1,14 +1,35 @@
 (ns shale.webdriver
-  (:require clj-webdriver.driver
+  (:require [schema.core :as s]
+            clj-webdriver.driver
             [clj-webdriver.core :as core]
+            [clj-webdriver.remote.driver :refer [session-id]]
+            [clj-webdriver.taxi :refer [execute-script]]
             wall.hack)
-  (:import [org.openqa.selenium.remote
-            DesiredCapabilities]
+  (:import org.openqa.selenium.remote.DesiredCapabilities
            clj_webdriver.ext.remote.RemoteWebDriverExt
-           shale.ext.ResumableRemoteWebDriver
-           java.net.URL)
-  (:use [clj-webdriver.remote.driver :only [session-id]]
-        clj-webdriver.taxi))
+           java.net.URL
+           shale.ext.ResumableRemoteWebDriver))
+
+(s/defn ^:always-validate add-prox-to-capabilities :- {s/Any s/Any}
+  [capabilities :- {s/Any s/Any}
+   proxy-type   :- (s/enum :socks5 :http)
+   proxy-host   :- s/Str ; IP address
+   proxy-port   :- s/Int]
+  (let [browser-name (get capabilities "browserName")
+        host-and-port (format "%s:%s" proxy-host proxy-port)
+        proxy-url (format "%s://%s" proxy-type host-and-port)]
+    (case browser-name
+      "chrome" (merge-with (partial merge-with into)
+                           capabilities
+                           {"chromeOptions"
+                            {"args" [(format "--proxy-server=%s" proxy-url)]}})
+      "phantomjs" (merge-with into
+                              capabilities
+                              {"phantomjs.cli.args"
+                               [(format "--proxy=%s" host-and-port)
+                                (format "--proxy-type=%s" proxy-type)]})
+      (throw (ex-info "Unknown browser for proxy config."
+                      {:browser-name browser-name})))))
 
 (defn new-webdriver [node capabilities]
   (clj-webdriver.driver/init-driver
