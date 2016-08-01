@@ -17,7 +17,7 @@
    proxy-port   :- s/Int]
   (let [browser-name (get capabilities "browserName")
         host-and-port (format "%s:%s" proxy-host proxy-port)
-        proxy-url (format "%s://%s" proxy-type host-and-port)]
+        proxy-url (format "%s://%s" (name proxy-type) host-and-port)]
     (case browser-name
       "chrome" (merge-with (partial merge-with into)
                            capabilities
