@@ -14,7 +14,7 @@
             [com.stuartsierra.component :as component]
             [io.aviso.ansi :refer [bold-red bold-green bold-blue]]
             [shale.logging :as logging]
-            [shale.nodes :as nodes :refer [NodeView]]
+            [shale.nodes :as nodes]
             [shale.utils :refer :all]
             [shale.redis :as redis]
             [shale.selenium :as selenium]
@@ -54,20 +54,19 @@
 
 (s/defschema SessionView
   "A session, as presented to library users."
-  {(s/required-key :id)             s/Str
-   (s/required-key :webdriver-id)   s/Str
-   (s/required-key :tags)         #{s/Str}
-   (s/required-key :reserved)       s/Bool
-   (s/required-key :current-url)   (s/maybe s/Str)
-   (s/required-key :browser-name)   s/Str
-   (s/required-key :node)           NodeView
-   (s/required-key :capabilities)   {s/Keyword s/Any}})
+  {:id             s/Str
+   :webdriver-id   s/Str
+   :tags         #{s/Str}
+   :reserved       s/Bool
+   :current-url   (s/maybe s/Str)
+   :browser-name   s/Str
+   :node           nodes/NodeView
+   :capabilities   {s/Keyword s/Any}})
 
 (s/defschema TagChange
   "Add/remove a session/node tag"
-  {:resource (s/either (literal-pred :session) (literal-pred :node))
-   :action   (s/either (literal-pred :add) (literal-pred :remove))
-   :tag      s/Str})
+  {:action (s/enum :add :remove)
+   :tag    s/Str})
 
 (s/defschema Requirement
   "A schema for a session requirement."
@@ -267,8 +266,8 @@
   "Modification to a session"
   (any-pair
     :change-tag TagChange
-    :go-to-url s/Str
-    :reserve s/Bool))
+    :go-to-url  s/Str
+    :reserve    s/Bool))
 
 (s/defn ^:always-validate save-session-tags-to-redis
   [pool :- SessionPool
