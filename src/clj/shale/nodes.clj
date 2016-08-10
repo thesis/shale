@@ -63,10 +63,10 @@
 
 (s/defschema NodeView
   "A node, as presented to library users."
-  {(s/optional-key :id)           s/Str
-   (s/optional-key :url)          s/Str
-   (s/optional-key :tags)        [s/Str]
-   (s/optional-key :max-sessions) s/Int})
+  {:id           s/Str
+   :url          s/Str
+   :tags         #{s/Str}
+   :max-sessions s/Int})
 
 (s/defn ->NodeView :- NodeView
   [id :- s/Str
@@ -99,32 +99,40 @@
 
 (s/defn modify-node :- NodeView
   "Modify a node's url or tags in Redis."
-  [pool id {:keys [url tags]
-            :or {:url nil
-                 :tags nil}}]
+  [pool :- NodePool
+   id   :- s/Str
+   {:keys [url tags max-sessions]
+    :or {url nil
+         tags nil
+         max-sessions nil}
+    :as node}]
   (last
     (car/wcar (:redis-conn pool)
       (let [node-key (redis/model-key redis/NodeInRedis id)
             node-tags-key (redis/node-tags-key id)]
-        (if url (->> url
-                     str
-                     (car/hset node-key :url)))
-        (if tags (redis/sset-all node-tags-key tags))
+        (redis/hset-all node-key
+                        (merge {}
+                               (if url {:url (str url)})
+                               (if max-sessions {:max-sessions max-sessions})))
+        (when tags (redis/sset-all node-tags-key tags))
         (car/return (view-model pool id))))))
 
-(s/defn create-node :- NodeView
+(s/defn ^:always-validate create-node :- NodeView
   "Create a node in a given pool."
-  [pool {:keys [url tags]
-         :or {:tags []}}]
+  [pool :- NodePool
+   {:keys [url tags max-sessions]
+    :or {tags #{}
+         max-sessions (:default-session-limit pool)}}]
   (last
     (car/wcar (:redis-conn pool)
       (let [id (gen-uuid)
             node-key (redis/model-key redis/NodeInRedis id)]
         (car/sadd (redis/model-ids-key redis/NodeInRedis) id)
-        (modify-node pool id {:url url :tags tags})
-        (car/return (view-model pool id))))))
+        (car/return (modify-node pool id {:url url
+                                          :tags tags
+                                          :max-sessions max-sessions}))))))
 
-(s/defn destroy-node
+(s/defn ^:always-validate destroy-node
   [pool :- NodePool
    id   :- s/Str]
   (car/wcar (:redis-conn pool)
@@ -185,7 +193,7 @@
                                              node-id :- s/Str]
   (count (raw-sessions-with-node pool node-id)))
 
-(s/defn nodes-under-capacity
+(s/defn ^:always-validate nodes-under-capacity
   "Nodes with available capacity."
   [pool :- NodePool]
   (let [session-limit (:default-session-limit pool)]
@@ -207,7 +215,7 @@
              (map :tags [requirements model]))
       true)))
 
-(s/defn get-node :- (s/maybe NodeView)
+(s/defn ^:always-validate get-node :- (s/maybe NodeView)
   [pool         :- NodePool
    requirements :- NodeRequirements]
   (try

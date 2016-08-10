@@ -2,6 +2,7 @@
   (:require [clojure.walk :refer [keywordize-keys]]
             [taoensso.carmine :as car :refer (wcar)]
             [schema.core :as s]
+            [schema.coerce :as coerce]
             [shale.utils :refer :all]))
 
 (defn hset-all [k m]
@@ -109,10 +110,10 @@
 (defmodel NodeInRedis
   "A node, as represented in redis."
   :model-name "nodes"
-  {(s/optional-key :id)             s/Str
-   (s/optional-key :url)            s/Str
-   (s/optional-key :max-sessions)   s/Int
-   (s/optional-key :tags)         #{s/Str}})
+  {:id             s/Str
+   :url            s/Str
+   :tags         #{s/Str}
+   :max-sessions   s/Int})
 
 (s/defschema IPAddress
   (s/pred is-ip?))
@@ -160,6 +161,10 @@
   [m]
   (and (map? m) (not (record? m))))
 
+(defn coerce-model
+  [model-schema data]
+  ((coerce/coercer model-schema coerce/string-coercion-matcher) data))
+
 (defn model
   "Return a model from a Redis key given a particular schema.
 
@@ -178,13 +183,19 @@
   [redis-conn model-schema id]
   (let [set-keys (->> model-schema
                       (keys-with-vals-matching-pred set?)
-                      (map (comp name :k)))
+                      (map #(name (if (keyword? %)
+                                    %
+                                    (:k %)))))
         list-keys (->> model-schema
                        (keys-with-vals-matching-pred sequential?)
-                       (map (comp name :k)))
+                       (map #(name (if (keyword? %)
+                                     %
+                                     (:k %)))))
         map-keys (->> model-schema
                       (keys-with-vals-matching-pred is-map-type?)
-                      (map (comp name :k)))
+                      (map #(name (if (keyword? %)
+                                    %
+                                    (:k %)))))
         k (model-key model-schema id)]
     (last
       (wcar redis-conn
@@ -216,7 +227,8 @@
                  (filter #(not (.startsWith (key %) redis-key-prefix)))
                  (into {})
                  keywordize-keys
-                 (merge {:id id}))))))))
+                 (merge {:id id})
+                 (coerce-model model-schema))))))))
 
 (defn soft-delete-model!
   "Add a flag to a Redis model to signify a \"soft delete\".
