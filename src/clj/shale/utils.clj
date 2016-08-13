@@ -57,21 +57,6 @@
 
 ;; schema utils
 
-(defmacro literal-pred
-  "Yields a predicate schema that only matches one value. Takes an optional
-  name.
-
-  For example,
-  ```
-  > (s/validate (literal-pred :my-keyword) :my-keyword)
-  :my-keyword
-  ```
-
-  "
-  [literal & rest]
-  (let [pred-name (first (split-at 1 rest))]
-    `(s/pred #(= ~literal %) ~@pred-name)))
-
 (defmacro keyword-schema-pair
   "Yields a predicate that matches keyword / schema pairs like
   [:my-keyword \"My Value\"].
@@ -84,7 +69,7 @@
   ```
   "
   [kw schema]
-  `(s/pair (literal-pred ~kw) "keyword" ~schema ~kw))
+  `(s/pair (s/eq ~kw) "keyword" ~schema ~kw))
 
 (defmacro any-pair
   "Syntactic sugar for a schema that validates a value against any of a number
