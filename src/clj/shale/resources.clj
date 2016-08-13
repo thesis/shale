@@ -17,7 +17,7 @@
             [shale.proxies :as proxies]
             [shale.sessions :as sessions])
   (:import java.net.URL
-           [schema.core Schema EqSchema]))
+           [schema.core Schema EqSchema Predicate]))
 
 (defn json-keys [m]
   (transform-keys ->snake_case_string m))
@@ -87,7 +87,10 @@
                         (= (.pred-name sub) 'keyword?)
                         (string? x))
                  (walk (keyword x))
-                 (walk x))))))))
+                 (if (and (instance? schema.core.EnumSchema sub)
+                          (every? keyword? (.vs sub)))
+                   (walk (keyword x))
+                   (walk x)))))))))
    schema))
 
 (defn parse-request-data
