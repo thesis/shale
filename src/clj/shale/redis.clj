@@ -97,15 +97,15 @@
 (defmodel SessionInRedis
   "A session, as represented in redis."
   :model-name "sessions"
-  {(s/optional-key :id)             s/Str
-   (s/optional-key :webdriver-id)   (s/maybe s/Str)
-   (s/optional-key :tags)           #{s/Str}
-   (s/optional-key :reserved)       s/Bool
-   (s/optional-key :current-url)    (s/maybe s/Str)
-   (s/optional-key :browser-name)   s/Str
-   (s/optional-key :node)           {:id s/Str
-                                     s/Any s/Any}
-   (s/optional-key :capabilities)   {s/Keyword s/Any}})
+  {:id             s/Str
+   :webdriver-id   (s/maybe s/Str)
+   :tags           #{s/Str}
+   :reserved       s/Bool
+   :current-url    (s/maybe s/Str)
+   :browser-name   s/Str
+   :node           {:id  s/Str
+                    :url s/Str}
+   :capabilities   {s/Keyword s/Any}})
 
 (defmodel NodeInRedis
   "A node, as represented in redis."
@@ -163,7 +163,14 @@
 
 (defn coerce-model
   [model-schema data]
-  ((coerce/coercer model-schema coerce/string-coercion-matcher) data))
+  (let [coercer (coerce/coercer model-schema coerce/string-coercion-matcher)
+        coerced (coercer data)]
+    (when (instance? schema.utils.ErrorContainer coerced)
+      (throw (ex-info "Cannot coerce Redis model"
+                      {:schema model-schema
+                       :data data
+                       :error coerced})))
+    coerced))
 
 (defn model
   "Return a model from a Redis key given a particular schema.
