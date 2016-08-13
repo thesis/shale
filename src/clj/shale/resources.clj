@@ -5,6 +5,7 @@
             [camel-snake-kebab.core :refer :all]
             [camel-snake-kebab.extras :refer [transform-keys]]
             [schema.core :as s]
+            [schema.coerce :as coerce]
             [liberator.core :refer [defresource]]
             [compojure.core :refer [context ANY GET routes]]
             [compojure.route :refer [resources not-found]]
@@ -15,7 +16,8 @@
             [shale.nodes :as nodes]
             [shale.proxies :as proxies]
             [shale.sessions :as sessions])
-  (:import [java.net URL]))
+  (:import java.net.URL
+           [schema.core Schema EqSchema]))
 
 (defn json-keys [m]
   (transform-keys ->snake_case_string m))
@@ -57,10 +59,42 @@
 (defn ->boolean-params-data [context]
   (name-keys (truth-from-str-vals (get-in context [:request :params]))))
 
+(defn request-data-coercion
+  "A schema.coerce inspired walker to coerce request data to a matching schema.
+
+  As well as the basic coercions (keyword -> string, string -> int) it also
+  converts snake_cased_strings to kebab-cased-keywords."
+  [schema]
+  (s/start-walker
+   (fn [sub]
+     (let [walk (s/walker sub)]
+       (fn [x]
+         (if-let [keywords (and (not (instance? schema.core.Schema sub))
+                                (map? sub)
+                                (map? x)
+                                (->> (keys sub)
+                                     (map s/explicit-schema-key)
+                                     (filter identity)))]
+           (walk (->> keywords
+                      (map (fn [k] (vec [(->snake_case_string k) k])))
+                      (into {})
+                      (rename-keys x)))
+           (if (vector? sub)
+             (walk (vec x))
+             (if (and (instance? EqSchema sub) (keyword? (.-v sub)) (string? x))
+               (walk (->kebab-case-keyword x))
+               (if (and (instance? schema.core.Predicate sub)
+                        (= (.pred-name sub) 'keyword?)
+                        (string? x))
+                 (walk (keyword x))
+                 (walk x))))))))
+   schema))
+
 (defn parse-request-data
   "Parse JSON bodies in PUT and POST requests according to an optional schema.
-  If include-boolean-params is true, merge any boolean param variables into the
-  returned map as well."
+
+  If include-boolean-params is true, and the body data is a map, merge any
+  boolean param variables into the returned map as well."
   [& {:keys [context k include-boolean-params schema]
       :or {k ::data schema s/Any}}]
   (when (#{:put :post :patch} (get-in context [:request :request-method]))
@@ -69,10 +103,25 @@
         (let [body-data (json/parse-string body)
               params-data (if include-boolean-params
                             (->boolean-params-data context))
-              data (merge body-data params-data)]
-          (if-let [schema-error (s/check schema data)]
-            {:message (pretty schema-error)}
-            [false {k data}]))
+              data (if (map? body-data)
+                     (merge body-data params-data)
+                     (if (sequential? body-data)
+                       (vec body-data)
+                       body-data))
+              coerced ((request-data-coercion schema) (if (sequential? data)
+                                                        (vec data)
+                                                        data))]
+          (if (instance? schema.utils.ErrorContainer coerced)
+            (do
+              (logging/warn
+                (format (str "Client data doesn't match schema:\n%s\n"
+                             "Schema: %s\n"
+                             "Error: %s")
+                        data
+                        schema
+                        (pretty coerced)))
+              {:message (:error coerced)})
+            [false {k coerced}]))
         {:message "Empty body."})
       (catch com.fasterxml.jackson.core.JsonParseException e
         {:message "Malformed JSON."}))))
@@ -109,15 +158,15 @@
   :malformed? #(parse-request-data
                  :context %
                  :include-boolean-params true
-                 :schema {(s/optional-key "browser_name") s/Str
-                          (s/optional-key "tags") [s/Str]
-                          (s/optional-key "node") {(s/optional-key "id")    s/Str
-                                                   (s/optional-key "url")   s/Str
-                                                   (s/optional-key "tags") [s/Str]}
-                          (s/optional-key "reserve") s/Bool
-                          (s/optional-key "reserved") s/Bool
-                          (s/optional-key "extra_desired_capabilities") {s/Any s/Any}
-                          (s/optional-key "force_create") s/Bool})
+                 :schema {(s/optional-key :browser-name) s/Str
+                          (s/optional-key :tags) [s/Str]
+                          (s/optional-key :node) {(s/optional-key :id)    s/Str
+                                                   (s/optional-key :url)   s/Str
+                                                   (s/optional-key :tags) [s/Str]}
+                          (s/optional-key :reserve) s/Bool
+                          (s/optional-key :reserved) s/Bool
+                          (s/optional-key :extra-desired-capabilities) {s/Any s/Any}
+                          (s/optional-key :force-create) s/Bool})
   :handle-ok (fn [context]
                (jsonify (sessions/view-models (->session-pool context))))
   :handle-exception handle-exception
@@ -226,8 +275,8 @@
   :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-request-data
                  :context %
-                 :schema {(s/optional-key "url") s/Str
-                          (s/optional-key "tags") [s/Str]})
+                 :schema {(s/optional-key :url) s/Str
+                          (s/optional-key :tags) [s/Str]})
   :handle-ok (fn [context]
                (jsonify (get context ::node)))
   :handle-exception handle-exception
@@ -244,15 +293,15 @@
                    {::node node})))))
 
 (s/defschema ProxyCreate
-  {(s/optional-key "active")                s/Bool
-   (s/optional-key "public_ip")             s/Str
-   (s/optional-key "shared")                s/Bool
-   (s/required-key "private_host_and_port") s/Str
-   (s/required-key "type")                  (s/enum "socks5" "http")})
+  {(s/optional-key :active)                s/Bool
+   (s/optional-key :public-ip)             s/Str
+   (s/optional-key :shared)                s/Bool
+   (s/required-key :private-host-and-port) s/Str
+   (s/required-key :type)                  (s/enum :socks5 :http)})
 
 (s/defschema ProxyModification
-  {(s/optional-key "active") s/Bool
-   (s/optional-key "shared") s/Bool})
+  {(s/optional-key :active) s/Bool
+   (s/optional-key :shared) s/Bool})
 
 (defresource proxy-resource [id]
   :allowed-methods [:get :delete :patch]
