@@ -7,32 +7,32 @@
 
     (testing "session-tag matches"
       (let [requirement [:session-tag "a"]
-            s {:session {:tags ["a" "b"]}}]
+            s {:tags ["a" "b"]}]
         (is (matches-requirement s requirement))))
 
     (testing "session-tag doesn't match"
       (let [requirement [:session-tag "a"]
-            s {:session {:tags ["b" "c"]}}]
+            s {:tags ["b" "c"]}]
         (is (not (matches-requirement s requirement)))))
 
     (testing "not-session-tag matches"
       (let [requirement [:not [:session-tag "a"]]
-            s {:session {:tags ["b" "c"]}}]
+            s {:tags ["b" "c"]}]
         (is (matches-requirement s requirement))))
 
     (testing "not-session-tag doesn't match"
       (let [requirement [:not [:session-tag "a"]]
-            s {:session {:tags ["a" "b"]}}]
+            s {:tags ["a" "b"]}]
         (is (not (matches-requirement s requirement)))))
 
     (testing "and of session-tag matches"
       (let [requirement [:and [[:session-tag "a"] [:session-tag "b"]]]
-            s {:session {:tags ["a" "b"]}}]
+            s {:tags ["a" "b"]}]
         (is (matches-requirement s requirement))))
 
     (testing "and of session-tag doesn't match"
       (let [requirement [:and [[:session-tag "a"] [:session-tag "c"]]]
-            s {:session {:tags ["a" "b"]}}]
+            s {:tags ["a" "b"]}]
         (is (not (matches-requirement s requirement)))))
 
     (testing "node-tag matches"
@@ -47,32 +47,32 @@
 
     (testing "reserved matches"
       (let [requirement [:reserved false]
-            s {:session {:reserved false}}]
+            s {:reserved false}]
         (is (matches-requirement s requirement))))
 
     (testing "reserved doesn't match"
       (let [requirement [:reserved false]
-            s {:session {:reserved true}}]
+            s {:reserved true}]
         (is (not (matches-requirement s requirement)))))
 
     (testing "browser matches"
       (let [requirement [:browser-name "a"]
-            s {:session {:browser-name "a"}}]
+            s {:browser-name "a"}]
         (is (matches-requirement s requirement))))
 
     (testing "browser doesn't match"
       (let [requirement [:browser-name "a"]
-            s {:session {:browser-name "b"}}]
+            s {:browser-name "b"}]
         (is (not (matches-requirement s requirement)))))
 
     (testing "current-url matches"
       (let [requirement [:current-url "a"]
-            s {:session {:current-url "a"}}]
+            s {:current-url "a"}]
         (is (matches-requirement s requirement))))
 
     (testing "current-url doesn't match"
       (let [requirement [:current-url "a"]
-            s {:session {:current-url "b"}}]
+            s {:current-url "b"}]
         (is (not (matches-requirement s requirement)))))
 
     (testing "session-id matches"

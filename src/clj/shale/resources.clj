@@ -195,14 +195,12 @@
                 (str id))))
 
 (def shared-session-resource
-  {:allowed-methods [:get :put :delete]
+  {:allowed-methods [:get :patch :delete]
    :available-media-types ["application/json"]
    :known-content-type? is-json-or-unspecified?
    :malformed? #(parse-request-data
                   :context %
-                  :schema {(s/optional-key "reserved") s/Bool
-                           (s/optional-key "tags") [s/Str]
-                           (s/optional-key "current_url") s/Str})
+                  :schema [sessions/ModifyArg])
    :handle-ok (fn [context]
                 (jsonify (::session context)))
    :handle-exception handle-exception
@@ -214,7 +212,7 @@
                   (->session-id context)
                   :immediately immediately))
               {::session nil})
-   :put! (fn [context]
+   :patch! (fn [context]
            {::session
             (let [session-pool (->session-pool context)
                   id (->session-id context)

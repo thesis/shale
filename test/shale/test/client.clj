@@ -120,16 +120,19 @@
       (is (= 1 (session-diff test-fn))))))
 
 (deftest ^:integration test-tag-modification
-  (testing "setting tags"
+  (testing "adding tags"
     (let [test-fn (fn []
                     (let [session (first (shale.client/sessions))
                           id (get session "id")]
-                      (shale.client/modify-session! id {:tags ["test-tag"]})
+                      (shale.client/modify-session! id [[:change-tag
+                                                        {:tag "test-tag"
+                                                         :action :add}]])
                       id))]
       (is (= "test-tag" (-> (logged-in-sessions-fixture test-fn)
                             shale.client/session
                             (get "tags")
-                            first))))))
+                            sort
+                            last))))))
 
 (deftest ^:integration test-reservations
   (testing "releasing a session"

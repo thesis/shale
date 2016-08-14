@@ -1,14 +1,16 @@
 (ns shale.client
   (:require [clj-http.client :as client]
+            [clojure.set :refer [rename-keys]]
             (cheshire [core :as json])
             [clj-webdriver.taxi :as taxi]
             [slingshot.slingshot :refer [try+ throw+]]
             [taoensso.timbre :as timbre :refer [error]]
+            [schema.core :as s]
             [camel-snake-kebab.core :refer [->snake_case_string]]
             [camel-snake-kebab.extras :refer [transform-keys]]
+            [shale.sessions :as sessions]
             [shale.webdriver :as webdriver])
   (:use [clj-webdriver.remote.driver :only [session-id]]
-        [clojure.set :only [rename-keys]]
         shale.utils))
 
 (def default-url-root "http://localhost:5000")
@@ -40,7 +42,16 @@
 (defn ^:private session-by-webdriver-url [url-root webdriver-id]
   (clojure.string/join "/" [(sessions-url url-root) "webdriver" webdriver-id]))
 
-(defn ^:private map->session-url [url-root m-or-id]
+(s/defschema SessionIdentifier
+  (s/either
+    s/Str
+    {:id s/Str}
+    {:session-id s/Str}
+    {:webdriver-id s/Str}))
+
+(s/defn ^:always-validate map->session-url
+  [url-root :- s/Str
+   m-or-id :- SessionIdentifier]
   (if (map? m-or-id)
     (if (contains? m-or-id :webdriver-id)
       (session-by-webdriver-url url-root (:webdriver-id m-or-id))
@@ -156,20 +167,22 @@
                     (catch [:status 400] {:keys [body]} (error body) (throw+)))]
      (json/parse-string (response :body)))))
 
-(defn modify-session!
-  ([id options] (modify-session! default-url-root id options))
-  ([url-root id {:keys [reserved tags]
-                 :or {reserved nil
-                      tags nil}}]
+(s/defn ^:always-validate modify-session!
+  ([id :- SessionIdentifier
+    modifications :- [sessions/ModifyArg]]
+   (modify-session! default-url-root id modifications))
+  ([url-root :- s/Str
+    id :- SessionIdentifier
+    modifications :- [sessions/ModifyArg]]
    (let [url (map->session-url url-root id)
-         body (merge (if (not (nil? reserved)) {:reserved reserved})
-                     (if tags {:tags tags})
-                     {})
+         body (->> modifications
+                   (map #(transform-keys ->snake_case_string %))
+                   vec)
          response (try+
-                    (client/put url
-                                {:body (json/generate-string body)
-                                 :content-type :json
-                                 :accept :json})
+                    (client/patch url
+                                  {:body (json/generate-string body)
+                                   :content-type :json
+                                   :accept :json})
                     (catch [:status 400] {:keys [body]}
                       (error body)
                       (throw+)))]
@@ -178,16 +191,17 @@
 (defn reserve-session!
   ([id] (reserve-session! default-url-root id))
   ([url-root id]
-   (modify-session! url-root id {:reserved true})))
+   (modify-session! url-root id [[:reserve true]])))
 
 (defn release-session!
   ([id] (release-session! default-url-root id))
   ([url-root id]
-   (modify-session! url-root id {:reserved false})))
+   (modify-session! url-root id [[:reserve false]])))
 
-(defn destroy-session!
+(s/defn destroy-session!
   ([id] (destroy-session! default-url-root id))
-  ([url-root id]
+  ([url-root
+    id]
    (let [url (map->session-url url-root id)]
      (client/delete url {:query-params {"immediately" "true"}}))
    nil))

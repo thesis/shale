@@ -166,8 +166,8 @@ Note, though, that there are better ways to manage session proxies!
 #### Unreserve a session and add a tag
 
 ```bash
-curl -d '{"tags":["walmart", "logged-in"], "reserved":false}' \
-     -XPUT http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db \
+curl -d '[["change_tag", {"action": "add", "tag":"walmart"}], ["reserve", true]]' \
+     -XPATCH http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db \
      --header "Content-Type:application/json"
 ```
 
