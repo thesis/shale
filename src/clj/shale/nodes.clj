@@ -1,5 +1,6 @@
 (ns shale.nodes
   (:require [clojure.set :refer [difference]]
+            [clojure.core.match :refer [match]]
             [taoensso.carmine :as car :refer (wcar)]
             [schema.core :as s]
             [clojure.walk :refer :all]
@@ -176,10 +177,15 @@
                        (difference registered-nodes nodes))))))
     true))
 
-(def NodeRequirements
-  {(s/optional-key :url)   s/Str
-   (s/optional-key :tags) [s/Str]
-   (s/optional-key :id)    s/Str})
+(s/defschema NodeRequirement
+  "A schema for a node requirement."
+  (any-pair
+    :id  s/Str
+    :tag s/Str
+    :url s/Str
+    :not (s/recursive #'NodeRequirement)
+    :and [(s/recursive #'NodeRequirement)]
+    :or  [(s/recursive #'NodeRequirement)]))
 
 (s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
                                                   node-id :- s/Str]
@@ -200,26 +206,31 @@
     (filter #(< (raw-session-count pool (:id %)) session-limit)
             (view-models pool))))
 
-(s/defn matches-requirements :- s/Bool
-  [model        :- NodeView
-   requirements :- NodeRequirements]
-  (and
-    (if (contains? requirements :id)
-      (apply = (map :id [requirements model]))
-      true)
-    (if (contains? requirements :url)
-      (apply = (map :url [requirements model]))
-      true)
-    (if (contains? requirements :tags)
-      (apply clojure.set/subset?
-             (map :tags [requirements model]))
-      true)))
+(s/defn ^:always-validate matches-requirement :- s/Bool
+  [model       :- NodeView
+   requirement :- (s/maybe NodeRequirement)]
+  (logging/debug
+    (format "Testing node %s against requirement %s."
+            model
+            requirement))
+  (if requirement
+    (let [[req-type arg] requirement
+          n model]
+      (-> (match req-type
+                 :tag (some #{arg} (:tags n))
+                 :id  (= arg (:id n))
+                 :url (= arg (:url n))
+                 :not (not     (matches-requirement n arg))
+                 :and (every? #(matches-requirement n %) arg)
+                 :or  (some   #(matches-requirement n %) arg))
+          boolean))
+    true))
 
 (s/defn ^:always-validate get-node :- (s/maybe NodeView)
-  [pool         :- NodePool
-   requirements :- NodeRequirements]
+  [pool        :- NodePool
+   requirement :- (s/maybe NodeRequirement)]
   (try
     (rand-nth
-      (filter #(matches-requirements % requirements)
+      (filter #(matches-requirement % requirement)
               (nodes-under-capacity pool)))
     (catch IndexOutOfBoundsException e)))

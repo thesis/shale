@@ -1,6 +1,7 @@
 (ns shale.client
   (:require [clj-http.client :as client]
             [clojure.set :refer [rename-keys]]
+            [clojure.walk :as walk]
             (cheshire [core :as json])
             [clj-webdriver.taxi :as taxi]
             [slingshot.slingshot :refer [try+ throw+]]
@@ -142,28 +143,50 @@
   ([requirements] (get-or-create-session! default-url-root requirements))
   ([url-root {:keys [browser-name
                      node
-                     reserved
                      tags
                      reserve
                      force-create]
               :or {browser-name "phantomjs"
                    node nil
-                   reserved nil
-                   reserve nil
-                   force-create nil
-                   tags []}
+                   reserve false
+                   force-create false
+                   tags #{}}
               :as requirements}]
-   (let [body (rename-keys (select-keys requirements
-                                        [:browser-name :reserved :node :tags])
-                           {:browser-name :browser_name})
-         params (rename-keys (select-keys requirements [:reserve :force-create])
-                             {:force-create :force_create})
+
+   (let [tags-req (if (> (count tags) 0)
+                    [:and (vec (map #(vec [:tag %]) tags))])
+         node-reqs (->> [(into [] (dissoc node :url))
+                         (map #(vec [[:tag %]]) (:tags node))]
+                        (apply concat)
+                        vec)
+         node-req (if (> (count node-reqs) 0)
+                    [:and node-reqs])
+         reqs (->> [(if browser-name [[:browser-name browser-name]])
+                    (if tags-req [tags-req])
+                    (if node-req [node-req])]
+                  (apply concat)
+                  vec)
+         req (if (> (count reqs) 0)
+               [:and reqs])
+         create-req (merge {:browser-name browser-name
+                            :tags tags}
+                           (if reserve {:reserved reserve})
+                           (if node {:node-require node-req})
+                           )
+         modifications (->> [(if reserve [[:reserve true]])]
+                            (apply concat)
+                            vec)
+
+         arg (merge (if modifications {:modify modifications})
+                    {:create create-req}
+                    {:force-create force-create}
+                    (if req {:require req}))
+         body (walk/postwalk #(if (keyword? %) (->snake_case_string %) %) arg)
          response (try+
                     (client/post (sessions-url url-root)
                                  {:body (json/generate-string body)
                                   :content-type :json
-                                  :accept :json
-                                   :query-params params})
+                                  :accept :json})
                     (catch [:status 400] {:keys [body]} (error body) (throw+)))]
      (json/parse-string (response :body)))))
 

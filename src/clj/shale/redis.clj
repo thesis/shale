@@ -103,8 +103,7 @@
    :reserved       s/Bool
    :current-url    (s/maybe s/Str)
    :browser-name   s/Str
-   :node           {:id  s/Str
-                    :url s/Str}
+   :node-id        s/Str
    :capabilities   {s/Keyword s/Any}})
 
 (defmodel NodeInRedis

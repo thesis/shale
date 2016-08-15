@@ -79,18 +79,25 @@
                       (map (fn [k] (vec [(->snake_case_string k) k])))
                       (into {})
                       (rename-keys x)))
-           (if (vector? sub)
-             (walk (vec x))
-             (if (and (instance? EqSchema sub) (keyword? (.-v sub)) (string? x))
-               (walk (->kebab-case-keyword x))
-               (if (and (instance? schema.core.Predicate sub)
-                        (= (.pred-name sub) 'keyword?)
-                        (string? x))
-                 (walk (keyword x))
-                 (if (and (instance? schema.core.EnumSchema sub)
-                          (every? keyword? (.vs sub)))
-                   (walk (keyword x))
-                   (walk x)))))))))
+           (cond
+             (and
+               (vector? sub)
+               (sequential? x)) (walk (vec x))
+             (and
+               (set? sub)
+               (sequential? x)) (walk (into #{} x))
+             (and
+               (instance? EqSchema sub)
+               (keyword? (.-v sub))
+               (string? x)) (walk (->kebab-case-keyword x))
+             (and
+               (instance? schema.core.Predicate sub)
+               (= (.pred-name sub) 'keyword?)
+               (string? x)) (walk (keyword x))
+            (and
+              (instance? schema.core.EnumSchema sub)
+              (every? keyword? (.vs sub))) (walk (keyword x))
+            :else (walk x))))))
    schema))
 
 (defn parse-request-data
@@ -161,15 +168,7 @@
   :malformed? #(parse-request-data
                  :context %
                  :include-boolean-params true
-                 :schema {(s/optional-key :browser-name) s/Str
-                          (s/optional-key :tags) [s/Str]
-                          (s/optional-key :node) {(s/optional-key :id)    s/Str
-                                                   (s/optional-key :url)   s/Str
-                                                   (s/optional-key :tags) [s/Str]}
-                          (s/optional-key :reserve) s/Bool
-                          (s/optional-key :reserved) s/Bool
-                          (s/optional-key :extra-desired-capabilities) {s/Any s/Any}
-                          (s/optional-key :force-create) s/Bool})
+                 :schema sessions/GetOrCreateArg)
   :handle-ok (fn [context]
                (jsonify (sessions/view-models (->session-pool context))))
   :handle-exception handle-exception
