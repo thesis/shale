@@ -121,8 +121,6 @@
                                             {:source-paths ["env/prod/cljs"]
                                              :compiler
                                              {:optimizations :advanced
-                                              :pretty-print false}}}}}
-             :aws {:dependencies [[amazonica "0.2.26" :exclusions [joda-time]]]
-                   :uberjar-name "shale-aws.jar"}}
+                                              :pretty-print false}}}}}}
 
   :aot [#"shale\.ext\.*" #"shale\.core"])
