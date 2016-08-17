@@ -351,12 +351,46 @@
         (car/return
           (view-model pool id))))))
 
+(s/defn require->create :- CreateArg
+  "Infer session creation options from a session requirement.
+
+  Ignores or'd and regated requirements."
+  [req :- Requirement]
+  (let [reqs [req]
+        nilled (postwalk #(if (and (sequential? %)
+                                   (some #{(first %)} [:or :not]))
+                            ::nil
+                            %)
+                         reqs)
+        filtered (postwalk #(if (sequential? %)
+                              (vec (filter (partial not= ::nil) %))
+                              %)
+                           nilled)
+        flattened (->> filtered
+                       (tree-seq sequential? rest)
+                       (filter #(nil? (s/check Requirement %)))
+                       (map (partial into {}))
+                       (apply merge-with (comp vec concat)))
+        node-reqs (->> [(if-let [node-id (:node-id flattened)]
+                          [[:id node-id]])
+                        (if-let [node-tags (:node-tag flattened)]
+                          (vec (map #(vec [:tag %]) node-tags)))]
+                       (apply concat))
+        node-req (if (> (count node-reqs) 0)
+                   [:and node-reqs])]
+    (-> flattened
+        (rename-keys {:tag :tags})
+        (dissoc :current-url :webdriver-id :node-id :node-tag)
+        (assoc :node-require node-req))))
+
 (s/defschema GetOrCreateArg
-  "The arg to get-or-create-session."
+  "The arg to get-or-create-session.
+
+  Note if there's no requirement, but there are creation options, creation will
+  be forced."
   {(s/optional-key :require) Requirement  ; filter criteria
    (s/optional-key :score) [Score]        ; sort ranking
    (s/optional-key :create) CreateArg     ; how to create, if creating
-   (s/optional-key :force-create) s/Bool  ; whether to force creation
    (s/optional-key :modify) [ModifyArg]}) ; modifications to perform always
 
 (s/defn ^:always-validate get-or-create-session
@@ -366,21 +400,25 @@
     (format "Getting or creating a new session.\nRequirements %s" arg))
   (car/wcar (:redis-conn pool)
     (car/return
-      (or
-        (if-not (:force-create arg)
-          (if-let [candidate (->> (view-models pool)
-                                  (filter
-                                    (fn [session-model]
-                                      (matches-requirement
-                                        session-model
-                                        (:require arg))))
-                                  first)]
-            (if-let [modifications (:modify arg)]
-              (modify-session pool
-                              (:id candidate)
-                              modifications)
-              candidate)))
-        (create-session pool (:create arg))))))
+      (let [force-create (and (contains? arg :create)
+                              (not (contains? arg :require)))
+            candidate (or
+                        (if (not force-create)
+                          (->> (view-models pool)
+                               (filter
+                                 (fn [session-model]
+                                   (matches-requirement
+                                     session-model
+                                     (:require arg))))
+                               first))
+                        (let [create (or (:create arg)
+                                         (require->create (:require arg)))]
+                          (create-session pool create)))]
+        (if-let [modifications (:modify arg)]
+          (modify-session pool
+                          (:id candidate)
+                          modifications)
+          candidate)))))
 
 (s/defn ^:always-validate destroy-webdriver!
   [pool         :- SessionPool

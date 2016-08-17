@@ -179,8 +179,7 @@
 
          arg (merge (if modifications {:modify modifications})
                     {:create create-req}
-                    {:force-create force-create}
-                    (if req {:require req}))
+                    (if (and (not force-create) req) {:require req}))
          body (walk/postwalk #(if (keyword? %) (->snake_case_string %) %) arg)
          response (try+
                     (client/post (sessions-url url-root)
