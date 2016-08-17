@@ -72,16 +72,18 @@
 (s/defschema Requirement
   "A schema for a session requirement."
   (any-pair
-    :id            s/Str
-    :tag           s/Str
-    :node-tag      s/Str
-    :node-id       s/Str
-    :reserved      s/Bool
-    :browser-name  s/Str
-    :current-url   s/Str
-    :not           (s/recursive #'Requirement)
-    :and           [(s/recursive #'Requirement)]
-    :or            [(s/recursive #'Requirement)]))
+    :id           s/Str
+    :tag          s/Str
+    :node-tag     s/Str
+    :node-id      s/Str
+    :reserved     s/Bool
+    :browser-name s/Str
+    :current-url  s/Str
+    :webdriver-id s/Str
+    :nil?         (s/enum :webdriver-id :current-url)
+    :not          (s/recursive #'Requirement)
+    :and          [(s/recursive #'Requirement)]
+    :or           [(s/recursive #'Requirement)]))
 
 (defn maybe-bigdec [x]
   (try (bigdec x) (catch NumberFormatException e nil)))
@@ -113,6 +115,7 @@
                :browser-name (= arg (:browser-name s))
                :current-url  (= arg (:current-url s))
                :node-id      (= arg (get-in s [:node :id]))
+               :nil?         (nil? (get s arg))
                :not          (not     (matches-requirement s arg))
                :and          (every? #(matches-requirement s %) arg)
                :or           (some   #(matches-requirement s %) arg))

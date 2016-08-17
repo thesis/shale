@@ -110,7 +110,24 @@
     (testing "node-id doesn't match"
       (let [requirement [:node-id (gen-uuid)]
             s (assoc-in base-session [:node :id] (gen-uuid))]
-        (is (not (matches-requirement s requirement)))))))
+        (is (not (matches-requirement s requirement)))))
+
+    (testing "webdriver-id matches"
+      (let [id (gen-uuid)
+            requirement [:webdriver-id id]
+            s (assoc base-session :webdriver-id id)]
+        (is (matches-requirement s requirement))))
+
+    (testing "webdriver-id doesn't match"
+      (let [id (gen-uuid)
+            requirement [:webdriver-id id]
+            s base-session]
+        (is (not (matches-requirement s requirement)))))
+
+    (testing "webdriver-id is nil"
+      (let [requirement [:nil? :webdriver-id]
+            s (assoc base-session :webdriver-id nil)]
+        (is (matches-requirement s requirement))))))
 
 (deftest test-require->create
   (testing "inferring create args from requirements"
