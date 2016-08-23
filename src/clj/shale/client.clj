@@ -143,11 +143,13 @@
   ([requirements] (get-or-create-session! default-url-root requirements))
   ([url-root {:keys [browser-name
                      node
+                     prox
                      tags
                      reserve
                      force-create]
               :or {browser-name "phantomjs"
                    node nil
+                   prox nil
                    reserve false
                    force-create false
                    tags #{}}
@@ -161,9 +163,14 @@
                         vec)
          node-req (if (> (count node-reqs) 0)
                     [:and node-reqs])
+         prox-reqs (->> (into [] prox)
+                        vec)
+         prox-req (if (> (count prox-reqs) 0)
+                    [:and prox-reqs])
          reqs (->> [(if browser-name [[:browser-name browser-name]])
                     (if tags-req [tags-req])
-                    (if node-req [node-req])]
+                    (if node-req [[:node node-req]])
+                    (if prox-req [[:proxy prox-req]])]
                   (apply concat)
                   vec)
          req (if (> (count reqs) 0)
@@ -171,12 +178,11 @@
          create-req (merge {:browser-name browser-name
                             :tags tags}
                            (if reserve {:reserved reserve})
-                           (if node {:node-require node-req})
-                           )
+                           (if node-req {:node-require node-req})
+                           (if prox-req {:proxy-require prox-req}))
          modifications (->> [(if reserve [[:reserve true]])]
                             (apply concat)
                             vec)
-
          arg (merge (if modifications {:modify modifications})
                     {:create create-req}
                     (if (and (not force-create) req) {:require req}))

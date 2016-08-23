@@ -11,10 +11,18 @@
                           :url ""
                           :tags #{"a" "b"}
                           :max-sessions 6}
+                   :proxy nil
                    :reserved false
                    :capabilities {:browserName "firefox"}
                    :browser-name "firefox"
                    :current-url "http://google.com"})
+
+(def base-proxy {:id (gen-uuid)
+                 :shared true
+                 :active true
+                 :private-host-and-port "localhost:101010"
+                 :type :socks5
+                 :public-ip nil})
 
 (deftest test-matches-requirement
   (testing "matches-requirement"
@@ -49,13 +57,13 @@
             s base-session]
         (is (not (matches-requirement s requirement)))))
 
-    (testing "node-tag matches"
-      (let [requirement [:node-tag "a"]
+    (testing "node tag matches"
+      (let [requirement [:node [:tag "a"]]
             s base-session]
         (is (matches-requirement s requirement))))
 
-    (testing "node-tag doesn't match"
-      (let [requirement [:node-tag "a"]
+    (testing "node tag doesn't match"
+      (let [requirement [:node [:tag "a"]]
             s (assoc-in base-session [:node :tags] #{"b" "c"})]
         (is (not (matches-requirement s requirement)))))
 
@@ -103,13 +111,28 @@
 
     (testing "node-id matches"
       (let [id (gen-uuid)
-            requirement [:node-id id]
+            requirement [:node [:id id]]
             s (assoc-in base-session [:node :id] id)]
         (is (matches-requirement s requirement))))
 
     (testing "node-id doesn't match"
-      (let [requirement [:node-id (gen-uuid)]
+      (let [requirement [:node [:id (gen-uuid)]]
             s (assoc-in base-session [:node :id] (gen-uuid))]
+        (is (not (matches-requirement s requirement)))))
+
+    (testing "proxy id matches"
+      (let [id (gen-uuid)
+            requirement [:proxy [:id id]]
+            s (-> base-session
+                  (assoc :proxy base-proxy)
+                  (assoc-in [:proxy :id] id))]
+        (is (matches-requirement s requirement))))
+
+    (testing "proxy id doesn't match"
+      (let [requirement [:proxy [:id (gen-uuid)]]
+            s (-> base-session
+                  (assoc :proxy base-proxy)
+                  (assoc-in [:proxy :id] (gen-uuid)))]
         (is (not (matches-requirement s requirement)))))
 
     (testing "webdriver-id matches"
@@ -134,31 +157,44 @@
 
     (testing "empty requirements"
       (let [requirement nil]
-        (is {} (require->create requirement))))
+        (is (= {} (require->create requirement)))))
 
     (testing "browser name"
       (let [requirement [:browser-name "firefox"]]
-        (is {:browser-name "firefox"} (require->create requirement))))
+        (is (= {:browser-name "firefox"}
+               (require->create requirement)))))
 
     (testing "browser name and tag"
-      (let [requirement [:and [:browser-name "firefox"] [:tag "lol"]]]
-        (is {:browser-name "firefox"
-             :tags #{"lol"}}
-            (require->create requirement))))
+      (let [requirement [:and [[:browser-name "firefox"] [:tag "lol"]]]]
+        (is (= {:browser-name "firefox"
+                :tags #{:lol}}
+               (require->create requirement)))))
 
     (testing "nested browser name and tag"
-      (let [requirement [:and [:browser-name "firefox"] [:tag "lol"]]]
-        (is {:browser-name "firefox"
-             :tags #{"lol"}}
-            (require->create requirement))))
+      (let [requirement [:and [[:browser-name "firefox"] [:tag "lol"]]]]
+        (is (= {:browser-name "firefox"
+                :tags #{:lol}}
+               (require->create requirement)))))
 
     (testing "excluded tags"
-      (let [requirement [:and [:webdriver-id (gen-uuid)] [:tag "lol"]]]
-        (is {:tags #{"lol"}}
-            (require->create requirement))))
+      (let [requirement [:and [[:webdriver-id (gen-uuid)] [:tag "lol"]]]]
+        (is (= {:tags #{:lol}}
+               (require->create requirement)))))
+
+    (testing "multiple tags"
+      (let [requirement [:and [[:tag "sheep"] [:tag "pony"]]]]
+        (is (=
+             {:tags #{:sheep :pony}}
+             (require->create requirement)))))
 
     (testing "node requirements"
       (let [id (gen-uuid)
-            requirement [:and [:node-id id] [:node-tag "lol"]]]
-        (is {:node-require [:and [:id id] [:tag "lol"]]}
-            (require->create requirement))))))
+            requirement [:node [:and [[:id id] [:tag "lol"]]]]]
+        (is (= {:node-require [:and [[:id id] [:tag "lol"]]]}
+               (require->create requirement)))))
+
+    (testing "proxy requirements"
+      (let [id (gen-uuid)
+            requirement [:proxy [:and [[:shared true]]]]]
+        (is (= {:proxy-require [:and [[:shared true]]]}
+               (require->create requirement)))))))

@@ -1,8 +1,8 @@
 (ns shale.test.utils
   (:require [clojure.java.io :refer [writer]]
             [taoensso.carmine :as car]
-            [carica.core :refer [overrider]]
-            [shale.configurer :as configurer])
+            [com.stuartsierra.component :as component]
+            [shale.core :refer [get-app-system]])
   (:import [org.openqa.selenium.server
             SeleniumServer
             RemoteControlConfiguration]
@@ -67,13 +67,22 @@
   (car/wcar redis-conn
     (car/flushdb)))
 
+(defn with-system-from-config
+  [system-atom config]
+  (fn [test-fn]
+    (reset! system-atom (component/start (get-app-system config)))
+    (try
+      (test-fn)
+      (finally
+        (component/stop @system-atom)
+        (reset! system-atom nil)))))
+
 (defn with-clean-redis
   "Given a system variable (eg #'system), return a fixture that clears Redis
   before and after running the test function."
-  [system-var]
+  [system-atom]
   (fn [test-fn]
-    (let [system (deref system-var)
-          redis (:redis system)]
+    (let [redis (:redis @system-atom)]
       (clear-redis redis)
       (try
         (test-fn)

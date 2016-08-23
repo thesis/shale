@@ -1,12 +1,12 @@
 (ns shale.proxies
-  (:require [com.stuartsierra.component :as component]
+  (:require [clojure.core.match :refer [match]]
+            [clojure.walk :refer [postwalk]]
+            [com.stuartsierra.component :as component]
             [schema.core :as s]
             [taoensso.carmine :as car]
             [shale.logging :as logging]
             [shale.redis :as redis]
-            [shale.sessions :as sessions]
-            [shale.utils :refer [gen-uuid]])
-  (:import shale.sessions.SessionPool))
+            [shale.utils :refer [gen-uuid any-pair]]))
 
 ; create a proxy pool object that gets the initial proxies from config
 ; - requires config + redis conn + session pool
@@ -34,21 +34,58 @@
   (map->ProxyPool {}))
 
 (def SharedProxySchema
-  {(s/optional-key :public-ip) (s/maybe redis/IPAddress)
-   :type                       (s/enum :socks5 :http)
-   :private-host-and-port      s/Str})
+  {:type                  (s/enum :socks5 :http)
+   :private-host-and-port s/Str})
 
 (s/defschema ProxySpec
   "Spec for creating a new proxy record"
   (merge SharedProxySchema
-         {(s/optional-key :shared) s/Bool}))
+         {(s/optional-key :public-ip) (s/maybe redis/IPAddress)
+          (s/optional-key :shared)    s/Bool
+          (s/optional-key :active)    s/Bool}))
+
+(def proxy-spec-defaults
+  {:shared true
+   :active true})
 
 (s/defschema ProxyView
   "A proxy, as presented to library users"
   (merge SharedProxySchema
-         {:id     s/Str
-          :active s/Bool
-          :shared s/Bool}))
+         {:id        s/Str
+          :public-ip (s/maybe redis/IPAddress)
+          :active    s/Bool
+          :shared    s/Bool}))
+
+(s/defschema ProxyRequirement
+  (any-pair
+    :id                    s/Str
+    :shared                s/Bool
+    :active                s/Bool
+    :private-host-and-port s/Str
+    :type                  (:type SharedProxySchema)
+    :public-ip             redis/IPAddress
+    :nil?                  (s/enum :public-ip)
+    :not                   (s/recursive #'ProxyRequirement)
+    :and                   [(s/recursive #'ProxyRequirement)]
+    :or                    [(s/recursive #'ProxyRequirement)]))
+
+(s/defn ^:always-validate matches-requirement :- s/Bool
+  [prox        :- ProxyView
+   requirement :- ProxyRequirement]
+  (logging/debug
+    (format "Testing proxy %s against requirement %s."
+            prox
+            requirement))
+  (let [[req-type arg] requirement
+        p prox]
+    (-> (match req-type
+               (:or :id :shared :active :private-host-and-port :type)
+                 (= arg (get p req-type))
+               :nil? (nil? (get p arg))
+               :not  (not     (matches-requirement p arg))
+               :and  (every? #(matches-requirement p %) arg)
+               :or   (some   #(matches-requirement p %) arg))
+        boolean)))
 
 (s/defn ^:always-validate create-proxy! :- (s/maybe ProxyView)
   [pool :- ProxyPool
@@ -112,3 +149,44 @@
       (car/return
         (map model->view-model
              (redis/models redis-conn redis/ProxyInRedis))))))
+
+(s/defn ^:always-validate get-proxy :- (s/maybe ProxyView)
+  [pool        :- ProxyPool
+   requirement :- (s/maybe ProxyRequirement)]
+  (try
+    (rand-nth
+      (filter #(matches-requirement % (or requirement
+                                          [:and [[:shared true] [:active true]]]))
+              (view-models pool)))
+    (catch IndexOutOfBoundsException e)))
+
+; TODO DRY up this with logic in sessions
+
+(s/defn ^:always-validate require->spec :- ProxySpec
+  "Infer proxy creation options from a requirement.
+
+  Ignores or'd and regated requirements."
+  [requirement :- (s/maybe ProxyRequirement)]
+  (let [reqs [requirement]
+        nilled (postwalk #(if (and (sequential? %)
+                                   (some #{(first %)} [:or :not]))
+                            ::nil
+                            %)
+                         reqs)
+        filtered (postwalk #(if (sequential? %)
+                              (vec (filter (partial not= ::nil) %))
+                              %)
+                           nilled)
+        flattened (->> filtered
+                       (tree-seq sequential? identity)
+                       (filter #(nil? (s/check ProxyRequirement %)))
+                       (filter #(not= (first %) :and))
+                       (map (partial apply hash-map))
+                       (apply merge-with (comp vec concat)))]
+    (merge proxy-spec-defaults flattened)))
+
+(s/defn ^:always-validate get-or-create-proxy! :- ProxyView
+  [pool :- ProxyPool
+   requirement :- ProxyRequirement]
+  (or (get-proxy pool requirement)
+      (create-proxy! pool (require->spec requirement))))

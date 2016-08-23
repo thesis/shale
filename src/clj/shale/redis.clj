@@ -104,6 +104,7 @@
    :current-url    (s/maybe s/Str)
    :browser-name   s/Str
    :node-id        s/Str
+   :proxy-id       (s/maybe s/Str)
    :capabilities   {s/Keyword s/Any}})
 
 (defmodel NodeInRedis
@@ -122,7 +123,7 @@
   :model-name "proxies"
   {:id                    s/Str
    :public-ip             (s/maybe IPAddress)
-   :type                  (s/enum "socks5" "http")
+   :type                  (s/enum :socks5 :http)
    :private-host-and-port s/Str
    :active                s/Bool
    :shared                s/Bool})
