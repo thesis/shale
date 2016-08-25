@@ -98,7 +98,7 @@
                         (get "id"))]
         ; clear all the old sessions
         (shale.client/destroy-sessions!)
-        ; and get three new onws on this node
+        ; and get three new ones on this node
         (dotimes [_ 3]
           (shale.client/get-or-create-session!
             {:browser-name "phantomjs"

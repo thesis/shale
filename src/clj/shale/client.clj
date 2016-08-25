@@ -146,11 +146,13 @@
                      prox
                      tags
                      reserve
+                     reserved
                      force-create]
               :or {browser-name "phantomjs"
                    node nil
                    prox nil
                    reserve false
+                   reserved nil
                    force-create false
                    tags #{}}
               :as requirements}]
@@ -169,6 +171,7 @@
                     [:and prox-reqs])
          reqs (->> [(if browser-name [[:browser-name browser-name]])
                     (if tags-req [tags-req])
+                    (if (some? reserved) [[:reserved reserved]])
                     (if node-req [[:node node-req]])
                     (if prox-req [[:proxy prox-req]])]
                   (apply concat)
