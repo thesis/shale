@@ -18,7 +18,6 @@
 (s/defrecord ProxyPool
   [config
    redis-conn
-   session-pool
    logger]
   component/Lifecycle
   (start [cmp]

@@ -36,6 +36,7 @@
 (s/defrecord SessionPool
   [redis-conn
    node-pool
+   proxy-pool
    logger
    webdriver-timeout
    start-webdriver-timeout]
@@ -332,11 +333,11 @@
                (proxies/get-or-create-proxy!
                  (:proxy-pool pool) proxy-require))
         defaulted-reqs
-        (merge {:node-id (:id node)
+        (merge defaulted-options
+               {:node-id (:id node)
                 :proxy-id (:id prox)
                 :tags tags
-                :current-url nil}
-               defaulted-options)
+                :current-url nil})
         requested-capabilities
         (let [rekeyed (transform-keys ->camelCaseString
                                       (merge {:browser-name browser-name}
@@ -344,7 +345,8 @@
           (if proxy-require
             (let [[host port] (clojure.string/split
                                 (:private-host-and-port prox) #":")]
-              (add-prox-to-capabilities rekeyed (:type prox) host port))
+              (add-prox-to-capabilities
+                rekeyed (:type prox) host (bigint port)))
             rekeyed))
         id (gen-uuid)
         wd (start-webdriver!

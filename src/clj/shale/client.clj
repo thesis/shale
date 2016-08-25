@@ -1,8 +1,8 @@
 (ns shale.client
-  (:require [clj-http.client :as client]
-            [clojure.set :refer [rename-keys]]
+  (:require [clojure.set :refer [rename-keys]]
             [clojure.walk :as walk]
-            (cheshire [core :as json])
+            [clj-http.client :as client]
+            [cheshire [core :as json]]
             [clj-webdriver.taxi :as taxi]
             [slingshot.slingshot :refer [try+ throw+]]
             [taoensso.timbre :as timbre :refer [error]]
@@ -157,7 +157,13 @@
                    tags #{}}
               :as requirements}]
 
-   (let [tags-req (if (> (count tags) 0)
+   (let [and-reqs (fn [reqs]
+                    (if (sequential? reqs)
+                      (cond
+                        (keyword? (first reqs)) reqs
+                        (= (count reqs) 0) nil
+                        :else [:and reqs])))
+         tags-req (if (> (count tags) 0)
                     [:and (vec (map #(vec [:tag %]) tags))])
          node-reqs (->> [(into [] (dissoc node :url))
                          (map #(vec [[:tag %]]) (:tags node))]
@@ -167,8 +173,8 @@
                     [:and node-reqs])
          prox-reqs (->> (into [] prox)
                         vec)
-         prox-req (if (> (count prox-reqs) 0)
-                    [:and prox-reqs])
+         prox-req (and-reqs prox-reqs)
+         _ (prn "CLIENT: PROX REQS" prox-req)
          reqs (->> [(if browser-name [[:browser-name browser-name]])
                     (if tags-req [tags-req])
                     (if (some? reserved) [[:reserved reserved]])
@@ -176,8 +182,8 @@
                     (if prox-req [[:proxy prox-req]])]
                   (apply concat)
                   vec)
-         req (if (> (count reqs) 0)
-               [:and reqs])
+         req (and-reqs reqs)
+         _ (prn "CLIENT SESSION REQS" req)
          create-req (merge {:browser-name browser-name
                             :tags tags}
                            (if reserve {:reserved reserve})
@@ -189,7 +195,12 @@
          arg (merge (if modifications {:modify modifications})
                     {:create create-req}
                     (if (and (not force-create) req) {:require req}))
-         body (walk/postwalk #(if (keyword? %) (->snake_case_string %) %) arg)
+         body (walk/postwalk
+                #(cond
+                   (= % :socks5) "socks5"
+                   (keyword? %) (->snake_case_string %)
+                   :else %)
+                arg)
          response (try+
                     (client/post (sessions-url url-root)
                                  {:body (json/generate-string body)

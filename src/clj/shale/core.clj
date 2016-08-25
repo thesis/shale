@@ -52,9 +52,9 @@
    :node-pool (component/using (nodes/new-node-pool conf)
                                [:redis-conn :logger ])
    :session-pool (component/using (sessions/new-session-pool conf)
-                                  [:redis-conn :node-pool :logger])
+                                  [:redis-conn :node-pool :proxy-pool :logger])
    :proxy-pool (component/using (proxies/new-proxy-pool)
-                                [:config :redis-conn :session-pool :logger])
+                                [:config :redis-conn :logger])
    :app (component/using (handler/new-app)
                          [:session-pool :node-pool :proxy-pool :logger])])
 
