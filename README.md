@@ -69,11 +69,12 @@ machine running shale.
 
 ## Examples
 
+Session creation, selection, and modification uses an S-expression inspired
+syntax.
+
 ### curl
 
 #### Get or create a new session
-
-Requirements are specified in a format similar to S-expressions.
 
 ```bash
 curl -d '{"require": ["browser_name", "phantomjs"]}' -XPOST \
