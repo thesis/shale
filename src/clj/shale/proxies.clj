@@ -33,8 +33,9 @@
   (map->ProxyPool {}))
 
 (def SharedProxySchema
-  {:type                  (s/enum :socks5 :http)
-   :private-host-and-port s/Str})
+  {:type (s/enum :socks5 :http)
+   :host s/Str
+   :port s/Int})
 
 (s/defschema ProxySpec
   "Spec for creating a new proxy record"
@@ -57,16 +58,17 @@
 
 (s/defschema ProxyRequirement
   (any-pair
-    :id                    s/Str
-    :shared                s/Bool
-    :active                s/Bool
-    :private-host-and-port s/Str
-    :type                  (:type SharedProxySchema)
-    :public-ip             redis/IPAddress
-    :nil?                  (s/enum :public-ip)
-    :not                   (s/recursive #'ProxyRequirement)
-    :and                   [(s/recursive #'ProxyRequirement)]
-    :or                    [(s/recursive #'ProxyRequirement)]))
+    :id        s/Str
+    :shared    s/Bool
+    :active    s/Bool
+    :host      s/Str
+    :port      s/Int
+    :type      (:type SharedProxySchema)
+    :public-ip redis/IPAddress
+    :nil?      (s/enum :public-ip)
+    :not       (s/recursive #'ProxyRequirement)
+    :and       [(s/recursive #'ProxyRequirement)]
+    :or        [(s/recursive #'ProxyRequirement)]))
 
 (s/defn ^:always-validate matches-requirement :- s/Bool
   [prox        :- ProxyView
@@ -78,7 +80,7 @@
   (let [[req-type arg] requirement
         p prox]
     (-> (match req-type
-               (:or :id :shared :active :private-host-and-port :type)
+               (:or :id :shared :active :host :port :type)
                  (= arg (get p req-type))
                :nil? (nil? (get p arg))
                :not  (not     (matches-requirement p arg))

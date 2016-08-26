@@ -223,7 +223,8 @@ An initial proxy list can be provided in the config.
 curl -XPOST http://localhost:5000/proxies/ \
      -d '{
             "public_ip": "8.8.8.8",
-            "private_host_and_port": "127.0.0.1:1234",
+            "host": "127.0.0.1",
+            "port": "1234",
             "type":"socks5"
             "shared":true
          }' \
@@ -234,7 +235,8 @@ curl -XPOST http://localhost:5000/proxies/ \
 {
     "id":"f7c64a2c-595d-434c-80f0-15c9751ddcc8",
     "public_ip":"127.0.0.1",
-    "private_host_and_port":"128.0.0.1:1234",
+    "host":"128.0.0.1",
+    "port":"1234",
     "type":"socks5",
     "active":true,
     "shared":true
@@ -260,7 +262,8 @@ curl http://localhost:5000/proxies/
     {
         "id":"f7c64a2c-595d-434c-80f0-15c9751ddcc8",
         "public_ip":"8.8.8.8",
-        "private_host_and_port":"127.0.0.1:1234",
+        "host":"127.0.0.1",
+        "port":"1234",
         "type":"socks5",
         "active":true,
         "shared":true
@@ -271,7 +274,7 @@ curl http://localhost:5000/proxies/
 #### Create a Chrome session with a new proxy
 
 ```bash
-curl -d '{"create": {"browser_name":"chrome", "proxy": {"type": "socks5", "private_host_and_port": "<host>:<port>", "shared": true}}}'
+curl -d '{"create": {"browser_name":"chrome", "proxy": {"type": "socks5", "host": "<host>", "port":<port>, "shared": true}}}'
      -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```

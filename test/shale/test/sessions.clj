@@ -20,7 +20,8 @@
 (def base-proxy {:id (gen-uuid)
                  :shared true
                  :active true
-                 :private-host-and-port "localhost:101010"
+                 :host "localhost"
+                 :port 101010
                  :type :socks5
                  :public-ip nil})
 

@@ -112,8 +112,10 @@
 
 (deftest ^:integration test-get-or-create-with-proxies
   (testing "sessions are created with the specified proxy"
-      (let [host-and-port "localhost:1234"
-            proxy-req [:and [[:private-host-and-port host-and-port]
+      (let [host "localhost"
+            port 1234
+            proxy-req [:and [[:host host]
+                             [:port port]
                              [:type :socks5]]]]
         (shale.client/destroy-sessions!)
         (dotimes [_ 3]
@@ -122,10 +124,12 @@
              :prox proxy-req}))
         (is (= 1 (count (shale.client/sessions))))
         (prn "SESSION WITH PROXY!" (first (shale.client/sessions)))
-        (is (some? (get (first (shale.client/sessions)) "proxy")))
-        (is (= host-and-port
-               (get-in (first (shale.client/sessions))
-                       ["proxy" "private_host_and_port"]))))))
+        (let [prox (get (first (shale.client/sessions)) "proxy")]
+          (is (some? prox))
+          (is (= (select-keys prox ["port" "host" "type"])
+                 {"port" port
+                  "host" host
+                  "type" "socks5" }))))))
 
 (deftest ^:integration test-force-create
   (testing "force create a new session"
@@ -169,11 +173,14 @@
 
 (deftest ^:integration test-proxies
   (testing "creating a proxy"
-    (let [host-and-port "127.0.0.1:6789"
+    (let [host "127.0.0.1"
+          port 6789
           prox (shale.client/create-proxy!
-                 {:host-and-port host-and-port
+                 {:host host
+                  :port port
                   :type "socks5"})]
-      (is (= host-and-port (get prox "private_host_and_port")))
+      (is (= host (get prox "host")))
+      (is (= port (get prox "port")))
       (is (= [prox] (->> (shale.client/proxies)
                          (filter #(= (get % "id")
                                      (get prox "id")))

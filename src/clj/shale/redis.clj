@@ -121,12 +121,13 @@
 (defmodel ProxyInRedis
   "A proxy, as represented in redis."
   :model-name "proxies"
-  {:id                    s/Str
-   :public-ip             (s/maybe IPAddress)
-   :type                  (s/enum :socks5 :http)
-   :private-host-and-port s/Str
-   :active                s/Bool
-   :shared                s/Bool})
+  {:id        s/Str
+   :public-ip (s/maybe IPAddress)
+   :type      (s/enum :socks5 :http)
+   :host      s/Str
+   :port      s/Int
+   :active    s/Bool
+   :shared    s/Bool})
 
 ;; model fetching
 

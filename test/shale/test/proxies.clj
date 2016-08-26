@@ -22,7 +22,8 @@
 (def base-proxy {:id (gen-uuid)
                  :shared true
                  :active true
-                 :private-host-and-port "localhost:101010"
+                 :host "localhost"
+                 :port 101010
                  :type :socks5
                  :public-ip nil})
 
@@ -34,22 +35,23 @@
   (testing "type and host"
     (let [req [:and
                [[:type (:type base-proxy)]
-                [:private-host-and-port (:private-host-and-port base-proxy)]]]]
+                [:host (:host base-proxy)]
+                [:port (:port base-proxy)]]]]
       (is (= (select-keys base-proxy
-                          [:shared :active :type :private-host-and-port])
+                          [:shared :active :type :host :port])
              (proxies/require->spec req))))))
 
 (deftest ^:integration test-creation-and-deletion
   (testing "proxy creation"
     (let [pool (:proxy-pool @system)
-          spec (select-keys base-proxy [:type :private-host-and-port])]
+          spec (select-keys base-proxy [:type :host :port])]
       (is 0 (count (proxies/view-models pool)))
       (proxies/create-proxy! pool spec)
       (is 1 (count (proxies/view-models pool)))))
 
   (testing "proxy deletion"
     (let [pool (:proxy-pool @system)
-          spec (select-keys base-proxy [:type :private-host-and-port])
+          spec (select-keys base-proxy [:type :host :port])
           prox (proxies/create-proxy! pool spec)]
       (is 1 (count (proxies/view-models pool)))
       (proxies/delete-proxy! pool (:id prox))
@@ -60,9 +62,10 @@
     (let [pool (:proxy-pool @system)
           req [:and
                [[:type (:type base-proxy)]
-                [:private-host-and-port (:private-host-and-port base-proxy)]]]]
+                [:host (:host base-proxy)]
+                [:port (:port base-proxy)]]]]
       (is 0 (count (proxies/view-models pool)))
       (let [prox (proxies/get-or-create-proxy! pool req)]
         (is 1 (count (proxies/view-models pool)))
-        (is (select-keys base-proxy [:private-host-and-port :type])
-            (select-keys prox [:private-host-and-port :type]))))))
+        (is (select-keys base-proxy [:host :port :type])
+            (select-keys prox [:host :port :type]))))))

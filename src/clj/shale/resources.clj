@@ -292,11 +292,12 @@
                    {::node node})))))
 
 (s/defschema ProxyCreate
-  {(s/optional-key :active)                s/Bool
-   (s/optional-key :public-ip)             s/Str
-   (s/optional-key :shared)                s/Bool
-   (s/required-key :private-host-and-port) s/Str
-   (s/required-key :type)                  (s/enum :socks5 :http)})
+  {(s/optional-key :active)    s/Bool
+   (s/optional-key :public-ip) s/Str
+   (s/optional-key :shared)    s/Bool
+   (s/required-key :host)      s/Str
+   (s/required-key :port)      s/Int
+   (s/required-key :type)      (s/enum :socks5 :http)})
 
 (s/defschema ProxyModification
   {(s/optional-key :active) s/Bool

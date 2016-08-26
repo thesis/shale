@@ -87,7 +87,8 @@
   ([requirements] (create-proxy! default-url-root
                                  requirements))
   ([url-root {:keys [proxy-type
-                     host-and-port
+                     host
+                     port
                      public-ip
                      shared
                      active]
@@ -97,8 +98,7 @@
                    public-ip nil}
               :as requirements}]
    (let [body (->> (rename-keys requirements
-                                {:host-and-port :private-host-and-port
-                                 :proxy-type :type})
+                                {:proxy-type :type})
                    (transform-keys ->snake_case_string))
          response (try+
                     (client/post (proxies-url url-root)
@@ -174,7 +174,6 @@
          prox-reqs (->> (into [] prox)
                         vec)
          prox-req (and-reqs prox-reqs)
-         _ (prn "CLIENT: PROX REQS" prox-req)
          reqs (->> [(if browser-name [[:browser-name browser-name]])
                     (if tags-req [tags-req])
                     (if (some? reserved) [[:reserved reserved]])
@@ -183,7 +182,6 @@
                   (apply concat)
                   vec)
          req (and-reqs reqs)
-         _ (prn "CLIENT SESSION REQS" req)
          create-req (merge {:browser-name browser-name
                             :tags tags}
                            (if reserve {:reserved reserve})

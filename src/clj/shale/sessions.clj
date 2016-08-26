@@ -343,8 +343,7 @@
                                       (merge {:browser-name browser-name}
                                              capabilities))]
           (if proxy-require
-            (let [[host port] (clojure.string/split
-                                (:private-host-and-port prox) #":")]
+            (let [{:keys [host port]} prox]
               (add-prox-to-capabilities
                 rekeyed (:type prox) host (bigint port)))
             rekeyed))
