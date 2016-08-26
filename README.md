@@ -73,8 +73,10 @@ machine running shale.
 
 #### Get or create a new session
 
+Requirements are specified in a format similar to S-expressions.
+
 ```bash
-curl -d '{"browser_name":"phantomjs"}' -XPOST \
+curl -d '{"require": ["browser_name", "phantomjs"]}' -XPOST \
      http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
@@ -108,8 +110,8 @@ curl http://localhost:5000/sessions/
 #### Create a new session with tags
 
 ```bash
-curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
-     -XPOST http://localhost:5000/sessions/?force_create=True \
+curl -d '{"create": {"browser_name":"phantomjs", "tags":["walmart"]}}' \
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
 
@@ -126,8 +128,9 @@ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 #### Get or create a new reserved session with tags
 
 ```bash
-curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
-     -XPOST http://localhost:5000/sessions/?reserve=True \
+curl -d '{"require": ["and [["browser_name", "phantomjs"] ["tag", "walmart"]]],
+          "modify": [["reserve", true]]}' \
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
 
@@ -144,24 +147,33 @@ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 #### Create a session on a particular node
 
 ```bash
-curl -d '{"browser_name":"phantomjs", "node":{"id": "<node id>"}}' \
-     -XPOST http://localhost:5000/sessions/?force_create=True \
+curl -d '{"create": {"browser_name":"phantomjs", "node":{"id": "<node id>"}}}' \
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
 
-#### Create a Chrome session using a proxy
+#### Create a Chrome session using a proxy (manually)
+
+You can create sessions with custom options, like proxy settings, disabling
+local storage, or any other settings exposed by Selenium's
+`DesiredCapabilities`.
 
 ```bash
-curl -d '{"browser_name":"chrome", "extra_desired_capabilities": {"chromeOptions": {"args": ["--proxy-server=socks5://<host>:<port>"]}}' \
-     -XPOST http://localhost:5000/sessions/?force_create=True \
+curl -d '{"create": {"browser_name":"chrome", "extra_desired_capabilities": {"chromeOptions": {"args": ["--proxy-server=socks5://<host>:<port>", "--disable-plugins","--disable-local-storage"]}}}' \
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
+
+Note, though, that there are better ways to manage session proxies!
 
 #### Unreserve a session and add a tag
 
+PATCH accepts an array of modifications, including `change_tag`, `reserve`, and
+`go_to_url`.
+
 ```bash
-curl -d '{"tags":["walmart", "logged-in"], "reserved":false}' \
-     -XPUT http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db \
+curl -d '[["change_tag", {"action": "add", "tag":"walmart"}], ["reserve", true]]' \
+     -XPATCH http://localhost:5000/sessions/05e9229d-356b-46a3-beae-f8ab02cea7db \
      --header "Content-Type:application/json"
 ```
 
@@ -193,9 +205,87 @@ true
 curl -XDELETE http://localhost:5000/sessions/
 ```
 
-```
+```json
 true
 ```
+
+### Proxies
+
+Shale also includes its own proxy management that allows proxies to be shared
+between sessions.
+
+An initial proxy list can be provided in the config.
+
+#### Add a new proxy
+
+```bash
+curl -XPOST http://localhost:5000/proxies/ \
+     -d '{
+            "public_ip": "8.8.8.8",
+            "private_host_and_port": "127.0.0.1:1234",
+            "type":"socks5"
+            "shared":true
+         }' \
+     --header "Content-Type:application/json"
+```
+
+```json
+{
+    "id":"f7c64a2c-595d-434c-80f0-15c9751ddcc8",
+    "public_ip":"127.0.0.1",
+    "private_host_and_port":"128.0.0.1:1234",
+    "type":"socks5",
+    "active":true,
+    "shared":true
+}
+```
+A proxy with `"shared": false` can only be used by sessions that reference it
+by ID. Those with `"shared": true` are candidates for use by other sessions.
+
+The `public_ip` is an optional attribute to keep track of a proxies
+public-facing IP. This can be useful if you're testing public sites on the
+internet, and have an IP whitelist.
+
+Currently, only SOCKS proxies are supported.
+
+#### List all proxies
+
+```bash
+curl http://localhost:5000/proxies/
+```
+
+```json
+[
+    {
+        "id":"f7c64a2c-595d-434c-80f0-15c9751ddcc8",
+        "public_ip":"8.8.8.8",
+        "private_host_and_port":"127.0.0.1:1234",
+        "type":"socks5",
+        "active":true,
+        "shared":true
+    }
+]
+```
+
+#### Create a Chrome session with a new proxy
+
+```bash
+curl -d '{"create": {"browser_name":"chrome", "proxy": {"type": "socks5", "private_host_and_port": "<host>:<port>", "shared": true}}}'
+     -XPOST http://localhost:5000/sessions/ \
+     --header "Content-Type:application/json"
+```
+
+If the proxy hasn't been seen before, it will be recorded as a candidate for use
+by other sessions. To avoid that behavior, set `"shared": false`.
+
+#### Get or create a Chrome session with an existing proxy
+
+```bash
+curl -d '{"require": ["and" [["browser_name", "chrome"] ["proxy", ["id", "f7c64a2c-595d-434c-80f0-15c9751ddcc8"]]]]}'
+     -XPOST http://localhost:5000/sessions/ \
+     --header "Content-Type:application/json"
+```
+
 ### Clojure
 
 The Clojure client returns functional web drivers using `clj-webdriver`,

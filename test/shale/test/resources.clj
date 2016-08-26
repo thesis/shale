@@ -1,6 +1,6 @@
 (ns shale.test.resources
   (:require [clojure.test :refer :all]
-            [shale.resources :refer [parse-request-data ->sessions-request]]
+            [shale.resources :refer [parse-request-data]]
             [schema.core :as s]))
 
 (deftest test-parse-request-data
@@ -40,36 +40,36 @@
     (testing "schema error"
       (let [context {:request {:request-method :post :body "{}"}}]
         (is (=
+          {:message {"a" 'missing-required-key}}
           (parse-request-data :context context
-                              :schema {(s/required-key "a") s/Num})
-          {:message "{\"a\" missing-required-key}"}))))
+                              :schema {(s/required-key "a") s/Num})))))
 
     (testing "default key"
       (let [context {:request {:request-method :post :body "{\"a\": 1}"}}]
         (is (=
           (parse-request-data :context context)
-          [false {:shale.resources/data {"a" 1}}]))))))
+          [false {:shale.resources/data {"a" 1}}]))))
 
-(deftest test-->sessions-resource
+    (testing "request schema keyword coercion"
+      (let [context {:request
+                     {:request-method :patch
+                      :body "{\"a\": 1, \"b\": 2, \"c\": 3, \"d\":[\"z\"]}"}}]
+        (is (=
+          [false {:shale.resources/data {:a 1 :b 2 "c" 3 :d [:z]}}]
+          (parse-request-data :context context
+                              :schema {:a s/Int
+                                       (s/optional-key :b) s/Int
+                                       (s/required-key "c") s/Int
+                                       :d [s/Keyword]
+                                       })))))
 
-  (testing "->sessions-request"
-
-    (testing "1"
-      (let [context {:shale.resources/data {"browser_name" "phantomjs"}}
-            sessions-request {:browser-name "phantomjs"}]
-        (is (->sessions-request context) sessions-request)))
-
-    (testing "2"
-      (let [context {:shale.resources/data {"browser_name" "phantomjs"
-                                            "tags" ["walmart"]}}
-            sessions-request {:browser-name "phantomjs"
-                              :tags ["walmart"]}]
-        (is (->sessions-request context) sessions-request)))
-
-    (testing "3"
-      (let [context {:shale.resources/data {"tags" ["walmart" "logged-in"]
-                                            "reserved" false}}
-            sessions-request {:tags ["walmart" "logged-in"]
-                              :reserved false}]
-        (is (->sessions-request context) sessions-request)))
-))
+    (testing "request schema keyword case coercion"
+      (let [context {:request
+                     {:request-method :patch
+                      :body "{\"a_one\": 1, \"b_two\": 2, \"c_three\": 3}"}}]
+        (is (=
+          [false {:shale.resources/data {:a-one 1 :b-two 2 :c-three 3}}]
+          (parse-request-data :context context
+                              :schema {:a-one s/Int
+                                       :b-two s/Int
+                                       :c-three s/Int})))))))

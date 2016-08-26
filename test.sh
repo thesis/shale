@@ -11,7 +11,7 @@ export PATH="$PATH:$PWD/phantomjs/bin/"
 
 lein version
 lein compile
-lein with-profile aws uberjar
+lein uberjar
 
 mkdir resources
 cp test-config.clj resources/config.clj

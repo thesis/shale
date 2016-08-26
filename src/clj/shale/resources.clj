@@ -5,16 +5,19 @@
             [camel-snake-kebab.core :refer :all]
             [camel-snake-kebab.extras :refer [transform-keys]]
             [schema.core :as s]
+            [schema.coerce :as coerce]
             [liberator.core :refer [defresource]]
             [compojure.core :refer [context ANY GET routes]]
             [compojure.route :refer [resources not-found]]
             [hiccup.page :refer [include-js include-css html5]]
             [clojure.set :refer [rename-keys]]
+            [shale.utils :refer :all]
             [shale.logging :as logging]
             [shale.nodes :as nodes]
-            [shale.utils :refer :all]
+            [shale.proxies :as proxies]
             [shale.sessions :as sessions])
-  (:import [java.net URL]))
+  (:import java.net.URL
+           [schema.core Schema EqSchema Predicate]))
 
 (defn json-keys [m]
   (transform-keys ->snake_case_string m))
@@ -56,22 +59,79 @@
 (defn ->boolean-params-data [context]
   (name-keys (truth-from-str-vals (get-in context [:request :params]))))
 
+(defn request-data-coercion
+  "A schema.coerce inspired walker to coerce request data to a matching schema.
+
+  As well as the basic coercions (keyword -> string, string -> int) it also
+  converts snake_cased_strings to kebab-cased-keywords."
+  [schema]
+  (s/start-walker
+   (fn [sub]
+     (let [walk (s/walker sub)]
+       (fn [x]
+         (if-let [keywords (and (not (instance? schema.core.Schema sub))
+                                (map? sub)
+                                (map? x)
+                                (->> (keys sub)
+                                     (map s/explicit-schema-key)
+                                     (filter identity)))]
+           (walk (->> keywords
+                      (map (fn [k] (vec [(->snake_case_string k) k])))
+                      (into {})
+                      (rename-keys x)))
+           (cond
+             (and
+               (vector? sub)
+               (sequential? x)) (walk (vec x))
+             (and
+               (set? sub)
+               (sequential? x)) (walk (into #{} x))
+             (and
+               (instance? EqSchema sub)
+               (keyword? (.-v sub))
+               (string? x)) (walk (->kebab-case-keyword x))
+             (and
+               (instance? schema.core.Predicate sub)
+               (= (.pred-name sub) 'keyword?)
+               (string? x)) (walk (keyword x))
+            (and
+              (instance? schema.core.EnumSchema sub)
+              (every? keyword? (.vs sub))) (walk (keyword x))
+            :else (walk x))))))
+   schema))
+
 (defn parse-request-data
   "Parse JSON bodies in PUT and POST requests according to an optional schema.
-  If include-boolean-params is true, merge any boolean param variables into the
-  returned map as well."
+
+  If include-boolean-params is true, and the body data is a map, merge any
+  boolean param variables into the returned map as well."
   [& {:keys [context k include-boolean-params schema]
       :or {k ::data schema s/Any}}]
-  (when (#{:put :post} (get-in context [:request :request-method]))
+  (when (#{:put :post :patch} (get-in context [:request :request-method]))
     (try
       (if-let [body (body-as-string context)]
         (let [body-data (json/parse-string body)
               params-data (if include-boolean-params
                             (->boolean-params-data context))
-              data (merge body-data params-data)]
-          (if-let [schema-error (s/check schema data)]
-            {:message (str schema-error)}
-            [false {k data}]))
+              data (if (map? body-data)
+                     (merge body-data params-data)
+                     (if (sequential? body-data)
+                       (vec body-data)
+                       body-data))
+              coerced ((request-data-coercion schema) (if (sequential? data)
+                                                        (vec data)
+                                                        data))]
+          (if (instance? schema.utils.ErrorContainer coerced)
+            (do
+              (logging/warn
+                (format (str "Client data doesn't match schema:\n%s\n"
+                             "Schema: %s\n"
+                             "Error: %s")
+                        data
+                        schema
+                        (pretty coerced)))
+              {:message (:error coerced)})
+            [false {k coerced}]))
         {:message "Empty body."})
       (catch com.fasterxml.jackson.core.JsonParseException e
         {:message "Malformed JSON."}))))
@@ -85,13 +145,6 @@
                   "Internal server error.")]
     (jsonify {:error message})))
 
-(defn ->sessions-request
-  "Convert context to a sessions request. Merge the `reserve-after-create`
-  and deprecated `reserve` keys for older clients."
-  [context]
-  (doto (clojure-keys (get context ::data))
-    (prn "SESSION REQUEST!")))
-
 (defn ->session-pool
   [context]
   (get-in context [:request :state :session-pool]))
@@ -99,6 +152,10 @@
 (defn ->node-pool
   [context]
   (get-in context [:request :state :node-pool]))
+
+(defn ->proxy-pool
+  [context]
+  (get-in context [:request :state :proxy-pool]))
 
 (defn ->session-id
   [context]
@@ -111,22 +168,14 @@
   :malformed? #(parse-request-data
                  :context %
                  :include-boolean-params true
-                 :schema {(s/optional-key "browser_name") s/Str
-                          (s/optional-key "tags") [s/Str]
-                          (s/optional-key "node") {(s/optional-key "id")    s/Str
-                                                   (s/optional-key "url")   s/Str
-                                                   (s/optional-key "tags") [s/Str]}
-                          (s/optional-key "reserve") s/Bool
-                          (s/optional-key "reserved") s/Bool
-                          (s/optional-key "extra_desired_capabilities") {s/Any s/Any}
-                          (s/optional-key "force_create") s/Bool})
+                 :schema sessions/GetOrCreateArg)
   :handle-ok (fn [context]
                (jsonify (sessions/view-models (->session-pool context))))
   :handle-exception handle-exception
   :post! (fn [context]
            {::session (sessions/get-or-create-session
                         (->session-pool context)
-                        (->sessions-request context))})
+                        (clojure-keys (::data context)))})
   :delete! (fn [context]
              (let [immediately (get (->boolean-params-data context) "immediately")
                    destroy sessions/destroy-session
@@ -145,14 +194,12 @@
                 (str id))))
 
 (def shared-session-resource
-  {:allowed-methods [:get :put :delete]
+  {:allowed-methods [:get :patch :delete]
    :available-media-types ["application/json"]
    :known-content-type? is-json-or-unspecified?
    :malformed? #(parse-request-data
                   :context %
-                  :schema {(s/optional-key "reserved") s/Bool
-                           (s/optional-key "tags") [s/Str]
-                           (s/optional-key "current_url") s/Str})
+                  :schema [sessions/ModifyArg])
    :handle-ok (fn [context]
                 (jsonify (::session context)))
    :handle-exception handle-exception
@@ -164,7 +211,7 @@
                   (->session-id context)
                   :immediately immediately))
               {::session nil})
-   :put! (fn [context]
+   :patch! (fn [context]
            {::session
             (let [session-pool (->session-pool context)
                   id (->session-id context)
@@ -228,8 +275,7 @@
   :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-request-data
                  :context %
-                 :schema {(s/optional-key "url") s/Str
-                          (s/optional-key "tags") [s/Str]})
+                 :schema {(s/optional-key :tags) [s/Str]})
   :handle-ok (fn [context]
                (jsonify (get context ::node)))
   :handle-exception handle-exception
@@ -240,9 +286,69 @@
            (nodes/modify-node (->node-pool context) id (clojure-keys
                                                          (::data context)))})
   :exists? (fn [context]
-             (let [node (nodes/view-model (->node-pool context) id)]
-               (if-not (nil? node)
-                 {::node node}))))
+             (let [node-pool (->node-pool context)]
+               (if (nodes/view-model-exists? node-pool id)
+                 (if-let [node (nodes/view-model node-pool id)]
+                   {::node node})))))
+
+(s/defschema ProxyCreate
+  {(s/optional-key :active)                s/Bool
+   (s/optional-key :public-ip)             s/Str
+   (s/optional-key :shared)                s/Bool
+   (s/required-key :private-host-and-port) s/Str
+   (s/required-key :type)                  (s/enum :socks5 :http)})
+
+(s/defschema ProxyModification
+  {(s/optional-key :active) s/Bool
+   (s/optional-key :shared) s/Bool})
+
+(defresource proxy-resource [id]
+  :allowed-methods [:get :delete :patch]
+  :available-media-types ["application/json"]
+  :known-content-type? is-json-or-unspecified?
+  :malformed? (fn [context]
+                (parse-request-data
+                  :context context
+                  :schema ProxyModification))
+  :handle-ok (fn [context]
+               (jsonify (get context ::proxy)))
+  :handle-exception handle-exception
+  :delete! (fn [context]
+             (proxies/delete-proxy! (->proxy-pool context) id))
+  :patch! (fn [context]
+            (proxies/modify-proxy! (->proxy-pool context)
+                                   id
+                                   (clojure-keys (::data context))))
+  :exists? (fn [context]
+             (let [proxy-pool (->proxy-pool context)]
+               (if (proxies/view-model-exists? proxy-pool id)
+                 (if-let [prox (proxies/view-model proxy-pool id)]
+                   {::proxy prox})))))
+
+(defresource proxies-resource [params]
+  :allowed-methods [:get :post]
+  :available-media-types ["application/json"]
+  :known-content-type? is-json-or-unspecified?
+  :malformed? (fn [context]
+                (parse-request-data
+                  :context context
+                  :schema ProxyCreate))
+  :respond-with-entity? (fn [context]
+                          (contains? context ::proxy))
+  :post! (fn [context]
+           (let [prox-spec (-> (::data context)
+                               clojure-keys
+                               (update-in [:type]
+                                          #(if-not (nil? %)
+                                             (keyword %))))]
+             {::proxy (proxies/create-proxy!
+                        (->proxy-pool context)
+                        prox-spec)}))
+  :handle-created (fn [context]
+                    (jsonify (::proxy context)))
+  :handle-ok (fn [context]
+               (jsonify (proxies/view-models (->proxy-pool context))))
+  :handle-exception handle-exception)
 
 (def mount-target
   [:div#app
@@ -288,5 +394,9 @@
     (ANY ["/nodes/:id", :id #"(?:[a-zA-Z0-9\-])+"]
       [id]
       (node-resource id))
+    (ANY "/proxies" {params :params} proxies-resource)
+    (ANY ["/proxies/:id", :id #"(?:[a-zA-Z0-9\-])+"]
+         [id]
+         (proxy-resource id))
     (resources "/")
     (not-found "Not Found")))

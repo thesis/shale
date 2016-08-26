@@ -80,7 +80,7 @@
       (is (= 1 (session-diff #(shale.client/get-or-create-session!
                              {:browser-name "phantomjs"})))))
 
-    (testing "that another session isn't created based on browser"
+    (testing "another session isn't created based on browser name"
       (is (= 0 (session-diff #(shale.client/get-or-create-session!
                              {:browser-name "phantomjs"})))))
 
@@ -90,15 +90,16 @@
                           {:browser-name "phantomjs"
                            :tags ["some-unknown-tag"]}))]
         (is (= 3 (session-diff
-                   #(logged-in-sessions-fixture test-fn))))))
-    (testing "that sessions are created on the specified node"
+                   #(logged-in-sessions-fixture test-fn))))))))
 
+(deftest ^:integration test-get-or-create-with-nodes
+  (testing "sessions are created on the specified node"
       (let [node-id (-> (shale.client/nodes)
                         first
                         (get "id"))]
         ; clear all the old sessions
         (shale.client/destroy-sessions!)
-        ; and get three new onws on this node
+        ; and get three new ones on this node
         (dotimes [_ 3]
           (shale.client/get-or-create-session!
             {:browser-name "phantomjs"
@@ -107,7 +108,24 @@
              :reserved false}))
         (is (= 3 (count
                    (filter #(= (get-in % ["node" "id"]) node-id)
-                           (shale.client/sessions)))))))))
+                           (shale.client/sessions))))))))
+
+(deftest ^:integration test-get-or-create-with-proxies
+  (testing "sessions are created with the specified proxy"
+      (let [host-and-port "localhost:1234"
+            proxy-req [:and [[:private-host-and-port host-and-port]
+                             [:type :socks5]]]]
+        (shale.client/destroy-sessions!)
+        (dotimes [_ 3]
+          (shale.client/get-or-create-session!
+            {:browser-name "phantomjs"
+             :prox proxy-req}))
+        (is (= 1 (count (shale.client/sessions))))
+        (prn "SESSION WITH PROXY!" (first (shale.client/sessions)))
+        (is (some? (get (first (shale.client/sessions)) "proxy")))
+        (is (= host-and-port
+               (get-in (first (shale.client/sessions))
+                       ["proxy" "private_host_and_port"]))))))
 
 (deftest ^:integration test-force-create
   (testing "force create a new session"
@@ -120,16 +138,19 @@
       (is (= 1 (session-diff test-fn))))))
 
 (deftest ^:integration test-tag-modification
-  (testing "setting tags"
+  (testing "adding tags"
     (let [test-fn (fn []
                     (let [session (first (shale.client/sessions))
                           id (get session "id")]
-                      (shale.client/modify-session! id {:tags ["test-tag"]})
+                      (shale.client/modify-session! id [[:change-tag
+                                                        {:tag "test-tag"
+                                                         :action :add}]])
                       id))]
       (is (= "test-tag" (-> (logged-in-sessions-fixture test-fn)
                             shale.client/session
                             (get "tags")
-                            first))))))
+                            sort
+                            last))))))
 
 (deftest ^:integration test-reservations
   (testing "releasing a session"
@@ -145,6 +166,18 @@
                     {:reserve true
                      :browser-name "phantomjs"})]
       (is (get session "reserved")))))
+
+(deftest ^:integration test-proxies
+  (testing "creating a proxy"
+    (let [host-and-port "127.0.0.1:6789"
+          prox (shale.client/create-proxy!
+                 {:host-and-port host-and-port
+                  :type "socks5"})]
+      (is (= host-and-port (get prox "private_host_and_port")))
+      (is (= [prox] (->> (shale.client/proxies)
+                         (filter #(= (get % "id")
+                                     (get prox "id")))
+                         vec))))))
 
 (deftest ^:integration test-webdriver-macro
   (testing "that the with-webdriver* macro properly releases its session"

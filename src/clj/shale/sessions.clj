@@ -1,7 +1,7 @@
 (ns shale.sessions
   (:require [clojure.set :refer [rename-keys]]
             [clojure.core.match :refer [match]]
-            [clojure.walk :refer :all]
+            [clojure.walk :refer [postwalk]]
             [clj-webdriver.remote.driver :as remote-webdriver]
             [clj-webdriver.taxi :refer [current-url quit]]
             [clj-http.client :as client]
@@ -11,28 +11,32 @@
             [camel-snake-kebab.core :refer :all]
             [camel-snake-kebab.extras :refer [transform-keys]]
             [slingshot.slingshot :refer [try+ throw+]]
+            [com.stuartsierra.component :as component]
+            [io.aviso.ansi :refer [bold-red bold-green bold-blue]]
             [shale.logging :as logging]
-            [shale.nodes :as nodes :refer [NodeView]]
+            [shale.nodes :as nodes]
+            [shale.proxies :as proxies]
             [shale.utils :refer :all]
-            [shale.redis :refer :all]
+            [shale.redis :as redis]
             [shale.selenium :as selenium]
-            [shale.webdriver :refer [new-webdriver
+            [shale.webdriver :refer [add-prox-to-capabilities
+                                     new-webdriver
                                      resume-webdriver
                                      to-async
-                                     webdriver-capabilities]]
-            [com.stuartsierra.component :as component]
-            [io.aviso.ansi :refer [bold-red bold-green bold-blue]])
+                                     webdriver-capabilities]])
   (:import org.openqa.selenium.WebDriverException
            org.openqa.selenium.remote.UnreachableBrowserException
            org.xbill.DNS.Type
            org.apache.http.conn.ConnectTimeoutException
            java.net.ConnectException
            java.net.SocketTimeoutException
-           java.util.concurrent.ExecutionException))
+           java.util.concurrent.ExecutionException
+           shale.nodes.NodePool))
 
 (s/defrecord SessionPool
   [redis-conn
    node-pool
+   proxy-pool
    logger
    webdriver-timeout
    start-webdriver-timeout]
@@ -54,35 +58,36 @@
 
 (s/defschema SessionView
   "A session, as presented to library users."
-  {(s/required-key :id)             s/Str
-   (s/required-key :webdriver-id)   s/Str
-   (s/required-key :tags)         #{s/Str}
-   (s/required-key :reserved)       s/Bool
-   (s/required-key :current-url)   (s/maybe s/Str)
-   (s/required-key :browser-name)   s/Str
-   (s/required-key :node)           NodeView
-   (s/required-key :capabilities)   {s/Keyword s/Any}})
+  {:id             s/Str
+   :webdriver-id  (s/maybe s/Str)
+   :tags         #{s/Str}
+   :reserved       s/Bool
+   :current-url   (s/maybe s/Str)
+   :browser-name   s/Str
+   :node           nodes/NodeView
+   :proxy         (s/maybe proxies/ProxyView)
+   :capabilities   {s/Keyword s/Any}})
 
 (s/defschema TagChange
   "Add/remove a session/node tag"
-  {:resource (s/either (literal-pred :session) (literal-pred :node))
-   :action   (s/either (literal-pred :add) (literal-pred :remove))
-   :tag      s/Str})
+  {:action (s/enum :add :remove)
+   :tag    s/Str})
 
 (s/defschema Requirement
   "A schema for a session requirement."
   (any-pair
-    :id            s/Str
-    :session-id    s/Str
-    :session-tag   s/Str
-    :node-tag      s/Str
-    :reserved      s/Bool
-    :node-id       s/Str
-    :browser-name  s/Str
-    :current-url   s/Str
-    :not           (s/recursive #'Requirement)
-    :and           [(s/recursive #'Requirement)]
-    :or            [(s/recursive #'Requirement)]))
+    :id           s/Str
+    :tag          s/Str
+    :reserved     s/Bool
+    :browser-name s/Str
+    :current-url  s/Str
+    :webdriver-id s/Str
+    :node         nodes/NodeRequirement
+    :proxy        proxies/ProxyRequirement
+    :nil?         (s/enum :webdriver-id :current-url)
+    :not          (s/recursive #'Requirement)
+    :and          [(s/recursive #'Requirement)]
+    :or           [(s/recursive #'Requirement)]))
 
 (defn maybe-bigdec [x]
   (try (bigdec x) (catch NumberFormatException e nil)))
@@ -96,70 +101,8 @@
   {:weight  DecString
    :require Requirement})
 
-(s/defschema OldRequirements
-  {(s/optional-key :browser-name)  s/Str
-   (s/optional-key :reserved)      s/Bool
-   (s/optional-key :tags)          [s/Str]
-   (s/optional-key :node)          {(s/optional-key :id)    s/Str
-                                    (s/optional-key :url)   s/Str
-                                    (s/optional-key :tags) [s/Str]}})
-
-(s/defschema OldSessionViewModel
-  {:id s/Str
-   (s/optional-key :webdriver-id) s/Str
-   (s/optional-key :reserved) s/Bool
-   (s/optional-key :tags) #{s/Str}
-   (s/optional-key :browser-name) s/Str
-   (s/optional-key :current-url) (s/maybe s/Str)
-   (s/optional-key :node) {(s/optional-key :id) s/Str
-                           (s/optional-key :url) s/Str
-                           (s/optional-key :tags) [s/Str]}
-   (s/optional-key :capabilities) {s/Keyword s/Any}})
-
-(s/defschema SessionAndNode
-  {(s/optional-key :id)      s/Str
-   (s/optional-key :session) SessionInRedis
-   (s/optional-key :node)    NodeInRedis})
-
-(s/defn ^:always-validate old->new-session-model :- SessionAndNode
-  [session-model :- OldSessionViewModel]
-  (merge
-    (select-keys session-model [:id])
-    {:session (select-keys
-                session-model
-                [:tags :reserved :browser-name :current-url :webdriver-id])
-     :node (select-keys (:node session-model) [:tags :url :id])}))
-
-(defmultischema matches-requirement
-  :old (s/pair s/Any "session" OldRequirements "requirements")
-  :new (s/pair s/Any "session" Requirement "requirement"))
-
-(s/defmethod matches-requirement :old :- s/Bool
-  [session-model :- OldSessionViewModel
-   requirements :- OldRequirements]
-  (logging/debug
-    (format "Testing session %s against requirements %s."
-            session-model
-            requirements))
-  (matches-requirement
-    (old->new-session-model session-model)
-    [:and
-     (vec
-       (concat
-         (map #(vec [:session-tag %])
-              (get requirements :tags))
-         (->> [:browser-name :reserved]
-              (map #(vec [% (get requirements %)]))
-              (filter (comp not nil? second))
-              (into []))
-         (if-let [node-id
-                  (get-in requirements [:node :id])]
-           [[:node-id node-id]])
-         (map #(vec [:node-tag %])
-              (get-in requirements [:node :tags]))))]))
-
-(s/defmethod matches-requirement :new :- s/Bool
-  [session-model :- SessionAndNode
+(s/defn ^:always-validate matches-requirement :- s/Bool
+  [session-model :- SessionView
    requirement :- Requirement]
   (logging/debug
     (format "Testing session %s against requirement %s."
@@ -167,18 +110,17 @@
             requirement))
   (let [[req-type arg] requirement
         s session-model]
-    (match req-type
-           :session-tag  (some #{arg} (get-in s [:session :tags]))
-           :node-tag     (some #{arg} (get-in s [:node :tags]))
-           :id           (= arg (get-in s [:id]))
-           :webdriver-id (= arg (get-in s [:session :webdriver-id]))
-           :node-id      (= arg (get-in s [:node :id]))
-           :reserved     (= arg (get-in s [:session :reserved]))
-           :browser-name (= arg (get-in s [:session :browser-name]))
-           :current-url  (= arg (get-in s [:session :current-url]))
-           :not          (not     (matches-requirement s arg))
-           :and          (every? #(matches-requirement s %) arg)
-           :or           (some   #(matches-requirement s %) arg))))
+    (-> (match req-type
+               (:or :id :webdriver-id :reserved :browser-name :current-url)
+                 (= arg (get s req-type))
+               :tag   (some #{arg} (:tags s))
+               :node  (nodes/matches-requirement (:node s) arg)
+               :proxy (proxies/matches-requirement (:proxy s) arg)
+               :nil?  (nil? (get s arg))
+               :not   (not     (matches-requirement s arg))
+               :and   (every? #(matches-requirement s %) arg)
+               :or    (some   #(matches-requirement s %) arg))
+        boolean)))
 
 (declare view-model view-model-exists? view-models view-model-ids
          resume-webdriver-from-id destroy-session)
@@ -267,29 +209,22 @@
   "Modification to a session"
   (any-pair
     :change-tag TagChange
-    :go-to-url s/Str
-    :reserve s/Bool))
+    :go-to-url  s/Str
+    :reserve    s/Bool))
 
 (s/defn ^:always-validate save-session-tags-to-redis
   [pool :- SessionPool
    id :- s/Str
    tags]
   (car/wcar (:redis-conn pool)
-    (sset-all (session-tags-key id) tags)))
-
-(s/defn ^:always-validate save-session-node-to-redis
-  [pool :- SessionPool
-   id :- s/Str
-   node :- {s/Any s/Any}]
-  (car/wcar (:redis-conn pool)
-    (hset-all (session-node-key id) node)))
+    (redis/sset-all (redis/session-tags-key id) tags)))
 
 (s/defn ^:always-validate save-session-capabilities-to-redis
   [pool :- SessionPool
    id :- s/Str
    capabilities :- {s/Keyword s/Any}]
   (car/wcar (:redis-conn pool)
-    (hset-all (session-capabilities-key id) capabilities)))
+    (redis/hset-all (redis/session-capabilities-key id) capabilities)))
 
 (s/defn ^:always-validate save-session-diff-to-redis
   "For any key present in the session arg, write that value to redis."
@@ -297,135 +232,187 @@
    id   :- s/Str
    session]
   (car/wcar (:redis-conn pool)
-    (hset-all
-      (session-key id)
-      (select-keys session
-        [:webdriver-id :reserved :current-url :browser-name]))
+    (redis/hset-all
+      (redis/model-key redis/SessionInRedis id)
+      (merge
+        (select-keys
+          session
+          [:webdriver-id :reserved :current-url :browser-name :proxy-id])
+        (if-let [node-id (or (:node-id session) (get-in session [:node :id]))]
+          {:node-id node-id})))
     (if (contains? session :tags)
       (save-session-tags-to-redis pool id (:tags session)))
-    (if (contains? session :node)
-      (save-session-node-to-redis pool id (:node session)))
     (if (contains? session :capabilities)
       (save-session-capabilities-to-redis pool id (:capabilities session)))))
 
-(defn modify-session
-  [pool id {:keys [browser-name
-                   node
-                   reserved
-                   tags
-                   current-url
-                   webdriver-id
-                   capabilities]
-            :or {browser-name nil
-                 node nil
-                 reserved nil
-                 tags nil
-                 current-url nil
-                 webdriver-id nil
-                 capabilities {}}
-            :as modifications}]
-  (s/validate SessionPool pool)
-  (s/validate s/Str id)
+(s/defn apply-change-tag :- #{s/Str}
+  [tags   :- #{s/Str}
+   change :- TagChange]
+  (let [{:keys [action tag]} change]
+    (case action
+      :add (clojure.set/union #{tag} tags)
+      :remove (disj tags tag))))
+
+(s/defn ^:always-validate modify-session :- (s/maybe SessionView)
+  "Modify an existing session."
+  [pool          :- SessionPool
+   id            :- s/Str
+   modifications :- [ModifyArg]]
   (logging/info (format "Modifying session %s, %s" id modifications))
   (when (view-model-exists? pool id)
-    (if (or (not current-url)
-            (session-go-to-url-or-destroy-session id current-url))
-      (save-session-diff-to-redis
-        pool
-        id
-        (select-keys modifications
-          [:reserved :current-url :webdriver-id :browser-name :node :tags
-           :capabilities])))
+    (let [simple-modifications (->> modifications
+                                    (concat [[:change-tag []]])
+                                    (map #(apply hash-map %))
+                                    (apply merge-with #(if (vector? %1)
+                                                         (vec (concat %1 [%2]))
+                                                         %2)))
+          go-to-url (:go-to-url simple-modifications)
+          old-tags (set (:tags (view-model pool id)))
+          new-tags (if (contains? simple-modifications :change-tag)
+                     (reduce apply-change-tag
+                             old-tags
+                             (:change-tag simple-modifications))
+                     old-tags)
+          session-diff (merge (rename-keys simple-modifications
+                                           {:reserve :reserved
+                                            :go-to-url :current-url})
+                              (if-not (nil? new-tags)
+                                {:tags new-tags}))]
+      (if (or (not go-to-url)
+              (session-go-to-url-or-destroy-session id go-to-url))
+        (save-session-diff-to-redis pool id session-diff)))
     (view-model pool id)))
 
-(def CreateArg
-  "Session-creation args"
-  {(s/optional-key :browser-name) s/Str
-   (s/optional-key :capabilities) {}
-   (s/optional-key :node-id) s/Str})
+(s/defn ^:always-validate get-node-or-err :- nodes/NodeView
+  [pool      :- NodePool
+   node-req  :- (s/maybe nodes/NodeRequirement)]
+  (let [node (nodes/get-node pool node-req)]
+    (when (nil? node)
+      (throw
+        (ex-info "No suitable node found!"
+                 {:user-visible true :status 503})))
+    node))
 
-(defn create-session
-  [pool {:keys [browser-name
-                node
-                tags
-                extra-desired-capabilities
-                reserved
-                current-url]
-         :or {browser-name "firefox"
-              node nil
-              reserved false
-              tags []
-              extra-desired-capabilities nil
-              current-url nil}
-         :as requirements}]
-  (s/validate SessionPool pool)
-  (s/validate (s/maybe NodeView) node)
-  (logging/info (format "Creating a new session.\nRequirements: %s"
-                (str requirements)))
+(s/defschema CreateArg
+  "Session-creation args"
+  {(s/optional-key :browser-name)  s/Str
+   (s/optional-key :capabilities)  {s/Any s/Any}
+   (s/optional-key :node-require)  nodes/NodeRequirement
+   (s/optional-key :proxy-require) proxies/ProxyRequirement
+   (s/optional-key :reserved)      s/Bool
+   (s/optional-key :tags)          #{s/Keyword}})
+
+(def create-defaults
+  {:browser-name "firefox"
+   :tags #{}
+   :reserved false
+   :proxy-id nil})
+
+(s/defn ^:always-validate create-session :- SessionView
+  [pool :- SessionPool
+   options :- CreateArg]
+  (logging/info (format "Creating a new session.\nOptions: %s"
+                (pretty options)))
 
   (if (= 0 (count (nodes/nodes-under-capacity (:node-pool pool))))
     (throw
       (ex-info "All nodes are over capacity!"
                {:user-visible true :status 503})))
-  (let [node-req (merge (select-keys node [:url :tags :id])
-                        (or node {}))
-        node (nodes/get-node (:node-pool pool) node-req)
-        merged-reqs
-        (merge {:node (select-keys node [:url :id])
-                :tags tags}
-               (select-keys requirements
-                            [:browser-name
-                             :tags
-                             :current-url
-                             :reserved]))
-        defaulted-reqs merged-reqs
-        capabilities
-        (transform-keys ->camelCaseString
-                        (merge {:browser-name browser-name}
-                               extra-desired-capabilities))
-        node-url (get-in defaulted-reqs [:node :url])
-        _ (if (nil? node-url)
-            (throw
-              (ex-info "No suitable node found!"
-                       {:user-visible true :status 503})))
+  (let [{:keys [browser-name
+                capabilities
+                node-require
+                proxy-require
+                reserved
+                tags]
+         :or {node-require nil
+              proxy-require nil}
+         :as defaulted-options} (merge create-defaults options)
+        node (get-node-or-err (:node-pool pool)
+                              node-require)
+        prox (if proxy-require
+               (proxies/get-or-create-proxy!
+                 (:proxy-pool pool) proxy-require))
+        defaulted-reqs
+        (merge defaulted-options
+               {:node-id (:id node)
+                :proxy-id (:id prox)
+                :tags tags
+                :current-url nil})
+        requested-capabilities
+        (let [rekeyed (transform-keys ->camelCaseString
+                                      (merge {:browser-name browser-name}
+                                             capabilities))]
+          (if proxy-require
+            (let [[host port] (clojure.string/split
+                                (:private-host-and-port prox) #":")]
+              (add-prox-to-capabilities
+                rekeyed (:type prox) host (bigint port)))
+            rekeyed))
         id (gen-uuid)
         wd (start-webdriver!
-          node-url
-          capabilities
-          :timeout (:start-webdriver-timeout pool))
-        webdriver-id
-        (remote-webdriver/session-id wd)
-        actual-capabilities
-        (webdriver-capabilities wd)]
+             (:url node)
+             requested-capabilities
+             :timeout (:start-webdriver-timeout pool))
+        webdriver-id (remote-webdriver/session-id wd)
+        actual-capabilities (webdriver-capabilities wd)]
     (last
       (car/wcar (:redis-conn pool)
-        (car/sadd session-set-key id)
+        (car/sadd (redis/model-ids-key redis/SessionInRedis) id)
+        (save-session-diff-to-redis pool
+                                    id
+                                    (merge defaulted-reqs
+                                           {:webdriver-id webdriver-id
+                                            :capabilities actual-capabilities}))
         (car/return
-          (modify-session pool
-                          id
-                          (merge {:webdriver-id webdriver-id
-                                  :capabilities actual-capabilities}
-                                 defaulted-reqs)))))))
+          (view-model pool id))))))
 
-(def OldGetOrCreateArg
-  {(s/optional-key :browser-name)               s/Str
-   (s/optional-key :reserved)                   s/Bool
-   (s/optional-key :tags)                       [s/Str]
-   (s/optional-key :node)                       {(s/optional-key :url)   s/Str
-                                                 (s/optional-key :id)    s/Str
-                                                 (s/optional-key :tags) [s/Str]}
-   (s/optional-key :current-url)                s/Str
-   (s/optional-key :reserve)                    s/Bool
-   (s/optional-key :extra-desired-capabilities) Capabilities
-   (s/optional-key :force-create)               s/Bool})
+(s/defn ^:always-validate require->create :- CreateArg
+  "Infer session creation options from a session requirement.
 
-(s/def get-or-create-defaults :- OldGetOrCreateArg
-  {:browser-name "firefox"
-   :tags []
-   :reserved false})
+  Ignores or'd and regated requirements."
+  [req :- (s/maybe Requirement)]
+  (let [reqs [req]
+        nilled (postwalk #(if (and (sequential? %)
+                                   (some #{(first %)} [:or :not]))
+                            ::nil
+                            %)
+                         reqs)
+        filtered (postwalk #(if (sequential? %)
+                              (vec (filter (partial not= ::nil) %))
+                              %)
+                           nilled)
+        flattened (->> filtered
+                       (tree-seq #(and (sequential? %)
+                                       (not (#{:node :proxy} (first %))))
+                                 identity)
+                       (filter #(nil? (s/check Requirement %)))
+                       (filter #(and (not= (first %) :and)
+                                     (= (count %) 2)))
+                       (map (partial apply hash-map))
+                       (map #(if (contains? % :tag)
+                               (update-in % [:tag] (comp hash-set keyword))
+                               %))
+                       (apply merge-with (comp vec concat)))
+        node-req (:node flattened)
+        proxy-req (:proxy flattened)]
+    (-> flattened
+        (rename-keys {:tag :tags})
+        (as-> m
+          (if (nil? m)
+            {}
+            m)
+          (if (contains? m :tags)
+            (update-in m [:tags] (partial into #{}))
+            m))
+        (dissoc :current-url :webdriver-id :node :proxy :id)
+        (merge (if node-req {:node-require node-req})
+               (if proxy-req {:proxy-require proxy-req})))))
 
-(def GetOrCreateArg
-  "The arg to get-or-create-session."
+(s/defschema GetOrCreateArg
+  "The arg to get-or-create-session.
+
+  Note if there's no requirement, but there are creation options, creation will
+  be forced."
   {(s/optional-key :require) Requirement  ; filter criteria
    (s/optional-key :score) [Score]        ; sort ranking
    (s/optional-key :create) CreateArg     ; how to create, if creating
@@ -433,37 +420,30 @@
 
 (s/defn ^:always-validate get-or-create-session
   [pool :- SessionPool
-   arg]
-  (logging/debug (format "Getting or creating a new session.\nRequirements %s" arg))
-  (let [arg (s/validate OldGetOrCreateArg (merge get-or-create-defaults arg))]
-    (car/wcar (:redis-conn pool)
-      (car/return
-        (or
-          (if-not (:force-create arg)
-            (if-let [candidate (->> (view-models pool)
-                                    (filter
-                                      (fn [session-model]
-                                        (matches-requirement
-                                          session-model
-                                          (dissoc arg :reserve))))
-                                    first)]
-              (if (or (:reserve arg)
-                      (:current-url arg))
-                (modify-session pool
-                                (get candidate :id)
-                                (rename-keys
-                                  (select-keys arg
-                                               [:reserve
-                                                :current-url
-                                                :tags])
-                                  {:reserve :reserved}))
-                candidate)))
-          (let [reserved (or (:reserve arg)
-                             (:reserved arg))
-                create-req (-> arg
-                               (dissoc :reserve)
-                               (assoc :reserved reserved))]
-            (create-session pool create-req)))))))
+   arg  :- GetOrCreateArg]
+  (logging/debug
+    (format "Getting or creating a new session.\nRequirements %s" arg))
+  (car/wcar (:redis-conn pool)
+    (car/return
+      (let [force-create (and (contains? arg :create)
+                              (not (contains? arg :require)))
+            candidate (or
+                        (if (not force-create)
+                          (->> (view-models pool)
+                               (filter
+                                 (fn [session-model]
+                                   (matches-requirement
+                                     session-model
+                                     (:require arg))))
+                               first))
+                        (let [create (or (:create arg)
+                                         (require->create (:require arg)))]
+                          (create-session pool create)))]
+        (if-let [modifications (:modify arg)]
+          (modify-session pool
+                          (:id candidate)
+                          modifications)
+          candidate)))))
 
 (s/defn ^:always-validate destroy-webdriver!
   [pool         :- SessionPool
@@ -524,13 +504,18 @@
   (s/validate s/Str id)
   (car/wcar (:redis-conn pool)
     (logging/info (format "Destroying session %s..." id))
-    (car/watch session-set-key)
+    (car/watch (redis/model-ids-key redis/SessionInRedis))
     (when (view-model-exists? pool id)
       (let [session (view-model pool id)
+            redis-conn (:redis-conn pool)
             webdriver-id (:webdriver-id session)
             node-url (get-in session [:node :url])
-            _ (soft-delete-model! (:redis-conn pool) SessionInRedis id)
-            hard-delete #(delete-model! (:redis-conn pool) SessionInRedis id)]
+            _ (redis/soft-delete-model! redis-conn
+                                        redis/SessionInRedis
+                                        id)
+            hard-delete #(redis/delete-model! redis-conn
+                                              redis/SessionInRedis
+                                              id)]
         (destroy-webdriver! pool
                             webdriver-id
                             node-url
@@ -538,35 +523,43 @@
                             hard-delete))))
   true)
 
-(def view-model-defaults {:tags #{}
-                          :browser-name nil
-                          :reserved false
-                          :node {}
-                          :current-url nil
+(def view-model-defaults {:current-url nil
                           :webdriver-id nil})
 
-(s/defn ^:always-validate model->view-model :- SessionView
-  [model :- (s/maybe SessionInRedis)]
-  (some->> model
-           (merge view-model-defaults)))
+(s/defn ^:always-validate model->view-model :- (s/maybe SessionView)
+  [pool  :- SessionPool
+   model :- (s/maybe redis/SessionInRedis)]
+  (if-let [base (some->> model
+                         (merge view-model-defaults))]
+    (let [node (nodes/view-model (:node-pool pool)
+                                 (:node-id model))
+          prox (if-let [prox-id (:proxy-id model)]
+                 (proxies/view-model (:proxy-pool pool) prox-id))]
+      (-> base
+          (dissoc :node-id :proxy-id)
+          (assoc :node node)
+          (assoc :proxy prox)))))
 
 (s/defn ^:always-validate view-model-exists? :- s/Bool
   [pool :- SessionPool
    id   :- s/Str]
-  (model-exists? (:redis-conn pool) SessionInRedis id))
+  (redis/model-exists? (:redis-conn pool) redis/SessionInRedis id))
 
 (s/defn ^:always-validate view-model :- SessionView
   [pool :- SessionPool
    id   :- s/Str]
-  (-> (model (:redis-conn pool) SessionInRedis id)
-      model->view-model))
+  (let [redis-conn (:redis-conn pool)]
+    (car/wcar redis-conn
+              (car/return (->> (redis/model redis-conn redis/SessionInRedis id)
+                               (model->view-model pool))))))
 
 (s/defn ^:always-validate view-models :- [SessionView]
   [pool :- SessionPool]
   (let [redis-conn (:redis-conn pool)]
     (car/wcar redis-conn
       (car/return
-        (map model->view-model (models redis-conn SessionInRedis))))))
+        (map (partial model->view-model pool)
+             (redis/models redis-conn redis/SessionInRedis))))))
 
 (s/defn ^:always-validate view-model-ids :- [s/Str]
   [pool :- SessionPool]
@@ -585,8 +578,8 @@
    id   :- s/Str]
   (car/wcar (:redis-conn pool)
     (logging/debug (format "Refreshing session %s..." id))
-    (car/watch session-set-key)
-    (let [sess-key (format session-key-template id)]
+    (car/watch (redis/model-ids-key redis/SessionInRedis))
+    (let [sess-key (redis/model-key redis/SessionInRedis id)]
       (car/watch sess-key)
       (try+
         (if-let [wd (resume-webdriver-from-id
@@ -616,7 +609,7 @@
           node-pool (:node-pool pool)]
       (car/wcar redis-conn
         (logging/debug "Destroying unmanaged sessions...")
-        (car/watch session-set-key)
+        (car/watch (redis/model-ids-key redis/SessionInRedis))
 
         (let [known-webdrivers (->> (view-models pool)
                                     (map :webdriver-id)
@@ -641,7 +634,7 @@
   (let [redis-conn (:redis-conn pool)]
     (car/wcar redis-conn
               (logging/debug "Refreshing sessions...")
-              (car/watch session-set-key)
+              (car/watch (redis/model-ids-key redis/SessionInRedis))
               (doall
                 (pmap (partial refresh-session pool)
                       (or ids (view-model-ids pool))))

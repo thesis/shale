@@ -1,10 +1,14 @@
 (ns shale.handler
   (:require [cheshire [core :as json]]
-            [shale.resources :refer [assemble-routes]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [compojure.handler :refer [api]]
             [liberator.dev :as dev]
-            [com.stuartsierra.component :as component]))
+            [com.stuartsierra.component :as component]
+            [schema.core :as s]
+            [shale.resources :refer [assemble-routes]])
+  (:import shale.nodes.NodePool
+           shale.proxies.ProxyPool
+           shale.sessions.SessionPool))
 
 (defn ignore-trailing-slash
   "From https://gist.github.com/dannypurcell/8215411"
@@ -43,19 +47,25 @@
   (fn [request]
     (f (assoc request :state state))))
 
-(defn build-app [session-pool node-pool]
+(defn build-app [session-pool node-pool proxy-pool]
   (-> (assemble-routes)
-      (state-middleware {:session-pool session-pool :node-pool node-pool})
+      (state-middleware {:session-pool session-pool
+                         :node-pool node-pool
+                         :proxy-pool proxy-pool})
       (dev/wrap-trace :ui :header)
       ignore-trailing-slash
       user-visible-json-exceptions
       api
       wrap-multipart-params))
 
-(defrecord App [ring-app session-pool node-pool]
+(s/defrecord App
+  [ring-app
+   session-pool :- SessionPool
+   node-pool    :- NodePool
+   proxy-pool   :- ProxyPool]
   component/Lifecycle
   (start [cmp]
-    (let [app (build-app session-pool node-pool)]
+    (let [app (build-app session-pool node-pool proxy-pool)]
       (assoc cmp :ring-app app)))
   (stop [cmp]
     (assoc cmp :ring-app nil)))

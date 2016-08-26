@@ -1,13 +1,14 @@
 (ns shale.nodes
   (:require [clojure.set :refer [difference]]
+            [clojure.core.match :refer [match]]
             [taoensso.carmine :as car :refer (wcar)]
             [schema.core :as s]
-            [shale.logging :as logging]
-            [shale.redis :refer :all]
-            [shale.utils :refer :all]
             [clojure.walk :refer :all]
             [com.stuartsierra.component :as component]
-            [shale.node-providers :as node-providers])
+            [shale.logging :as logging]
+            [shale.node-providers :as node-providers]
+            [shale.redis :as redis]
+            [shale.utils :refer :all])
   (:import java.util.UUID
            [shale.node_providers DefaultNodeProvider AWSNodeProvider]))
 
@@ -59,17 +60,18 @@
 
 (s/defn node-ids :- [s/Str] [pool :- NodePool]
   (car/wcar (:redis-conn pool)
-    (car/smembers node-set-key)))
+    (car/smembers (redis/model-ids-key redis/NodeInRedis))))
 
-(def NodeView
+(s/defschema NodeView
   "A node, as presented to library users."
-  {(s/optional-key :id)           s/Str
-   (s/optional-key :url)          s/Str
-   (s/optional-key :tags)        [s/Str]
-   (s/optional-key :max-sessions) s/Int})
+  {:id           s/Str
+   :url          s/Str
+   :tags         #{s/Str}
+   :max-sessions s/Int})
 
-(s/defn ->NodeView [id :- s/Str
-                    from-redis :- NodeInRedis]
+(s/defn ->NodeView :- NodeView
+  [id :- s/Str
+   from-redis :- redis/NodeInRedis]
   (->> from-redis
        (merge {:id id})
        keywordize-keys))
@@ -78,7 +80,7 @@
   "Given a node pool, get a view model from Redis."
   [pool :- NodePool
    id   :- s/Str]
-  (let [m (model (:redis-conn pool) NodeInRedis id)]
+  (let [m (redis/model (:redis-conn pool) redis/NodeInRedis id)]
     (->NodeView id m)))
 
 (s/defn view-models :- [NodeView]
@@ -91,46 +93,58 @@
    url  :- s/Str]
   (first (filter #(= (% :url) url) (view-models pool))))
 
+(s/defn ^:always-validate view-model-exists? :- s/Bool
+  [pool :- NodePool
+   id   :- s/Str]
+  (redis/model-exists? (:redis-conn pool) redis/NodeInRedis id))
+
 (s/defn modify-node :- NodeView
   "Modify a node's url or tags in Redis."
-  [pool id {:keys [url tags]
-            :or {:url nil
-                 :tags nil}}]
+  [pool :- NodePool
+   id   :- s/Str
+   {:keys [url tags max-sessions]
+    :or {url nil
+         tags nil
+         max-sessions nil}
+    :as node}]
   (last
     (car/wcar (:redis-conn pool)
-      (let [node-key (node-key id)
-            node-tags-key (node-tags-key id)]
-        (if url (->> url
-                     str
-                     (car/hset node-key :url)))
-        (if tags (sset-all node-tags-key tags))
+      (let [node-key (redis/model-key redis/NodeInRedis id)
+            node-tags-key (redis/node-tags-key id)]
+        (redis/hset-all node-key
+                        (merge {}
+                               (if url {:url (str url)})
+                               (if max-sessions {:max-sessions max-sessions})))
+        (when tags (redis/sset-all node-tags-key tags))
         (car/return (view-model pool id))))))
 
-(s/defn create-node :- NodeView
+(s/defn ^:always-validate create-node :- NodeView
   "Create a node in a given pool."
-  [pool {:keys [url tags]
-         :or {:tags []}}]
+  [pool :- NodePool
+   {:keys [url tags max-sessions]
+    :or {tags #{}
+         max-sessions (:default-session-limit pool)}}]
   (last
     (car/wcar (:redis-conn pool)
       (let [id (gen-uuid)
-            node-key (node-key id)]
-        (car/sadd node-set-key id)
-        (modify-node pool id {:url url :tags tags})
-        (car/return (view-model pool id))))))
+            node-key (redis/model-key redis/NodeInRedis id)]
+        (car/sadd (redis/model-ids-key redis/NodeInRedis) id)
+        (car/return (modify-node pool id {:url url
+                                          :tags tags
+                                          :max-sessions max-sessions}))))))
 
-(s/defn destroy-node
+(s/defn ^:always-validate destroy-node
   [pool :- NodePool
    id   :- s/Str]
   (car/wcar (:redis-conn pool)
-    (car/watch node-set-key)
+    (car/watch (redis/model-ids-key redis/NodeInRedis))
     (try
-      (let [url (get (view-model pool id) :url)]
+      (let [url (:url (view-model pool id))]
         (if (some #{url} (node-providers/get-nodes (:node-provider pool)))
           (node-providers/remove-node (:node-provider pool) url)))
       (finally
-        (car/srem node-set-key id)
-        (car/del (node-key id))
-        (car/del (node-tags-key id)))))
+        (redis/delete-model! redis/NodeInRedis id)
+        (car/del (redis/node-tags-key id)))))
   true)
 
 (defn ^:private to-set [s]
@@ -163,47 +177,60 @@
                        (difference registered-nodes nodes))))))
     true))
 
-(def NodeRequirements
-  {(s/optional-key :url)   s/Str
-   (s/optional-key :tags) [s/Str]
-   (s/optional-key :id)    s/Str})
+(s/defschema NodeRequirement
+  "A schema for a node requirement."
+  (any-pair
+    :id  s/Str
+    :tag s/Str
+    :url s/Str
+    :not (s/recursive #'NodeRequirement)
+    :and [(s/recursive #'NodeRequirement)]
+    :or  [(s/recursive #'NodeRequirement)]))
 
 (s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
                                                   node-id :- s/Str]
-  (->> (models (:redis-conn pool) SessionInRedis :include-soft-deleted? true)
-       (filter #(= node-id (:node-id %)))))
+  (let [redis-conn (:redis-conn pool)]
+    (->> (redis/models redis-conn
+                       redis/SessionInRedis
+                       :include-soft-deleted? true)
+         (filter #(= node-id (:node-id %))))))
 
 (s/defn ^:always-validate raw-session-count [pool    :- NodePool
                                              node-id :- s/Str]
   (count (raw-sessions-with-node pool node-id)))
 
-(s/defn nodes-under-capacity
+(s/defn ^:always-validate nodes-under-capacity
   "Nodes with available capacity."
   [pool :- NodePool]
   (let [session-limit (:default-session-limit pool)]
     (filter #(< (raw-session-count pool (:id %)) session-limit)
             (view-models pool))))
 
-(s/defn matches-requirements :- s/Bool
-  [model        :- NodeView
-   requirements :- NodeRequirements]
-  (and
-    (if (contains? requirements :id)
-      (apply = (map :id [requirements model]))
-      true)
-    (if (contains? requirements :url)
-      (apply = (map :url [requirements model]))
-      true)
-    (if (contains? requirements :tags)
-      (apply clojure.set/subset?
-             (map :tags [requirements model]))
-      true)))
+(s/defn ^:always-validate matches-requirement :- s/Bool
+  [model       :- NodeView
+   requirement :- (s/maybe NodeRequirement)]
+  (logging/debug
+    (format "Testing node %s against requirement %s."
+            model
+            requirement))
+  (if requirement
+    (let [[req-type arg] requirement
+          n model]
+      (-> (match req-type
+                 :tag (some #{arg} (:tags n))
+                 :id  (= arg (:id n))
+                 :url (= arg (:url n))
+                 :not (not     (matches-requirement n arg))
+                 :and (every? #(matches-requirement n %) arg)
+                 :or  (some   #(matches-requirement n %) arg))
+          boolean))
+    true))
 
-(s/defn get-node :- (s/maybe NodeView)
-  [pool         :- NodePool
-   requirements :- NodeRequirements]
+(s/defn ^:always-validate get-node :- (s/maybe NodeView)
+  [pool        :- NodePool
+   requirement :- (s/maybe NodeRequirement)]
   (try
     (rand-nth
-      (filter #(matches-requirements % requirements)
+      (filter #(matches-requirement % requirement)
               (nodes-under-capacity pool)))
     (catch IndexOutOfBoundsException e)))

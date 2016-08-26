@@ -6,11 +6,12 @@
             [com.stuartsierra.component :as component]
             [system.components.repl-server :refer [new-repl-server]]
             [shale.configurer :refer [get-config]]
-            [shale.periodic :as periodic]
-            [shale.nodes :as nodes]
-            [shale.sessions :as sessions]
             [shale.handler :as handler]
-            [shale.logging :as logging])
+            [shale.logging :as logging]
+            [shale.nodes :as nodes]
+            [shale.periodic :as periodic]
+            [shale.proxies :as proxies]
+            [shale.sessions :as sessions])
   (:import clojure.lang.IPersistentMap
            clojure.lang.IRecord
            org.openqa.selenium.Platform
@@ -46,17 +47,16 @@
 
 (defn get-app-system-keyvals [conf]
   [:config conf
-   :redis (get-redis-config conf)
+   :redis-conn (get-redis-config conf)
    :logger (component/using (logging/new-logger) [:config])
    :node-pool (component/using (nodes/new-node-pool conf)
-                               {:redis-conn :redis
-                                :logger :logger})
+                               [:redis-conn :logger ])
    :session-pool (component/using (sessions/new-session-pool conf)
-                                  {:redis-conn :redis
-                                   :node-pool :node-pool
-                                   :logger :logger})
+                                  [:redis-conn :node-pool :proxy-pool :logger])
+   :proxy-pool (component/using (proxies/new-proxy-pool)
+                                [:config :redis-conn :logger])
    :app (component/using (handler/new-app)
-                         [:session-pool :node-pool :logger])])
+                         [:session-pool :node-pool :proxy-pool :logger])])
 
 (defn get-app-system [conf]
   (keyvals->system (get-app-system-keyvals conf)))

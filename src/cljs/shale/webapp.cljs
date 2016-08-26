@@ -171,7 +171,17 @@
         (str "A session identified by id."
              "Accepts GET, PUT, & DELETE.")]
       [:li (a-href-text "/sessions/refresh")
-        "POST to refresh all sessions."]]])
+        (str "POST to refresh all sessions. This shuldn't be necessary in "
+        "production since refreshes are scheduled regularly.")]
+      [:li (a-href-text "/nodes")
+        "Active Selenium nodes"]
+      [:li (a-href-text "/nodes/:id")
+        (str "A node identified by id."
+             "Accepts GET, PUT, & DELETE.")]
+      [:li (a-href-text "/nodes/refresh")
+        "POST to refresh all nodes."]
+      [:li (a-href-text "/proxies")
+        "Proxies available for use with new sessions."]]])
 
 (defn management-page []
   [management-page-header

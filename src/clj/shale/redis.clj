@@ -2,6 +2,7 @@
   (:require [clojure.walk :refer [keywordize-keys]]
             [taoensso.carmine :as car :refer (wcar)]
             [schema.core :as s]
+            [schema.coerce :as coerce]
             [shale.utils :refer :all]))
 
 (defn hset-all [k m]
@@ -16,12 +17,6 @@
 ;; in-database models
 (def redis-key-prefix "_shale")
 
-(def session-set-key
-  (apply str (interpose "/" [redis-key-prefix "sessions"])))
-
-(def session-key-template
-  (apply str (interpose "/" [redis-key-prefix "sessions" "%s"])))
-
 (def session-tags-key-template
   (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "tags"])))
 
@@ -30,9 +25,6 @@
 
 (def session-capabilities-key-template
   (apply str (interpose "/" [redis-key-prefix "sessions" "%s" "capabilities"])))
-
-(defn session-key [session-id]
-  (format session-key-template session-id))
 
 (defn session-tags-key [session-id]
   (format session-tags-key-template session-id))
@@ -43,17 +35,8 @@
 (defn session-capabilities-key [session-id]
   (format session-capabilities-key-template session-id))
 
-(def node-set-key
-  (apply str (interpose "/" [redis-key-prefix "nodes"])))
-
-(def node-key-template
-  (apply str (interpose "/" [redis-key-prefix "nodes" "%s"])))
-
 (def node-tags-key-template
   (apply str (interpose "/" [redis-key-prefix "nodes" "%s" "tags"])))
-
-(defn node-key [id]
-  (format node-key-template id))
 
 (defn node-tags-key [id]
   (format node-tags-key-template id))
@@ -114,23 +97,23 @@
 (defmodel SessionInRedis
   "A session, as represented in redis."
   :model-name "sessions"
-  {(s/optional-key :id)             s/Str
-   (s/optional-key :webdriver-id)   (s/maybe s/Str)
-   (s/optional-key :tags)           #{s/Str}
-   (s/optional-key :reserved)       s/Bool
-   (s/optional-key :current-url)    (s/maybe s/Str)
-   (s/optional-key :browser-name)   s/Str
-   (s/optional-key :node)           {:id s/Str
-                                     s/Any s/Any}
-   (s/optional-key :capabilities)   {s/Keyword s/Any}})
+  {:id             s/Str
+   :webdriver-id   (s/maybe s/Str)
+   :tags           #{s/Str}
+   :reserved       s/Bool
+   :current-url    (s/maybe s/Str)
+   :browser-name   s/Str
+   :node-id        s/Str
+   :proxy-id       (s/maybe s/Str)
+   :capabilities   {s/Keyword s/Any}})
 
 (defmodel NodeInRedis
   "A node, as represented in redis."
   :model-name "nodes"
-  {(s/optional-key :id)             s/Str
-   (s/optional-key :url)            s/Str
-   (s/optional-key :max-sessions)   s/Int
-   (s/optional-key :tags)         #{s/Str}})
+  {:id             s/Str
+   :url            s/Str
+   :tags         #{s/Str}
+   :max-sessions   s/Int})
 
 (s/defschema IPAddress
   (s/pred is-ip?))
@@ -138,23 +121,38 @@
 (defmodel ProxyInRedis
   "A proxy, as represented in redis."
   :model-name "proxies"
-  {(s/optional-key :public-ip) IPAddress
-   :type                       (s/enum :socks5 :http)
-   :private-host-and-port      s/Str
-   (s/optional-key :active)    s/Bool})
+  {:id                    s/Str
+   :public-ip             (s/maybe IPAddress)
+   :type                  (s/enum :socks5 :http)
+   :private-host-and-port s/Str
+   :active                s/Bool
+   :shared                s/Bool})
 
 ;; model fetching
-(defn model-key [model-schema id]
-  (clojure.string/join "/" [(:redis-key (meta model-schema)) id]))
 
-(defn model-ids-key [model-schema]
+(s/defn ^:always-validate model-ids-key :- s/Str
+  "Return the key containing all IDs of a particular model in Redis.
+
+  This is useful, for example, to watch when we need atomicity across model
+  records."
+  [model-schema]
   (:redis-key (meta model-schema)))
 
-(defn ^:private model-ids [redis-conn model-schema]
+(s/defn ^:always-validate model-key :- s/Str
+  [model-schema
+   id :- s/Str]
+  (clojure.string/join "/" [(model-ids-key model-schema) id]))
+
+(s/defn ^:always-validate model-ids :- [s/Str]
+  "Return all "
+  [redis-conn model-schema]
   (wcar redis-conn
     (car/smembers (model-ids-key model-schema))))
 
-(defn model-exists? [redis-conn model-schema id]
+(s/defn ^:always-validate model-exists? :- s/Bool
+  [redis-conn
+   model-schema
+   id :- s/Str]
   (not (nil? (some #{id} (model-ids redis-conn model-schema)))))
 
 (defn is-map-type?
@@ -162,6 +160,17 @@
   behavior of map?."
   [m]
   (and (map? m) (not (record? m))))
+
+(defn coerce-model
+  [model-schema data]
+  (let [coercer (coerce/coercer model-schema coerce/string-coercion-matcher)
+        coerced (coercer data)]
+    (when (instance? schema.utils.ErrorContainer coerced)
+      (throw (ex-info "Cannot coerce Redis model"
+                      {:schema model-schema
+                       :data data
+                       :error coerced})))
+    coerced))
 
 (defn model
   "Return a model from a Redis key given a particular schema.
@@ -181,13 +190,19 @@
   [redis-conn model-schema id]
   (let [set-keys (->> model-schema
                       (keys-with-vals-matching-pred set?)
-                      (map (comp name :k)))
+                      (map #(name (if (keyword? %)
+                                    %
+                                    (:k %)))))
         list-keys (->> model-schema
                        (keys-with-vals-matching-pred sequential?)
-                       (map (comp name :k)))
+                       (map #(name (if (keyword? %)
+                                     %
+                                     (:k %)))))
         map-keys (->> model-schema
                       (keys-with-vals-matching-pred is-map-type?)
-                      (map (comp name :k)))
+                      (map #(name (if (keyword? %)
+                                    %
+                                    (:k %)))))
         k (model-key model-schema id)]
     (last
       (wcar redis-conn
@@ -219,7 +234,8 @@
                  (filter #(not (.startsWith (key %) redis-key-prefix)))
                  (into {})
                  keywordize-keys
-                 (merge {:id id}))))))))
+                 (merge {:id id})
+                 (coerce-model model-schema))))))))
 
 (defn soft-delete-model!
   "Add a flag to a Redis model to signify a \"soft delete\".
@@ -232,9 +248,11 @@
       (car/watch ids-key)
       (car/hset m-key soft-delete-sub-key true))))
 
-(defn delete-model!
+(s/defn delete-model!
   "Hard delete a model from Redis."
-  [redis-conn model-schema id]
+  [redis-conn
+   model-schema
+   id :- s/Str]
   (let [m-key (model-key model-schema id)
         ids-key (model-ids-key model-schema)]
     (wcar redis-conn
