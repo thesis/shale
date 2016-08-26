@@ -73,8 +73,10 @@ machine running shale.
 
 #### Get or create a new session
 
+Requirements are specified in a format similar to S-expressions.
+
 ```bash
-curl -d '{"browser_name":"phantomjs"}' -XPOST \
+curl -d '{"require": ["browser_name", "phantomjs"]}' -XPOST \
      http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
@@ -108,8 +110,8 @@ curl http://localhost:5000/sessions/
 #### Create a new session with tags
 
 ```bash
-curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
-     -XPOST http://localhost:5000/sessions/?force_create=True \
+curl -d '{"create": {"browser_name":"phantomjs", "tags":["walmart"]}}' \
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
 
@@ -126,8 +128,9 @@ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 #### Get or create a new reserved session with tags
 
 ```bash
-curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
-     -XPOST http://localhost:5000/sessions/?reserve=True \
+curl -d '{"require": ["and [["browser_name", "phantomjs"] ["tag", "walmart"]]],
+          "modify": [["reserve", true]]}' \
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
 
@@ -144,8 +147,8 @@ curl -d '{"browser_name":"phantomjs", "tags":["walmart"]}' \
 #### Create a session on a particular node
 
 ```bash
-curl -d '{"browser_name":"phantomjs", "node":{"id": "<node id>"}}' \
-     -XPOST http://localhost:5000/sessions/?force_create=True \
+curl -d '{"create": {"browser_name":"phantomjs", "node":{"id": "<node id>"}}}' \
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
 
@@ -156,14 +159,17 @@ local storage, or any other settings exposed by Selenium's
 `DesiredCapabilities`.
 
 ```bash
-curl -d '{"browser_name":"chrome", "extra_desired_capabilities": {"chromeOptions": {"args": ["--proxy-server=socks5://<host>:<port>", "--disable-plugins","--disable-local-storage"]}}' \
-     -XPOST http://localhost:5000/sessions/?force_create=True \
+curl -d '{"create": {"browser_name":"chrome", "extra_desired_capabilities": {"chromeOptions": {"args": ["--proxy-server=socks5://<host>:<port>", "--disable-plugins","--disable-local-storage"]}}}' \
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
 
 Note, though, that there are better ways to manage session proxies!
 
 #### Unreserve a session and add a tag
+
+PATCH accepts an array of modifications, including `change_tag`, `reserve`, and
+`go_to_url`.
 
 ```bash
 curl -d '[["change_tag", {"action": "add", "tag":"walmart"}], ["reserve", true]]' \
@@ -264,19 +270,19 @@ curl http://localhost:5000/proxies/
 #### Create a Chrome session with a new proxy
 
 ```bash
-curl -d '{"browser_name":"chrome", "proxy": {"type": "socks5", "private_host_and_port": "<host>:<port>", "shared": true}}'
-     -XPOST http://localhost:5000/sessions/?force_create=True \
+curl -d '{"create": {"browser_name":"chrome", "proxy": {"type": "socks5", "private_host_and_port": "<host>:<port>", "shared": true}}}'
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
 
 If the proxy hasn't been seen before, it will be recorded as a candidate for use
 by other sessions. To avoid that behavior, set `"shared": false`.
 
-#### Create a Chrome session with an existing proxy
+#### Get or create a Chrome session with an existing proxy
 
 ```bash
-curl -d '{"browser_name":"chrome", "proxy": {"id":"f7c64a2c-595d-434c-80f0-15c9751ddcc8"}}'
-     -XPOST http://localhost:5000/sessions/?force_create=True \
+curl -d '{"require": ["and" [["browser_name", "chrome"] ["proxy", ["id", "f7c64a2c-595d-434c-80f0-15c9751ddcc8"]]]]}'
+     -XPOST http://localhost:5000/sessions/ \
      --header "Content-Type:application/json"
 ```
 
