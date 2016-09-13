@@ -1,4 +1,4 @@
-(defproject shale "0.3.0-SNAPSHOT"
+(defproject shale "0.3.0"
   :description "A Clojure-backed Selenium hub replacement"
   :url "https://github.com/cardforcoin/shale"
   :dependencies [[org.clojure/clojure "1.7.0"]
