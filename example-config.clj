@@ -26,6 +26,13 @@
  :node-refresh-delay 1000
  ;; the number of milliseconds between each session refresh
  :session-refresh-delay 200
+ ;; any initial proxies that should be added on startup. if they're already
+ ;; in redis, they won't be modified
+ :proxy-list [{:public-ip "8.8.8.8",
+               :host "127.0.0.1",
+               :port 1234,
+               :type :socks5
+               :shared true}]
  ;; optionally provide redis connection details suitable for use by carmine
  ;; eg http://ptaoussanis.github.io/carmine/taoensso.carmine.html#var-wcar
  ;; if not provided, the defaults will be used

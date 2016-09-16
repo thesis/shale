@@ -8,12 +8,8 @@
             [shale.redis :as redis]
             [shale.utils :refer [gen-uuid any-pair]]))
 
-; create a proxy pool object that gets the initial proxies from config
-; - requires config + redis conn + session pool
-; eventually, health checks that we run periodically to flag something as active / not active?
-;; eh, that requires shale to have access to the proxies
-
-(declare modify-proxy! view-model-exists? view-model)
+(declare modify-proxy! view-model-exists? view-model view-models ProxySpec
+         create-proxy!)
 
 (s/defrecord ProxyPool
   [config
@@ -22,8 +18,24 @@
   component/Lifecycle
   (start [cmp]
     (logging/info "Starting proxy pool...")
-    ;; TODO if proxies in config aren't in Redis, put them there
+    ;; if proxies in config aren't in Redis, put them there
     ;; if they are, don't modify eg availability
+    (let [proxies (or (:proxy-list config) [])
+          _ (do
+              (logging/info "Configuring proxy pool...")
+              (doall (map #(s/validate ProxySpec %) proxies)))
+          existing (->> (view-models  cmp)
+                        (map #(select-keys % [:host :port]))
+                        (into #{}))
+          new-proxies (filter (fn [p]
+                                (not (some existing
+                                           (select-keys p [:host :port]))))
+                              proxies)]
+      (when (> (count new-proxies) 0)
+        (logging/info "Creating proxies...")
+        (logging/info new-proxies)
+        (doall
+          (map (partial create-proxy! cmp) new-proxies))))
     cmp)
   (stop [cmp]
     (logging/info "Stopping proxy pool...")
