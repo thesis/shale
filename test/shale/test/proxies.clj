@@ -55,10 +55,14 @@
 (deftest ^:integration test-creation-and-deletion
   (testing "proxy creation"
     (let [pool (:proxy-pool @system)
-          spec (select-keys base-proxy [:type :host :port])]
+          spec (-> (select-keys base-proxy [:type :host :port])
+                   (assoc :tags #{"example" "tag"}))]
       (is 0 (count (proxies/view-models pool)))
       (proxies/create-proxy! pool spec)
-      (is 1 (count (proxies/view-models pool)))))
+      (is 1 (count (proxies/view-models pool)))
+      (is (= spec (-> (proxies/view-models pool)
+                      first
+                      (select-keys [:type :host :port :tags]))))))
 
   (testing "proxy deletion"
     (let [pool (:proxy-pool @system)
