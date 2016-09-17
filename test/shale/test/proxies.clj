@@ -40,6 +40,16 @@
                 [:port (:port base-proxy)]]]]
       (is (= (select-keys base-proxy
                           [:shared :active :type :host :port :tags])
+             (proxies/require->spec req)))))
+  (testing "tags"
+    (let [req [:and
+               [[:type (:type base-proxy)]
+                [:host (:host base-proxy)]
+                [:port (:port base-proxy)]
+                [:tag "example"]]]]
+      (is (= (merge {:tags #{"example"}}
+                    (select-keys base-proxy
+                          [:shared :active :type :host :port]))
              (proxies/require->spec req))))))
 
 (deftest ^:integration test-creation-and-deletion

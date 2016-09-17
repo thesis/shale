@@ -1,5 +1,6 @@
 (ns shale.proxies
   (:require [clojure.core.match :refer [match]]
+            [clojure.set :refer [rename-keys]]
             [clojure.walk :refer [postwalk]]
             [com.stuartsierra.component :as component]
             [schema.core :as s]
@@ -204,8 +205,12 @@
                        (filter #(nil? (s/check ProxyRequirement %)))
                        (filter #(not= (first %) :and))
                        (map (partial apply hash-map))
+                       (map #(if (contains? % :tag)
+                               (update-in % [:tag] hash-set)
+                               %))
                        (apply merge-with (comp vec concat)))]
-    (merge proxy-spec-defaults flattened)))
+    (merge proxy-spec-defaults
+           (rename-keys flattened {:tag :tags}))))
 
 (s/defn ^:always-validate get-or-create-proxy! :- ProxyView
   [pool :- ProxyPool
