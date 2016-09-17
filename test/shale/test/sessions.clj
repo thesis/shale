@@ -23,7 +23,8 @@
                  :host "localhost"
                  :port 101010
                  :type :socks5
-                 :public-ip nil})
+                 :public-ip nil
+                 :tags #{}})
 
 (deftest test-matches-requirement
   (testing "matches-requirement"
