@@ -25,6 +25,7 @@
                  :host "localhost"
                  :port 101010
                  :type :socks5
+                 :tags #{}
                  :public-ip nil})
 
 (deftest test-require->spec
@@ -38,7 +39,7 @@
                 [:host (:host base-proxy)]
                 [:port (:port base-proxy)]]]]
       (is (= (select-keys base-proxy
-                          [:shared :active :type :host :port])
+                          [:shared :active :type :host :port :tags])
              (proxies/require->spec req))))))
 
 (deftest ^:integration test-creation-and-deletion
