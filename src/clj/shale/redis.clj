@@ -126,6 +126,7 @@
    :type      (s/enum :socks5 :http)
    :host      s/Str
    :port      s/Int
+   :tags      #{s/Str}
    :active    s/Bool
    :shared    s/Bool})
 

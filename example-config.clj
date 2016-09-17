@@ -32,7 +32,8 @@
                :host "127.0.0.1",
                :port 1234,
                :type :socks5
-               :shared true}]
+               :shared true
+               :tags #{"test-tag"}}]
  ;; optionally provide redis connection details suitable for use by carmine
  ;; eg http://ptaoussanis.github.io/carmine/taoensso.carmine.html#var-wcar
  ;; if not provided, the defaults will be used

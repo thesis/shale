@@ -27,13 +27,15 @@
           existing (->> (view-models  cmp)
                         (map #(select-keys % [:host :port]))
                         (into #{}))
-          new-proxies (filter (fn [p]
-                                (not (some existing
-                                           (select-keys p [:host :port]))))
-                              proxies)]
+          new-proxies (->> proxies
+                           (filter
+                             (fn [p]
+                               (not
+                                 (.contains existing
+                                            (select-keys p [:host :port])))))
+                           (into []))]
       (when (> (count new-proxies) 0)
         (logging/info "Creating proxies...")
-        (logging/info new-proxies)
         (doall
           (map (partial create-proxy! cmp) new-proxies))))
     cmp)
@@ -54,11 +56,13 @@
   (merge SharedProxySchema
          {(s/optional-key :public-ip) (s/maybe redis/IPAddress)
           (s/optional-key :shared)    s/Bool
-          (s/optional-key :active)    s/Bool}))
+          (s/optional-key :active)    s/Bool
+          (s/optional-key :tags)      #{s/Str}}))
 
 (def proxy-spec-defaults
   {:shared true
-   :active true})
+   :active true
+   :tags #{}})
 
 (s/defschema ProxyView
   "A proxy, as presented to library users"
@@ -66,7 +70,8 @@
          {:id        s/Str
           :public-ip (s/maybe redis/IPAddress)
           :active    s/Bool
-          :shared    s/Bool}))
+          :shared    s/Bool
+          :tags      #{s/Str}}))
 
 (s/defschema ProxyRequirement
   (any-pair
@@ -77,6 +82,7 @@
     :port      s/Int
     :type      (:type SharedProxySchema)
     :public-ip redis/IPAddress
+    :tag       s/Str
     :nil?      (s/enum :public-ip)
     :not       (s/recursive #'ProxyRequirement)
     :and       [(s/recursive #'ProxyRequirement)]
@@ -94,6 +100,7 @@
     (-> (match req-type
                (:or :id :shared :active :host :port :type)
                  (= arg (get p req-type))
+               :tag  ((:tags p) arg)
                :nil? (nil? (get p arg))
                :not  (not     (matches-requirement p arg))
                :and  (every? #(matches-requirement p %) arg)
@@ -134,11 +141,13 @@
    id            :- s/Str
    modifications :- {s/Keyword s/Any}]
   (when (view-model-exists? pool id)
-    (car/wcar (:redis-conn pool)
-      (car/return
-          (redis/hset-all
-            (redis/model-key redis/ProxyInRedis id)
-            modifications)))
+    (let [k (redis/model-key redis/ProxyInRedis id)]
+      (car/wcar (:redis-conn pool)
+        (car/return
+          (redis/hset-all k modifications))
+        (when-let [tags (:tags modifications)]
+          (redis/sset-all (clojure.string/join "/" [k "tags"])
+                          tags))))
     (view-model pool id)))
 
 (s/defn ^:always-validate model->view-model :- ProxyView
