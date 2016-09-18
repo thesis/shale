@@ -1,6 +1,8 @@
 (defproject shale "0.3.2-SNAPSHOT"
   :description "A Clojure-backed Selenium hub replacement"
   :url "https://github.com/cardforcoin/shale"
+  :license {:name "MIT License"
+            :url "http://www.opensource.org/licenses/mit-license.php"}
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [com.stuartsierra/component "0.2.3"]
                  [org.danielsz/system "0.2.0"]
