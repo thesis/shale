@@ -139,61 +139,12 @@
          response (client/get url)]
      (json/parse-string (response :body)))))
 
-(defn get-or-create-session!
-  ([requirements] (get-or-create-session! default-url-root requirements))
-  ([url-root {:keys [browser-name
-                     node
-                     prox
-                     tags
-                     reserve
-                     reserved
-                     force-create]
-              :or {browser-name "phantomjs"
-                   node nil
-                   prox nil
-                   reserve false
-                   reserved nil
-                   force-create false
-                   tags #{}}
-              :as requirements}]
-
-   (let [and-reqs (fn [reqs]
-                    (if (sequential? reqs)
-                      (cond
-                        (keyword? (first reqs)) reqs
-                        (= (count reqs) 0) nil
-                        :else [:and reqs])))
-         tags-req (if (> (count tags) 0)
-                    [:and (vec (map #(vec [:tag %]) tags))])
-         node-reqs (->> [(into [] (dissoc node :url))
-                         (map #(vec [[:tag %]]) (:tags node))]
-                        (apply concat)
-                        vec)
-         node-req (if (> (count node-reqs) 0)
-                    [:and node-reqs])
-         prox-reqs (->> (into [] prox)
-                        vec)
-         prox-req (and-reqs prox-reqs)
-         reqs (->> [(if browser-name [[:browser-name browser-name]])
-                    (if tags-req [tags-req])
-                    (if (some? reserved) [[:reserved reserved]])
-                    (if node-req [[:node node-req]])
-                    (if prox-req [[:proxy prox-req]])]
-                  (apply concat)
-                  vec)
-         req (and-reqs reqs)
-         create-req (merge {:browser-name browser-name
-                            :tags tags}
-                           (if reserve {:reserved reserve})
-                           (if node-req {:node-require node-req})
-                           (if prox-req {:proxy-require prox-req}))
-         modifications (->> [(if reserve [[:reserve true]])]
-                            (apply concat)
-                            vec)
-         arg (merge (if modifications {:modify modifications})
-                    {:create create-req}
-                    (if (and (not force-create) req) {:require req}))
-         body (walk/postwalk
+(s/defn get-or-create-session!
+  ([arg :- sessions/GetOrCreateArg]
+   (get-or-create-session! default-url-root arg))
+  ([url-root :- s/Str
+    arg      :- sessions/GetOrCreateArg]
+   (let [body (walk/postwalk
                 #(cond
                    (= % :socks5) "socks5"
                    (keyword? %) (->snake_case_string %)
@@ -263,22 +214,12 @@
                     (catch [:status 400] {:keys [body]} (error body) (throw+)))]
      (json/parse-string (response :body)))))
 
-(defn get-or-create-webdriver!
-  ([requirements] (get-or-create-webdriver! default-url-root requirements))
-  ([url-root {:keys [browser-name
-                     node
-                     reserved
-                     tags
-                     reserve
-                     force-create]
-              :or {browser-name "phantomjs"
-                   node nil
-                   reserved nil
-                   reserve nil
-                   force-create nil
-                   tags []}
-              :as requirements}]
-   (let [session (get-or-create-session! url-root requirements)]
+(s/defn get-or-create-webdriver!
+  ([arg :- sessions/GetOrCreateArg]
+   (get-or-create-webdriver! default-url-root arg))
+  ([url-root :- s/Str
+    arg      :- sessions/GetOrCreateArg]
+   (let [session (get-or-create-session! url-root arg)]
      (webdriver/resume-webdriver
        (get session "webdriver_id")
        (get-in session ["node" "url"])
@@ -302,19 +243,18 @@
        ;; Log into Github
        ;;
        (use 'clj-webdriver.taxi)
-       (with-webdriver* {:browser-name :firefox :tags [\"github\"]}
+       (with-webdriver* {:require [:and [[:browser-name :firefox]
+                                         [:tag \"github\"]]]}
          (to \"https://github.com\")
          (click \"a[href*='login']\")
          (input-text \"#login_field\" \"your_username\")
          (-> \"#password\"
            (input-text \"your_password\")
            submit))"
-  [options & body]
-   (let [options-with-defaults (merge {:reserved false
-                                       :reserve true} options)]
-     `(binding [~'clj-webdriver.taxi/*driver*
-                (get-or-create-webdriver! ~options-with-defaults)]
-        (try
-          ~@body
-          (finally
-            (release-webdriver! ~'clj-webdriver.taxi/*driver*))))))
+  [arg & body]
+  `(binding [~'clj-webdriver.taxi/*driver*
+             (get-or-create-webdriver! ~arg)]
+     (try
+       ~@body
+       (finally
+         (release-webdriver! ~'clj-webdriver.taxi/*driver*)))))

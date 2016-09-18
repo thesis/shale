@@ -43,14 +43,14 @@
 
 (defn logged-in-sessions-fixture [f]
   (let [reqs {:browser-name "phantomjs" :tags []}]
-    (doseq [tag-config [["logged-in"] ["logged-out"]]]
+    (doseq [tag-config [#{"logged-in"} #{"logged-out"}]]
       (shale.client/get-or-create-session!
-        (assoc reqs :tags tag-config :force-create true))))
+        {:create (assoc reqs :tags tag-config)})))
   (f))
 
 (defn reserved-session-fixture [f]
-  (shale.client/get-or-create-session! {:browser-name "phantomjs"
-                                        :reserve true})
+  (shale.client/get-or-create-session! {:modify [[:reserve true]]
+                                        :require [:browser-name "phantomjs"]})
   (f))
 
 (defn delete-sessions-fixture [f]
@@ -78,17 +78,17 @@
   (testing "get-or-create"
     (testing "creating one session"
       (is (= 1 (session-diff #(shale.client/get-or-create-session!
-                             {:browser-name "phantomjs"})))))
+                             {:require [:browser-name "phantomjs"]})))))
 
     (testing "another session isn't created based on browser name"
       (is (= 0 (session-diff #(shale.client/get-or-create-session!
-                             {:browser-name "phantomjs"})))))
+                             {:require [:browser-name "phantomjs"]})))))
 
     (testing "that another session is created based on a tag"
       (let [test-fn (fn []
                         (shale.client/get-or-create-session!
-                          {:browser-name "phantomjs"
-                           :tags ["some-unknown-tag"]}))]
+                          {:require [:and [[:browser-name "phantomjs"]
+                                           [:tag "some-unknown-tag"]]]}))]
         (is (= 3 (session-diff
                    #(logged-in-sessions-fixture test-fn))))))))
 
@@ -102,10 +102,10 @@
         ; and get three new ones on this node
         (dotimes [_ 3]
           (shale.client/get-or-create-session!
-            {:browser-name "phantomjs"
-             :node {:id node-id}
-             :reserve true
-             :reserved false}))
+            {:require [:and [[:browser-name "phantomjs"]
+                             [:node [:id node-id]]
+                             [:reserved false]]]
+             :modify [[:reserve true]]}))
         (is (= 3 (count
                    (filter #(= (get-in % ["node" "id"]) node-id)
                            (shale.client/sessions))))))))
@@ -120,10 +120,9 @@
         (shale.client/destroy-sessions!)
         (dotimes [_ 3]
           (shale.client/get-or-create-session!
-            {:browser-name "phantomjs"
-             :prox proxy-req}))
+            {:require [:and [[:browser-name "phantomjs"]
+                             [:proxy proxy-req]]]}))
         (is (= 1 (count (shale.client/sessions))))
-        (prn "SESSION WITH PROXY!" (first (shale.client/sessions)))
         (let [prox (get (first (shale.client/sessions)) "proxy")]
           (is (some? prox))
           (is (= (select-keys prox ["port" "host" "type"])
@@ -136,8 +135,7 @@
     (let [test-fn
           (fn []
             (let [session (shale.client/get-or-create-session!
-                            {:browser-name "phantomjs"
-                             :force-create true})]
+                            {:create {:browser-name "phantomjs"}})]
               (is (get session "browser_name") "phantomjs")))]
       (is (= 1 (session-diff test-fn))))))
 
@@ -167,8 +165,8 @@
 
   (testing "reserving after creating a new session"
     (let [session (shale.client/get-or-create-session!
-                    {:reserve true
-                     :browser-name "phantomjs"})]
+                    {:create {:browser-name "phantomjs"}
+                     :modify [[:reserve true]]})]
       (is (get session "reserved")))))
 
 (deftest ^:integration test-proxies
@@ -188,7 +186,8 @@
 
 (deftest ^:integration test-webdriver-macro
   (testing "that the with-webdriver* macro properly releases its session"
-    (shale.client/with-webdriver* {:browser-name "phantomjs"}
+    (shale.client/with-webdriver* {:create {:browser-name "phantomjs"}
+                                   :modify [[:reserve true]]}
       (is (get (first (shale.client/sessions)) "reserved"))
       (is (= 1 (session-count))))
     (is (= 1 (session-count)))
@@ -196,5 +195,6 @@
 
 (deftest ^:integration test-webdriver-js
   (testing "that the wrapped webdriver can execute javascript"
-    (shale.client/with-webdriver* {:browser-name "phantomjs"}
+    (shale.client/with-webdriver* {:create {:browser-name "phantomjs"}
+                                   :modify [[:reserve true]]}
       (is (= 1 (execute-script "return 1;"))))))
