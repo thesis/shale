@@ -9,7 +9,7 @@
                  [compojure "1.4.0"]
                  [javax.servlet/servlet-api "2.5"]
                  [ring/ring-jetty-adapter "1.4.0"]
-                 [liberator "0.12.0"]
+                 [liberator "0.14.0"]
                  [org.clojure/tools.nrepl "0.2.11"]
                  [org.clojure/core.match "0.2.2"]
                  [clj-http "1.1.2"]
