@@ -275,7 +275,8 @@
   :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-request-data
                  :context %
-                 :schema {(s/optional-key :tags) [s/Str]})
+                 :schema {(s/optional-key :tags) [s/Str]
+                          (s/optional-key :max-sessions) s/Int})
   :handle-ok (fn [context]
                (jsonify (get context ::node)))
   :handle-exception handle-exception
