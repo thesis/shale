@@ -107,7 +107,7 @@
         (is-body "[]\n"))
       (doto resp-refresh
         (is-status 201)
-        (is-body nil))
+        (is-body ""))
       (is-200 resp-2)
       (let [parsed (is-json resp-2)
             node-list (:node-list (:config system))]
