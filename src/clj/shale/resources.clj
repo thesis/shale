@@ -270,7 +270,7 @@
            (nodes/refresh-nodes (->node-pool context))))
 
 (defresource node-resource [id]
-  :allowed-methods [:get :put :delete]
+  :allowed-methods [:get :patch :delete]
   :available-media-types ["application/json"]
   :known-content-type? is-json-or-unspecified?
   :malformed? #(parse-request-data
