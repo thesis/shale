@@ -281,10 +281,10 @@
   :handle-exception handle-exception
   :delete! (fn [context]
              (nodes/destroy-node (->node-pool context) id))
-  :put! (fn [context]
-          {::node
-           (nodes/modify-node (->node-pool context) id (clojure-keys
-                                                         (::data context)))})
+  :patch! (fn [context]
+            {::node
+             (nodes/modify-node (->node-pool context) id (clojure-keys
+                                                           (::data context)))})
   :exists? (fn [context]
              (let [node-pool (->node-pool context)]
                (if (nodes/view-model-exists? node-pool id)
