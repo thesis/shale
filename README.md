@@ -85,6 +85,7 @@ curl -d '{"require": ["browser_name", "phantomjs"]}' -XPOST \
 ```json
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
+  "webdriver_id": "bd416414-e80f-4556-9d97-ebcfdc44425f",
   "reserved": false,
   "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
@@ -101,6 +102,7 @@ curl http://localhost:5000/sessions/
 ```json
 [{
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
+  "webdriver_id": "bd416414-e80f-4556-9d97-ebcfdc44425f",
   "reserved": false,
   "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
@@ -119,6 +121,7 @@ curl -d '{"create": {"browser_name":"phantomjs", "tags":["walmart"]}}' \
 ```json
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
+  "webdriver_id": "bd416414-e80f-4556-9d97-ebcfdc44425f",
   "reserved": false,
   "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
@@ -138,6 +141,7 @@ curl -d '{"require": ["and [["browser_name", "phantomjs"] ["tag", "walmart"]]],
 ```json
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
+  "webdriver_id": "bd416414-e80f-4556-9d97-ebcfdc44425f",
   "reserved": true,
   "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
@@ -181,6 +185,7 @@ curl -d '[["change_tag", {"action": "add", "tag":"walmart"}], ["reserve", true]]
 ```json
 {
   "id": "05e9229d-356b-46a3-beae-f8ab02cea7db",
+  "webdriver_id": "bd416414-e80f-4556-9d97-ebcfdc44425f",
   "reserved": false,
   "node": {"url":"http://localhost:5555/wd/hub", "id":"2c28f0f2-e479-4501-a05d-a0991793abd7"},
   "browser_name": "phantomjs",
