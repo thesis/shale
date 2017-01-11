@@ -20,6 +20,7 @@
                  [environ "1.0.0"]
                  [com.taoensso/carmine "2.13.1" :exclusions [org.clojure/clojure]]
                  [com.taoensso/timbre "4.3.1"]
+                 [raven-clj "1.5.0"]
                  [com.brweber2/clj-dns "0.0.2"]
                  [org.bovinegenius/exploding-fish "0.3.4"]
                  [com.cemerick/url "0.1.1"]

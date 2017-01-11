@@ -3,6 +3,7 @@
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [compojure.handler :refer [api]]
             [liberator.dev :as dev]
+            [raven-clj.ring :refer [wrap-sentry]]
             [com.stuartsierra.component :as component]
             [schema.core :as s]
             [shale.resources :refer [assemble-routes]])
@@ -47,11 +48,21 @@
   (fn [request]
     (f (assoc request :state state))))
 
-(defn build-app [session-pool node-pool proxy-pool]
+(defn wrap-sentry-config
+  "Middleware that reports errors to sentry.io, if configured."
+  [app config]
+  (let [sentry (:sentry config)
+        dsn (:dsn sentry)]
+    (if dsn
+      (wrap-sentry app dsn)
+      app)))
+
+(defn build-app [config session-pool node-pool proxy-pool]
   (-> (assemble-routes)
       (state-middleware {:session-pool session-pool
                          :node-pool node-pool
                          :proxy-pool proxy-pool})
+      (wrap-sentry-config config)
       (dev/wrap-trace :ui :header)
       ignore-trailing-slash
       user-visible-json-exceptions
@@ -60,12 +71,13 @@
 
 (s/defrecord App
   [ring-app
+   config       :- {s/Any s/Any}
    session-pool :- SessionPool
    node-pool    :- NodePool
    proxy-pool   :- ProxyPool]
   component/Lifecycle
   (start [cmp]
-    (let [app (build-app session-pool node-pool proxy-pool)]
+    (let [app (build-app config session-pool node-pool proxy-pool)]
       (assoc cmp :ring-app app)))
   (stop [cmp]
     (assoc cmp :ring-app nil)))
