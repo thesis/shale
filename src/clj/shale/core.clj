@@ -77,7 +77,8 @@
             [:scheduler (component/using (periodic/new-scheduler conf)
                                          [:session-pool :node-pool :logger])
              :nrepl (if-let [nrepl-port (or (conf :nrepl-port) 5001)]
-                      (new-repl-server nrepl-port))])))
+                      (new-repl-server nrepl-port)
+                      {})])))
 
 (def shale-system nil)
 
