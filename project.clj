@@ -27,7 +27,7 @@
                  [overtone/at-at "1.2.0"]
                  [prismatic/schema "0.3.0"]
                  [slingshot "0.12.2"]
-                 [camel-snake-kebab "0.2.5" :exclusions [org.clojure/clojure]]
+                 [camel-snake-kebab "0.4.0" :exclusions [org.clojure/clojure]]
                  [io.aviso/pretty "0.1.19"]
                  ; for the web frontend
                  [hiccup "1.0.5"]
