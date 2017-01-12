@@ -102,4 +102,5 @@
     (init)
     (start)
     (catch Exception e
+      (logging/error e)
       (stop))))
