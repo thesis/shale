@@ -4,7 +4,8 @@
             [clj-webdriver.core :as core]
             [clj-webdriver.remote.driver :refer [session-id]]
             [clj-webdriver.taxi :refer [execute-script]]
-            wall.hack)
+            wall.hack
+            shale.ext.ResumableRemoteWebDriver)
   (:import org.openqa.selenium.remote.DesiredCapabilities
            clj_webdriver.ext.remote.RemoteWebDriverExt
            java.net.URL
