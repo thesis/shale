@@ -56,7 +56,11 @@
    :proxy-pool (component/using (proxies/new-proxy-pool)
                                 [:config :redis-conn :logger])
    :app (component/using (handler/new-app)
-                         [:session-pool :node-pool :proxy-pool :logger])])
+                         [:config
+                          :session-pool
+                          :node-pool
+                          :proxy-pool
+                          :logger])])
 
 (defn get-app-system [conf]
   (keyvals->system (get-app-system-keyvals conf)))
@@ -77,7 +81,8 @@
             [:scheduler (component/using (periodic/new-scheduler conf)
                                          [:session-pool :node-pool :logger])
              :nrepl (if-let [nrepl-port (or (conf :nrepl-port) 5001)]
-                      (new-repl-server nrepl-port))])))
+                      (new-repl-server nrepl-port)
+                      {})])))
 
 (def shale-system nil)
 
@@ -101,4 +106,5 @@
     (init)
     (start)
     (catch Exception e
+      (logging/error e)
       (stop))))
