@@ -71,9 +71,38 @@
   (can-add-node [this] false)
   (can-remove-node [this] false))
 
+(defn selenium-url
+  [pod port-name]
+  (let [port (->> pod
+                  :spec
+                  :containers
+                  (mapcat :ports)
+                  (filter (fn [p]
+                            (-> p :name (= port-name))))
+                  first)
+        _ (assert port)
+        port-num (:containerPort port)]
+    (str "http://" (-> pod :status :podIP) ":" port-num)))
 
+(deftype KubeNodeProvider [api-url label port-name namespace]
+  ;;; Uses pods with the given label. Label is a map containing a single key & value. port-name is the name of the container port to connect on
+  INodeProvider
+  (get-nodes [this]
+    (assert (map? label))
+    (assert (= 1 (count label)))
+    (let [label-key (-> label first key)
+          label-value (-> label first val)]
+      (->> (kube/list-pods api-url)
+           :items
+           (filter (fn [pod]
+                     (-> pod :metadata :labels (get label-key) (= label-value))))
+           (map (fn [pod]
+                  (selenium-url pod port-name))))))
+  (add-node [this url]
+    (throw (ex-info "Adding nodes is not yet implemented."
+                    {:user-visible true :status 500})))
 
-    (remove-node [this url])
+  (remove-node [this url])
 
-    (can-add-node [this] false)
-    (can-remove-node [this] false))
+  (can-add-node [this] false)
+  (can-remove-node [this] false))
