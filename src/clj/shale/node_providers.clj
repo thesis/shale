@@ -1,4 +1,6 @@
 (ns shale.node-providers
+  (:require [amazonica.aws.ec2 :as ec2]
+            [clj-kube.core :as kube])
   (:import java.io.FileNotFoundException))
 
 (try
@@ -40,14 +42,7 @@
   (can-remove-node [this] false))
 
 (defn ^:private describe-instances-or-throw []
-  (let [describe-instances (ns-resolve 'amazonica.aws.ec2 'describe-instances)]
-        (if describe-instances
-          (mapcat #(get % :instances) (get (describe-instances) :reservations))
-          (throw
-            (ex-info
-              (str "Unable to configure connect to the AWS API- make sure "
-                   "amazonica is listed in your dependencies.")
-              {:user-visible true :status 500})))))
+  (mapcat #(get % :instances) (get (ec2/describe-instances) :reservations)))
 
 (defn ^:private instances-running-shale []
   (filter #(and
@@ -62,14 +57,21 @@
                (if use-private-dns :private-dns-name :public-dns-name))))
 
 (deftype AWSNodeProvider [options]
-    INodeProvider
+  INodeProvider
 
-    (get-nodes [this]
-      (map #(instance->node-url % (get options :use-private-dns))
-           (instances-running-shale)))
-    (add-node [this url]
-      (throw (ex-info "Adding nodes is not yet implemented."
-                      {:user-visible true :status 500})))
+  (get-nodes [this]
+    (map #(instance->node-url % (get options :use-private-dns))
+         (instances-running-shale)))
+  (add-node [this url]
+    (throw (ex-info "Adding nodes is not yet implemented."
+                    {:user-visible true :status 500})))
+
+  (remove-node [this url])
+
+  (can-add-node [this] false)
+  (can-remove-node [this] false))
+
+
 
     (remove-node [this url])
 
