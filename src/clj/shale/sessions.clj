@@ -498,7 +498,7 @@
       (deref deferred))))
 
 (defn destroy-session
-  [pool id & {:keys [immediately] :or [immediately true]}]
+  [pool id & {:keys [immediately] :or {immediately true}}]
   (s/validate SessionPool pool)
   (s/validate s/Str id)
   (car/wcar (:redis-conn pool)
