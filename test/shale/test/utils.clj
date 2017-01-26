@@ -34,7 +34,7 @@
           (loop [tries 0]
             (if (local-port-available? port)
               (if (> tries 20)
-                (throw "Timed out waiting for Selenium to start." {:port port})
+                (throw (ex-info "Timed out waiting for Selenium to start." {:port port}))
                 (do
                   (Thread/sleep 100)
                   (recur (inc tries))))))
