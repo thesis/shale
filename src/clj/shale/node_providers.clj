@@ -41,7 +41,7 @@
   (can-add-node [this] false)
   (can-remove-node [this] false))
 
-(s/fdef new-default-node-provider :args (s/cat :nodes (s/coll-of string?)))
+;; (s/fdef new-default-node-provider :args (s/cat :nodes (s/coll-of string?)))
 (defn new-default-node-provider [nodes]
   (->DefaultNodeProvider nodes))
 
