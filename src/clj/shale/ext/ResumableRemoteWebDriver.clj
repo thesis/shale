@@ -17,7 +17,7 @@
                     org.openqa.selenium.Capabilities]}
     :post-init resume
     :extends clj_webdriver.ext.remote.RemoteWebDriverExt
-    :prefix -))
+    :prefix "-"))
 
 (defn -url-init
   [^URL node-url ^String session-id]
