@@ -1,7 +1,6 @@
 (ns shale.node-providers
   (:require [amazonica.aws.ec2 :as ec2]
-            [clj-kube.core :as kube]
-            [clojure.spec :as s])
+            [clj-kube.core :as kube])
   (:import java.io.FileNotFoundException))
 
 (try
@@ -115,12 +114,12 @@
   (can-add-node [this] false)
   (can-remove-node [this] false))
 
-(s/def :kube/api-url string?)
-(s/def :kube/label (s/map-of keyword? string?))
-(s/def :kube/port-name string?)
-(s/def :kube/namespace string?)
+;; (s/def :kube/api-url string?)
+;; (s/def :kube/label (s/map-of keyword? string?))
+;; (s/def :kube/port-name string?)
+;; (s/def :kube/namespace string?)
 
-(s/fdef new-kube-node-provider :args (s/keys :req-un [:kube/api-url :kube/label :kube/port-name] :opt-un [:kube/namespace]))
+;; (s/fdef new-kube-node-provider :args (s/keys :req-un [:kube/api-url :kube/label :kube/port-name] :opt-un [:kube/namespace]))
 (defn new-kube-node-provider [{:keys [api-url label port-name namespace]
                                :or {namespace "default"}
                                :as options}]

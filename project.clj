@@ -26,7 +26,7 @@
                  [javax.servlet/servlet-api "2.5"]
                  [liberator "0.14.0"]
                  [org.bovinegenius/exploding-fish "0.3.4"]
-                 [org.clojure/clojure "1.9.0-alpha14"]
+                 [org.clojure/clojure "1.8.0"]
                  [org.clojure/clojurescript "1.7.228" :scope "provided"]
                  [org.clojure/core.match "0.3.0-alpha4"]
                  [org.clojure/tools.nrepl "0.2.11"]
