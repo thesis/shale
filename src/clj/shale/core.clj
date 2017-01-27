@@ -90,7 +90,9 @@
   (alter-var-root #'shale-system component/start))
 
 (defn stop []
-  (alter-var-root #'shale-system component/stop))
+  (when shale-system
+    (component/stop shale-system))
+  (alter-var-root #'shale-system (constantly nil)))
 
 (defn init-cheshire []
   ; unfortunately, cheshire has a global encoders list
