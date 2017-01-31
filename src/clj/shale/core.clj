@@ -1,17 +1,18 @@
 (ns shale.core
-  (:require [ring.adapter.jetty :as jetty]
-            [io.aviso.exception :as pretty]
-            [cheshire.generate :refer [add-encoder encode-str]]
-            [schema.core :as s]
+  (:require [cheshire.generate :refer [add-encoder encode-str]]
             [com.stuartsierra.component :as component]
-            [system.components.repl-server :refer [new-repl-server]]
+            [environ.core :as env]
+            [io.aviso.exception :as pretty]
+            [schema.core :as s]
             [shale.configurer :refer [get-config]]
             [shale.handler :as handler]
             [shale.logging :as logging]
             [shale.nodes :as nodes]
             [shale.periodic :as periodic]
             [shale.proxies :as proxies]
-            [shale.sessions :as sessions])
+            [shale.sessions :as sessions]
+            [system.components.repl-server :refer [new-repl-server]]
+            [ring.adapter.jetty :as jetty])
   (:import clojure.lang.IPersistentMap
            clojure.lang.IRecord
            org.openqa.selenium.Platform
@@ -40,7 +41,15 @@
   (map->Jetty {:config conf}))
 
 (defn get-redis-config [conf]
-  {:pool {} :spec (:redis conf)})
+  (let [redis-conf (:redis conf)
+        {:keys [host port db]
+         :or {host "localhost"
+              port 6379
+              db 0}} redis-conf
+        host (if (and host (keyword? host) (namespace host) (= "env" (namespace host)))
+               (get env/env host)
+               host)]
+    {:pool {} :spec {:host host :port port :db db}}))
 
 (defn keyvals->system [kv]
   (apply component/system-map kv))
