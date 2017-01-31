@@ -47,7 +47,7 @@
               port 6379
               db 0}} redis-conf
         host (if (and host (keyword? host) (namespace host) (= "env" (namespace host)))
-               (get env/env host)
+               (get env/env (keyword (name host)))
                host)]
     (when (not host)
       (logging/infof "env: %s" env/env))
