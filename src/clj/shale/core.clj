@@ -49,6 +49,9 @@
         host (if (and host (keyword? host) (namespace host) (= "env" (namespace host)))
                (get env/env host)
                host)]
+    (when (not host)
+      (logging/infof "env: %s" env/env))
+    (assert host)
     {:pool {} :spec {:host host :port port :db db}}))
 
 (defn keyvals->system [kv]
