@@ -17,8 +17,10 @@
                           flatten
                           (filter identity)
                           (map io/as-url)
-                          concat)
-        config (clojure.edn/read-string (slurp (first config-paths)))]
-    (logging/info "Loaded shale config...\n")
-    (logging/info (pretty config))
-    config))
+                          concat)]
+    (if-let [config (some-> config-paths first slurp clojure.edn/read-string)]
+      (do
+        (logging/info "Loaded shale config...\n")
+        (logging/info (pretty config))
+        config)
+      (throw (ex-info "configuration not found. Requires either config.clj on classpath or CONFIG_FILE env var" {})))))

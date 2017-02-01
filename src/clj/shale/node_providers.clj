@@ -1,4 +1,6 @@
 (ns shale.node-providers
+  (:require [amazonica.aws.ec2 :as ec2]
+            [clj-kube.core :as kube])
   (:import java.io.FileNotFoundException))
 
 (try
@@ -22,7 +24,7 @@
   (can-remove-node [this]
     "Whether this pool supports removing nodes."))
 
-(deftype DefaultNodeProvider [nodes]
+(defrecord DefaultNodeProvider [nodes]
   INodeProvider
   ;;A simple node pool that chooses randomly from an initial list.
   (get-nodes [this]
@@ -39,39 +41,89 @@
   (can-add-node [this] false)
   (can-remove-node [this] false))
 
-(defn ^:private describe-instances-or-throw []
-  (let [describe-instances (ns-resolve 'amazonica.aws.ec2 'describe-instances)]
-        (if describe-instances
-          (mapcat #(get % :instances) (get (describe-instances) :reservations))
-          (throw
-            (ex-info
-              (str "Unable to configure connect to the AWS API- make sure "
-                   "amazonica is listed in your dependencies.")
-              {:user-visible true :status 500})))))
+;; (s/fdef new-default-node-provider :args (s/cat :nodes (s/coll-of string?)))
+(defn new-default-node-provider [nodes]
+  (->DefaultNodeProvider nodes))
 
-(defn ^:private instances-running-shale []
+(defn- describe-instances-or-throw []
+  (mapcat #(get % :instances) (get (ec2/describe-instances) :reservations)))
+
+(defn- instances-running-shale []
   (filter #(and
              (= (get-in % [:state :name]) "running")
              (some (fn [i] (= (get i :key) "shale"))
                    (get % :tags)))
           (describe-instances-or-throw)))
 
-(defn ^:private instance->node-url [instance use-private-dns]
+(defn- instance->node-url [instance use-private-dns]
   (format "http://%s:5555/wd/hub"
           (get instance
                (if use-private-dns :private-dns-name :public-dns-name))))
 
-(deftype AWSNodeProvider [options]
-    INodeProvider
+(defrecord AWSNodeProvider [use-private-dns]
+  INodeProvider
 
-    (get-nodes [this]
-      (map #(instance->node-url % (get options :use-private-dns))
-           (instances-running-shale)))
-    (add-node [this url]
-      (throw (ex-info "Adding nodes is not yet implemented."
-                      {:user-visible true :status 500})))
+  (get-nodes [this]
+    (map #(instance->node-url % use-private-dns)
+         (instances-running-shale)))
+  (add-node [this url]
+    (throw (ex-info "Adding nodes is not yet implemented."
+                    {:user-visible true :status 500})))
 
-    (remove-node [this url])
+  (remove-node [this url])
 
-    (can-add-node [this] false)
-    (can-remove-node [this] false))
+  (can-add-node [this] false)
+  (can-remove-node [this] false))
+
+(defn new-aws-node-provider [{:keys [use-private-dns]
+                              :as options}]
+  (map->AWSNodeProvider options))
+
+(defn selenium-url
+  [pod port-name]
+  (let [port (->> pod
+                  :spec
+                  :containers
+                  (mapcat :ports)
+                  (filter (fn [p]
+                            (-> p :name (= port-name))))
+                  first)
+        _ (assert port)
+        port-num (:containerPort port)]
+    (str "http://" (-> pod :status :podIP) ":" port-num)))
+
+(defrecord KubeNodeProvider [api-url label port-name namespace]
+  INodeProvider
+  (get-nodes [this]
+    (assert (map? label))
+    (assert (= 1 (count label)))
+    (let [label-key (-> label first key)
+          label-value (-> label first val)]
+      (->> (kube/list-pods api-url)
+           :items
+           (filter (fn [pod]
+                     (-> pod :metadata :labels (get label-key) (= label-value))))
+           (map (fn [pod]
+                  (selenium-url pod port-name))))))
+  (add-node [this url]
+    (throw (ex-info "Adding nodes is not yet implemented."
+                    {:user-visible true :status 500})))
+
+  (remove-node [this url])
+
+  (can-add-node [this] false)
+  (can-remove-node [this] false))
+
+;; (s/def :kube/api-url string?)
+;; (s/def :kube/label (s/map-of keyword? string?))
+;; (s/def :kube/port-name string?)
+;; (s/def :kube/namespace string?)
+
+;; (s/fdef new-kube-node-provider :args (s/keys :req-un [:kube/api-url :kube/label :kube/port-name] :opt-un [:kube/namespace]))
+(defn new-kube-node-provider [{:keys [api-url label port-name namespace]
+                               :or {namespace "default"}
+                               :as options}]
+  "Use pods with the given kubernetes label. Label is a map containing a single key & value. port-name is the named container port to connect on"
+  (assert (= :kube (:provider options)))
+  (assert api-url)
+  (map->KubeNodeProvider options))

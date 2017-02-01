@@ -3,7 +3,7 @@
 
 ;; either provide a fn map suitable to implement shale.nodes/INodePool to inject
 ;; custom node management
-{:node-pool-impl {:get-node (fn [this requirements]
+{:node-pool-impl {:get-nodes (fn [this requirements]
                               (prn "custom node pool!")
                               "http://localhost:5555/wd/hub")
                   :add-node (fn [this requirements] nil)
@@ -18,6 +18,14 @@
                           :ami "ami-12345678"
                           :tags {:service :shale}
                           :use-private-dns true}
+
+ :node-pool-cloud-config {:provider :kube
+                          :api-url "http://localhost:8001"
+                          :api-url :kubernetes-service ;; or if running shale inside kube, use the internal api
+                          :label :label {:app :selenium} ;; add all containers w/ metadata label :app :selenium
+                          :port-name "selenium" ;; connect
+                          }
+
  ;; if you just need a static list of nodes, provide that instead
  :node-list ["http://localhost:5555/wd/hub" "http://anotherhost:5555/wd/hub"]
  ;; the default max number of sessions to create per node.
@@ -37,6 +45,9 @@
  ;; optionally provide redis connection details suitable for use by carmine
  ;; eg http://ptaoussanis.github.io/carmine/taoensso.carmine.html#var-wcar
  ;; if not provided, the defaults will be used
+
+ ;; host can also be a namespaced keyword starting with :env, such as
+ ;; :env/redis-service-host, will use the value of that env var
  :redis {:host "localhost"
          :port 6379
          :db 0}
