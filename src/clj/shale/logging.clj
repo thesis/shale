@@ -2,7 +2,8 @@
   (:require [clojure.pprint :refer [pprint]]
             [com.stuartsierra.component :as component]
             [schema.core :as s]
-            [taoensso.timbre :as timbre]))
+            [taoensso.timbre :as timbre]
+            [taoensso.timbre.tools.logging]))
 
 (s/defrecord Logger
   [config :- (s/maybe {s/Any s/Any})
