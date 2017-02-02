@@ -1,4 +1,4 @@
-(defproject shale "0.3.2"
+(defproject shale "0.3.3-SNAPSHOT"
   :description "A Clojure-backed Selenium hub replacement"
   :url "https://github.com/cardforcoin/shale"
   :license {:name "MIT License"
@@ -15,6 +15,7 @@
                  [com.amazonaws/aws-java-sdk-ec2 "1.11.63"]
                  [com.brweber2/clj-dns "0.0.2"]
                  [com.cemerick/url "0.1.1"]
+                 [com.fzakaria/slf4j-timbre "0.3.4"]
                  [com.stuartsierra/component "0.2.3"]
                  [com.taoensso/carmine "2.15.1" :exclusions [org.clojure/clojure com.taoensso/encore]]
                  [com.taoensso/encore "2.87.0" :exclusions [org.clojure/clojure]]
