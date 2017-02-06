@@ -39,18 +39,23 @@
   [redis-conn
    logger
    node-provider
-   default-session-limit]
+   default-session-limit
+   config]
   component/Lifecycle
   (start [cmp]
     (logging/info "Starting the node pool...")
-    cmp)
+    (let [node-provider (node-provider-from-config config)
+          default-session-limit (or (:node-max-sessions config) 3)]
+      (logging/infof "Found nodes: %s" (node-providers/get-nodes node-provider))
+      (assoc cmp
+             :node-provider node-provider
+             :default-session-limit default-session-limit)))
   (stop [cmp]
     (logging/info "Stopping the node pool...")
     (assoc cmp :node-provider nil)))
 
 (defn new-node-pool [config]
-  (map->NodePool {:node-provider (node-provider-from-config config)
-                  :default-session-limit (or (:node-max-sessions config) 3)}))
+  (map->NodePool {:config config}))
 
 (s/defn node-ids :- [s/Str] [pool :- NodePool]
   (car/wcar (:redis-conn pool)
