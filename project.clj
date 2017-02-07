@@ -7,7 +7,7 @@
                  [camel-snake-kebab "0.4.0" :exclusions [org.clojure/clojure]]
                  [cheshire "5.6.3"]
                  [clj-http "2.3.0"]
-                 [arohner/clj-kube "0.1.2"]
+                 [arohner/clj-kube "0.1.3"]
                  [clj-wallhack "1.0.1"]
                  [clj-webdriver "0.6.1" :exclusions [org.clojure/core.cache]]
                  [cljs-ajax "0.5.3"]
