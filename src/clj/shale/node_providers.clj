@@ -100,7 +100,7 @@
           _ (assert (map? label))
           _ (assert (= 1 (count label)))
           label-key (-> label first key)
-          label-value (-> label first val)]
+          label-value (-> label first val name)]
       (->> (kube/list-pods api-url {:namespace (or (:kube/namespace this) "default")})
            :items
            (filter (fn [pod]
