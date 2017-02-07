@@ -93,20 +93,20 @@
         port-num (:containerPort port)]
     (str "http://" (-> pod :status :podIP) ":" port-num)))
 
-(defrecord KubeNodeProvider [api-url label port-name namespace]
+(defrecord KubeNodeProvider [api-url]
   INodeProvider
   (get-nodes [this]
     (assert (map? label))
     (assert (= 1 (count label)))
-    (let [label-key (-> label first key)
-          label-value (-> label first val)
-          ]
-      (->> (kube/list-pods api-url)
+    (let [label (:kube/label this)
+          label-key (-> label first key)
+          label-value (-> label first val)]
+      (->> (kube/list-pods api-url {:namespace (or (:kube/namespace this) "default")})
            :items
            (filter (fn [pod]
                      (-> pod :metadata :labels (get label-key) (= label-value))))
            (map (fn [pod]
-                  (selenium-url pod port-name))))))
+                  (selenium-url pod (:kube/port-name this)))))))
   (add-node [this url]
     (throw (ex-info "Adding nodes is not yet implemented."
                     {:user-visible true :status 500})))
@@ -122,13 +122,12 @@
 ;; (s/def :kube/namespace string?)
 
 ;; (s/fdef new-kube-node-provider :args (s/keys :req-un [:kube/api-url :kube/label :kube/port-name] :opt-un [:kube/namespace]))
-(defn new-kube-node-provider [{:keys [api-url label port-name namespace]
-                               :or {namespace "default"}
+(defn new-kube-node-provider [{:keys [api-url label port-name]
                                :as options}]
   "Use pods with the given kubernetes label. Label is a map containing a single key & value. port-name is the named container port to connect on"
   (assert (= :kube (:provider options)))
   (assert api-url)
-  (let [api-url (if (and api-url (keyword? api-url) (= "env" (namespace api-url)))
+  (let [api-url (if (and (keyword? api-url) (= "env" (namespace api-url)))
                   (do
                     (assert (get env/env (keyword (name api-url))))
                     (str "https://" (get env/env (keyword (name api-url)))))
