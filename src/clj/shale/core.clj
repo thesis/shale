@@ -11,6 +11,7 @@
             [shale.periodic :as periodic]
             [shale.proxies :as proxies]
             [shale.sessions :as sessions]
+            [shale.utils :refer (maybe-resolve-env-keyword) ]
             [system.components.repl-server :refer [new-repl-server]]
             [ring.adapter.jetty :as jetty])
   (:import clojure.lang.IPersistentMap
@@ -46,9 +47,7 @@
          :or {host "localhost"
               port 6379
               db 0}} redis-conf
-        host (if (and host (keyword? host) (namespace host) (= "env" (namespace host)))
-               (get env/env (keyword (name host)))
-               host)]
+        host (maybe-resolve-env-keyword host)]
     (when (not host)
       (logging/infof "env: %s" env/env))
     (assert host)

@@ -1,6 +1,7 @@
 (ns shale.node-providers
   (:require [amazonica.aws.ec2 :as ec2]
-            [clj-kube.core :as kube])
+            [clj-kube.core :as kube]
+            [environ.core :as env])
   (:import java.io.FileNotFoundException))
 
 (try
@@ -99,11 +100,7 @@
     (assert (= 1 (count label)))
     (let [label-key (-> label first key)
           label-value (-> label first val)
-          api-url (if (and host (keyword? k) (namespace k) (= "env" (namespace k)))
-                    (do
-                      (assert (get env/env (keyword (name k))))
-                      (str "https://" (get env/env (keyword (name k)))))
-                    k)]
+          ]
       (->> (kube/list-pods api-url)
            :items
            (filter (fn [pod]
@@ -131,4 +128,10 @@
   "Use pods with the given kubernetes label. Label is a map containing a single key & value. port-name is the named container port to connect on"
   (assert (= :kube (:provider options)))
   (assert api-url)
-  (map->KubeNodeProvider options))
+  (let [api-url (if (and api-url (keyword? api-url) (= "env" (namespace api-url)))
+                  (do
+                    (assert (get env/env (keyword (name api-url))))
+                    (str "https://" (get env/env (keyword (name api-url)))))
+                  api-url)
+        options (assoc options :api-url api-url)]
+    (map->KubeNodeProvider options)))
