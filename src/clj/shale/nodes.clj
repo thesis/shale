@@ -46,7 +46,7 @@
     (logging/info "Starting the node pool...")
     (let [node-provider (node-provider-from-config config)
           default-session-limit (or (:node-max-sessions config) 3)]
-      (logging/infof "Found nodes: %s" (node-providers/get-nodes node-provider))
+      (logging/infof "Found nodes: %s" (vec (node-providers/get-nodes node-provider)))
       (assoc cmp
              :node-provider node-provider
              :default-session-limit default-session-limit)))
