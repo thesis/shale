@@ -22,8 +22,8 @@
  :node-pool-cloud-config {:provider :kube
                           :api-url "http://localhost:8001"
                           :api-url :kubernetes-service ;; or if running shale inside kube, use the internal api
-                          :label :label {:app :selenium} ;; add all containers w/ metadata label :app :selenium
-                          :port-name "selenium" ;; connect
+                          :kube/label :label {:app :selenium} ;; add all containers w/ metadata label :app :selenium
+                          :kube/port-name "selenium" ;; connect
                           }
 
  ;; if you just need a static list of nodes, provide that instead
