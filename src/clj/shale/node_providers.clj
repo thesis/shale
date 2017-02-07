@@ -98,7 +98,12 @@
     (assert (map? label))
     (assert (= 1 (count label)))
     (let [label-key (-> label first key)
-          label-value (-> label first val)]
+          label-value (-> label first val)
+          api-url (if (and host (keyword? k) (namespace k) (= "env" (namespace k)))
+                    (do
+                      (assert (get env/env (keyword (name k))))
+                      (str "https://" (get env/env (keyword (name k)))))
+                    k)]
       (->> (kube/list-pods api-url)
            :items
            (filter (fn [pod]
