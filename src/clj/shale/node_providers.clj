@@ -87,7 +87,7 @@
                   :containers
                   (mapcat :ports)
                   (filter (fn [p]
-                            (-> p :name (= port-name))))
+                            (-> p :name (= (name port-name)))))
                   first)
         _ (assert port)
         port-num (:containerPort port)]
