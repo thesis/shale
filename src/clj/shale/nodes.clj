@@ -142,7 +142,7 @@
         (if (some #{url} (node-providers/get-nodes (:node-provider pool)))
           (node-providers/remove-node (:node-provider pool) url)))
       (finally
-        (redis/delete-model! redis/NodeInRedis id)
+        (redis/delete-model! (:redis-conn pool) redis/NodeInRedis id)
         (car/del (redis/node-tags-key id)))))
   true)
 
