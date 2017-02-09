@@ -91,7 +91,7 @@
                   first)
         _ (assert port)
         port-num (:containerPort port)]
-    (str "http://" (-> pod :status :podIP) ":" port-num)))
+    (str "http://" (-> pod :status :podIP) ":" port-num "/wd/hub")))
 
 (defrecord KubeNodeProvider [api-url]
   INodeProvider
