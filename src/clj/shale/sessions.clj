@@ -130,6 +130,7 @@
 
   Throws an exception on timeout, but blocks forever by default."
   [node capabilities & {:keys [timeout]}]
+  (logging/infof "start-webdriver! %s" node)
   (let [future-wd (future (new-webdriver node capabilities))
         wd (if (or (nil? timeout) (= 0 timeout))
                (deref future-wd)
