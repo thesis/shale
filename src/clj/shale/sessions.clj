@@ -313,7 +313,7 @@
   [pool :- SessionPool
    options :- CreateArg]
   (logging/info (format "Creating a new session.\nOptions: %s"
-                (pretty options)))
+                        (pretty options)))
 
   (if (= 0 (count (nodes/nodes-under-capacity (:node-pool pool))))
     (throw
