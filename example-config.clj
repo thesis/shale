@@ -66,4 +66,15 @@
  ;; timeout starting a new webdriver, in milliseconds. typically this should
  ;; be high if you're using slow machines or a browser with a longer startup
  ;; time, like chrome. defaults to 5000. 0 means block forever.
- :start-webdriver-timeout 5000 }
+ :start-webdriver-timeout 5000
+
+
+ ;; options for various webdriver browsers.
+
+ :webdriver {:chrome #{;; :no-sandbox
+                       }  ;; - use no-sandbox when running shale inside docker or kubernetes
+
+
+             }
+
+ }

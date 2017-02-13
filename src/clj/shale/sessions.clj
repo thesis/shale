@@ -22,6 +22,7 @@
             [shale.webdriver :refer [add-prox-to-capabilities
                                      new-webdriver
                                      resume-webdriver
+                                     maybe-add-no-sandbox
                                      to-async
                                      webdriver-capabilities]])
   (:import org.openqa.selenium.WebDriverException
@@ -39,7 +40,8 @@
    proxy-pool
    logger
    webdriver-timeout
-   start-webdriver-timeout]
+   start-webdriver-timeout
+   config]
   component/Lifecycle
   (start [cmp]
     (logging/info "Starting session pool...")
@@ -52,7 +54,8 @@
   (map->SessionPool {:start-webdriver-timeout
                      (or (:start-webdriver-timeout config) 1000)
                      :webdriver-timeout
-                     (or (:webdriver-timeout config) 1000)}))
+                     (or (:webdriver-timeout config) 1000)
+                     :config config}))
 
 (s/defschema Capabilities {s/Any s/Any})
 
@@ -348,6 +351,9 @@
               (add-prox-to-capabilities
                 rekeyed (:type prox) host (bigint port)))
             rekeyed))
+        requested-capabilities (if (-> pool :config :webdriver :chrome :no-sandbox)
+                                 (maybe-add-no-sandbox requested-capabilities)
+                                 requested-capabilities)
         id (gen-uuid)
         wd (start-webdriver!
              (:url node)
