@@ -229,7 +229,7 @@ curl -XPOST http://localhost:5000/proxies/ \
      -d '{
             "public_ip": "8.8.8.8",
             "host": "127.0.0.1",
-            "port": "1234",
+            "port": 1234,
             "type":"socks5"
             "shared":true
          }' \
@@ -241,7 +241,7 @@ curl -XPOST http://localhost:5000/proxies/ \
     "id":"f7c64a2c-595d-434c-80f0-15c9751ddcc8",
     "public_ip":"127.0.0.1",
     "host":"128.0.0.1",
-    "port":"1234",
+    "port":1234,
     "type":"socks5",
     "active":true,
     "shared":true
@@ -268,7 +268,7 @@ curl http://localhost:5000/proxies/
         "id":"f7c64a2c-595d-434c-80f0-15c9751ddcc8",
         "public_ip":"8.8.8.8",
         "host":"127.0.0.1",
-        "port":"1234",
+        "port":1234,
         "type":"socks5",
         "active":true,
         "shared":true
