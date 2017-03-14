@@ -8,7 +8,8 @@
             [shale.logging :as logging]
             [shale.node-providers :as node-providers]
             [shale.redis :as redis]
-            [shale.utils :refer :all])
+            [shale.utils :refer :all]
+            [shale.riemann :as riemann])
   (:import java.util.UUID))
 
 (deftype ConfigNodeProvider [])
@@ -35,7 +36,7 @@
     {:node-list nodes} (node-providers/new-default-node-provider nodes)
     _ (node-providers/new-default-node-provider ["http://localhost:5555/wd/hub"])))
 
-(s/defrecord NodePool
+(defrecord NodePool
   [redis-conn
    logger
    node-provider
@@ -97,6 +98,11 @@
    id   :- s/Str]
   (redis/model-exists? (:redis-conn pool) redis/NodeInRedis id))
 
+(riemann/defriemann-sender notify-node-modify pool
+  [id max-sessions]
+  {:state "ok"
+   :tags (into [] tags)})
+
 (s/defn modify-node :- NodeView
   "Modify a node's url or tags in Redis."
   [pool :- NodePool
@@ -115,7 +121,13 @@
                                (if url {:url (str url)})
                                (if max-sessions {:max-sessions max-sessions})))
         (when tags (redis/sset-all node-tags-key tags))
+        (notify-node-modify)
         (car/return (view-model pool id))))))
+
+(riemann/defriemann-sender notify-node-create pool
+  [id max-sessions]
+  {:state "ok"
+   :tags (into [] tags)})
 
 (s/defn ^:always-validate create-node :- NodeView
   "Create a node in a given pool."
@@ -128,9 +140,15 @@
       (let [id (gen-uuid)
             node-key (redis/model-key redis/NodeInRedis id)]
         (car/sadd (redis/model-ids-key redis/NodeInRedis) id)
+        (let [tags (into [] tags)]
+          (notify-node-create))
         (car/return (modify-node pool id {:url url
                                           :tags tags
                                           :max-sessions max-sessions}))))))
+
+(riemann/defriemann-sender notify-node-destroy pool
+  [id]
+  {:state "expired"})
 
 (s/defn ^:always-validate destroy-node
   [pool :- NodePool
@@ -143,13 +161,18 @@
           (node-providers/remove-node (:node-provider pool) url)))
       (finally
         (redis/delete-model! (:redis-conn pool) redis/NodeInRedis id)
-        (car/del (redis/node-tags-key id)))))
+        (car/del (redis/node-tags-key id))
+        (notify-node-destroy))))
   true)
 
 (defn ^:private to-set [s]
   (into #{} s))
 
 (def ^:private refresh-nodes-lock {})
+
+;; TODO
+;; - How should refresh riemann event look like?
+;; - Should it send also destroy and create event?
 
 (s/defn refresh-nodes
   "Syncs the node list with the backing node provider."

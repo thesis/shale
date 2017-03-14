@@ -46,7 +46,8 @@
                  [secretary "1.2.3"]
                  [slingshot "0.12.2"]
                  [sonian/carica "1.1.0" :exclusions [cheshire]]
-                 [venantius/accountant "0.1.7" :exclusions [org.clojure/tools.reader]]]
+                 [venantius/accountant "0.1.7" :exclusions [org.clojure/tools.reader]]
+                 [riemann "0.2.12" :exclusions [org.jsoup/jsoup io.netty/netty]]]
   :exclusions [cheshire]
   :scm {:name "git"
         :url "http://github.com/cardforcoin/shale"}
