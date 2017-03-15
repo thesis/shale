@@ -383,11 +383,8 @@
              :timeout (:start-webdriver-timeout pool))
         webdriver-id (remote-webdriver/session-id wd)
         actual-capabilities (webdriver-capabilities wd)]
-<<<<<<< HEAD
-=======
     (let [node-id (:id node)]
       (notify-session-create))
->>>>>>> 1a7f91d... Notification of riemann on create, modify, or destroy session/node
     (last
       (car/wcar (:redis-conn pool)
         (car/sadd (redis/model-ids-key redis/SessionInRedis) id)
@@ -560,12 +557,8 @@
                             webdriver-id
                             node-url
                             (boolean immediately)
-<<<<<<< HEAD
-                            hard-delete))))
-=======
                             hard-delete)
         (notify-session-destroy))))
->>>>>>> 1a7f91d... Notification of riemann on create, modify, or destroy session/node
   true)
 
 (def view-model-defaults {:current-url nil
