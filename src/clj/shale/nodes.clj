@@ -38,6 +38,7 @@
 
 (defrecord NodePool
   [redis-conn
+   riemann
    logger
    node-provider
    default-session-limit
@@ -98,10 +99,13 @@
    id   :- s/Str]
   (redis/model-exists? (:redis-conn pool) redis/NodeInRedis id))
 
-(riemann/defriemann-sender notify-node-modify pool
-  [id max-sessions]
-  {:state "ok"
-   :tags (into [] tags)})
+(defn notify-node-modify [pool id tags max-sessions]
+  (riemann/send-event
+   (:riemann pool)
+   {:id id
+    :max-sessions max-sessions
+    :state "ok"
+    :tags tags}))
 
 (s/defn modify-node :- NodeView
   "Modify a node's url or tags in Redis."
@@ -121,13 +125,14 @@
                                (if url {:url (str url)})
                                (if max-sessions {:max-sessions max-sessions})))
         (when tags (redis/sset-all node-tags-key tags))
-        (notify-node-modify)
+        (notify-node-modify pool id (into [] tags) max-sessions)
         (car/return (view-model pool id))))))
 
-(riemann/defriemann-sender notify-node-create pool
-  [id max-sessions]
-  {:state "ok"
-   :tags (into [] tags)})
+(defn notify-node-create [pool id tags max-sessions]
+  {:id id
+   :state "ok"
+   :max-sessions max-sessions
+   :tags tags})
 
 (s/defn ^:always-validate create-node :- NodeView
   "Create a node in a given pool."
@@ -140,15 +145,16 @@
       (let [id (gen-uuid)
             node-key (redis/model-key redis/NodeInRedis id)]
         (car/sadd (redis/model-ids-key redis/NodeInRedis) id)
-        (let [tags (into [] tags)]
-          (notify-node-create))
+        (notify-node-create pool id (into [] tags) max-sessions)
         (car/return (modify-node pool id {:url url
                                           :tags tags
                                           :max-sessions max-sessions}))))))
 
-(riemann/defriemann-sender notify-node-destroy pool
-  [id]
-  {:state "expired"})
+(defn notify-node-destroy [pool id]
+  (riemann/send-event
+   (:riemann pool)
+   {:id id
+    :state "expired"}))
 
 (s/defn ^:always-validate destroy-node
   [pool :- NodePool
@@ -162,7 +168,7 @@
       (finally
         (redis/delete-model! (:redis-conn pool) redis/NodeInRedis id)
         (car/del (redis/node-tags-key id))
-        (notify-node-destroy))))
+        (notify-node-destroy pool id))))
   true)
 
 (defn ^:private to-set [s]

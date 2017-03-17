@@ -37,6 +37,7 @@
 
 (s/defrecord SessionPool
   [redis-conn
+   riemann
    node-pool
    proxy-pool
    logger
@@ -129,9 +130,10 @@
 (declare view-model view-model-exists? view-models view-model-ids
          resume-webdriver-from-id destroy-session)
 
-(riemann/defriemann-sender notify-session-create-error pool
-  []
-  {:state "error"})
+(defn notify-session-create-error [pool]
+  (riemann/send-event
+   (:riemann pool)
+   {:state "error"}))
 
 (defn start-webdriver!
   "Create a webdriver. Optionally specify a timeout in milliseconds.
@@ -146,7 +148,7 @@
     (if (= wd ::timeout)
         (do
           (future-cancel future-wd)
-          (notify-session-create-error)
+          (notify-session-create-error pool)
           (logging/warn (format
                   "Timeout starting new webdriver on node %s"
                   node))
@@ -156,9 +158,11 @@
                       :node-url node})))
         wd)))
 
-(riemann/defriemann-sender notify-session-resume-error pool
-  [id]
-  {:state "error"})
+(defn notify-session-resume-error [pool id]
+  (riemann/send-event
+   (:riemann pool)
+   {:id id
+    :state "error"}))
 
 (defn resume-webdriver-from-id
   "Resume and return a web driver from a session id (versus a webdriver id).
@@ -181,7 +185,7 @@
       (if (= wd ::timeout)
         (do
           (future-cancel future-wd)
-          (notify-session-resume-error)
+          (notify-session-resume-error pool id)
           (logging/warn (format
                   "Timeout resuming session %s after %d ms against node %s"
                   webdriver-id
@@ -267,9 +271,14 @@
       :add (clojure.set/union #{tag} tags)
       :remove (disj tags tag))))
 
-(riemann/defriemann-sender notify-session-modify pool
-  [id tags reserved]
-  {:state "ok"})
+
+(defn notify-session-modify [pool id tags reserved]
+  (riemann/send-event
+   (:riemann pool)
+   {:id id
+    :tags tags
+    :reserved reserved
+    :state "ok"}))
 
 (s/defn ^:always-validate modify-session :- (s/maybe SessionView)
   "Modify an existing session."
@@ -299,8 +308,9 @@
       (if (or (not go-to-url)
               (session-go-to-url-or-destroy-session id go-to-url))
         (save-session-diff-to-redis pool id session-diff))
-      (let [{:keys [tags reserved]} session-diff]
-        (notify-session-modify)))
+      (let [{:keys [tags reserved]} session-diff
+            tags (into [] (map name tags))]
+        (notify-session-modify pool id tags reserved)))
     (view-model pool id)))
 
 (s/defn ^:always-validate get-node-or-err :- nodes/NodeView
@@ -308,7 +318,7 @@
    node-req  :- (s/maybe nodes/NodeRequirement)]
   (let [node (nodes/get-node pool node-req)]
     (when (nil? node)
-      (notify-session-create-error)
+      (notify-session-create-error pool)
       (throw
         (ex-info "No suitable node found!"
                  {:user-visible true :status 503})))
@@ -329,9 +339,15 @@
    :reserved false
    :proxy-id nil})
 
-(riemann/defriemann-sender notify-session-create pool
-  [id tags reserved browser-name node-id]
-  {:state "ok"})
+(defn notify-session-create [pool id tags reserved browser-name node-id]
+  (riemann/send-event
+   (:riemann pool)
+   {:id id
+    :tags tags
+    :reserved reserved
+    :browser-name browser-name
+    :node-id node-id
+    :state "ok"}))
 
 (s/defn ^:always-validate create-session :- SessionView
   [pool :- SessionPool
@@ -339,7 +355,7 @@
   (logging/info (format "Creating a new session.\nOptions: %s"
                         (pretty options)))
   (when (= 0 (count (nodes/nodes-under-capacity (:node-pool pool))))
-    (notify-session-create-error)
+    (notify-session-create-error pool)
     (throw
      (ex-info "All nodes are over capacity!"
               {:user-visible true :status 503})))
@@ -383,8 +399,10 @@
              :timeout (:start-webdriver-timeout pool))
         webdriver-id (remote-webdriver/session-id wd)
         actual-capabilities (webdriver-capabilities wd)]
-    (let [node-id (:id node)]
-      (notify-session-create))
+
+    (let [tags (into [] (map name tags))
+          node-id (:id node)]
+      (notify-session-create pool id tags reserved browser-name node-id))
     (last
       (car/wcar (:redis-conn pool)
         (car/sadd (redis/model-ids-key redis/SessionInRedis) id)
@@ -531,9 +549,11 @@
     (when immediately
       (deref deferred))))
 
-(riemann/defriemann-sender notify-session-destroy pool
-  [id]
-  {:state "expired"})
+(defn notify-session-destroy [pool id]
+  (riemann/send-event
+   (:riemann pool)
+   {:id id 
+    :state "expired"}))
 
 (defn destroy-session
   [pool id & {:keys [immediately] :or {immediately true}}]
@@ -558,7 +578,7 @@
                             node-url
                             (boolean immediately)
                             hard-delete)
-        (notify-session-destroy))))
+        (notify-session-destroy pool id))))
   true)
 
 (def view-model-defaults {:current-url nil

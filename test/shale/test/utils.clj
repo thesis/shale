@@ -92,7 +92,7 @@
         (finally
           (clear-redis redis))))))
 
-(def riemann-test-conf {:host "localhost" :port 6666})
+(def riemann-test-conf {:host "127.0.0.1" :port 6666})
 
 (defn with-riemann-server
   ([] (with-riemann-server (constantly nil)))
