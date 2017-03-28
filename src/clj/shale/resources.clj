@@ -204,8 +204,7 @@
                 (jsonify (::session context)))
    :handle-exception handle-exception
    :delete! (fn [context]
-              (let [immediately
-                    (get (->boolean-params-data context) "immediately")]
+              (let [immediately (get (->boolean-params-data context) "immediately")]
                 (sessions/destroy-session
                   (->session-pool context)
                   (->session-id context)

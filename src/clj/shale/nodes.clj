@@ -9,54 +9,53 @@
             [shale.node-providers :as node-providers]
             [shale.redis :as redis]
             [shale.utils :refer :all])
-  (:import java.util.UUID
-           [shale.node_providers DefaultNodeProvider AWSNodeProvider]))
+  (:import java.util.UUID))
 
 (deftype ConfigNodeProvider [])
 
-(def node-provider-from-config
-  "Return a node pool given a config function.
+(defn node-pool-impl-from-config [{:keys [get-node add-node remove-node can-add-node can-remove-node] :as impl}]
+  (reify node-providers/INodeProvider
+    (get-nodes [this]
+      ((:get-nodes impl) this))
+    (add-node [this url]
+      ((:add-node impl) this url))
+    (remove-node [this url]
+      ((:remove-node impl) this url))
+    (can-add-node [this]
+      ((:can-add-node impl) this))
+    (can-remove-node [this]
+      ((:can-remove-node impl) this))))
 
-  The config function should expect a single keyword argument and to look up
-  config values.
-
-  Note that, though this function isn't referentially transparent, it's
-  memoized. This is a hack, and will be cleaned up when we start using
-  components (https://github.com/cardforcoin/shale/issues/58)."
-  (memoize
-    (fn [config-fn]
-      (if (nil? (config-fn :node-pool-impl))
-        (if (nil? (config-fn :node-pool-cloud-config))
-          (node-providers/DefaultNodeProvider. (or (config-fn :node-list)
-                                                ["http://localhost:5555/wd/hub"]))
-          (if (= ((config-fn :node-pool-cloud-config) :provider) :aws)
-            (node-providers/AWSNodeProvider. (config-fn :node-pool-cloud-config))
-            (throw (ex-info (str "Issue with cloud config: AWS is "
-                                 "the only currently supported "
-                                 "provider.")
-                            {:user-visible true :status 500}))))
-        (do
-          (extend ConfigNodeProvider
-            node-providers/INodeProvider
-            (config-fn :node-pool-impl))
-          (ConfigNodeProvider.))))))
+(defn node-provider-from-config [config]
+  (match config
+    {:node-pool-cloud-config cloud-config} (match cloud-config
+                                             {:provider :aws} (node-providers/new-aws-node-provider cloud-config)
+                                             {:provider :kube} (node-providers/new-kube-node-provider cloud-config))
+    {:node-pool-impl impl} (node-pool-impl-from-config impl)
+    {:node-list nodes} (node-providers/new-default-node-provider nodes)
+    _ (node-providers/new-default-node-provider ["http://localhost:5555/wd/hub"])))
 
 (s/defrecord NodePool
   [redis-conn
    logger
    node-provider
-   default-session-limit]
+   default-session-limit
+   config]
   component/Lifecycle
   (start [cmp]
     (logging/info "Starting the node pool...")
-    cmp)
+    (let [node-provider (node-provider-from-config config)
+          default-session-limit (or (:node-max-sessions config) 3)]
+      (logging/infof "Found nodes: %s" (vec (node-providers/get-nodes node-provider)))
+      (assoc cmp
+             :node-provider node-provider
+             :default-session-limit default-session-limit)))
   (stop [cmp]
     (logging/info "Stopping the node pool...")
     (assoc cmp :node-provider nil)))
 
 (defn new-node-pool [config]
-  (map->NodePool {:node-provider (node-provider-from-config config)
-                  :default-session-limit (or (:node-max-sessions config) 3)}))
+  (map->NodePool {:config config}))
 
 (s/defn node-ids :- [s/Str] [pool :- NodePool]
   (car/wcar (:redis-conn pool)
@@ -143,7 +142,7 @@
         (if (some #{url} (node-providers/get-nodes (:node-provider pool)))
           (node-providers/remove-node (:node-provider pool) url)))
       (finally
-        (redis/delete-model! redis/NodeInRedis id)
+        (redis/delete-model! (:redis-conn pool) redis/NodeInRedis id)
         (car/del (redis/node-tags-key id)))))
   true)
 

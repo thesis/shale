@@ -29,9 +29,11 @@
                           flatten
                           (filter identity)
                           (map io/as-url)
-                          concat)
-        raw-config (clojure.edn/read-string (slurp (first config-paths)))]
-    (logging/info "Loading config...\n")
-    (logging/info (pretty raw-config))
-    (logging/info "Resolving environment variables...\n")
-    (clojure.walk/postwalk resolve-env-keyword! raw-config)))
+                          concat)]
+    (if-let [raw-config (some-> config-paths first slurp clojure.edn/read-string)]
+      (do
+        (logging/info "Loading config...\n")
+        (logging/info (pretty raw-config))
+        (logging/info "Resolving environment variables...\n")
+        (clojure.walk/postwalk resolve-env-keyword! raw-config))
+      (throw (ex-info "Configuration not found. Requires either config.clj on classpath or CONFIG_FILE env var" {})))))

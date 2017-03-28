@@ -4,7 +4,8 @@
             [clj-webdriver.core :as core]
             [clj-webdriver.remote.driver :refer [session-id]]
             [clj-webdriver.taxi :refer [execute-script]]
-            wall.hack)
+            wall.hack
+            shale.ext.ResumableRemoteWebDriver)
   (:import org.openqa.selenium.remote.DesiredCapabilities
            clj_webdriver.ext.remote.RemoteWebDriverExt
            java.net.URL
@@ -30,6 +31,13 @@
                                 (format "--proxy-type=%s" proxy-type)]})
       (throw (ex-info "Unknown browser for proxy config."
                       {:browser-name browser-name})))))
+
+(s/defn ^:always-validate maybe-add-no-sandbox :- {s/Any s/Any}
+  [capabilities :- {s/Any s/Any}]
+  (let [browser-name (get capabilities "browserName")]
+    (case browser-name
+      "chrome" (update-in capabilities ["chromeOptions" "args"] conj "--no-sandbox")
+      capabilities)))
 
 (defn new-webdriver [node capabilities]
   (clj-webdriver.driver/init-driver

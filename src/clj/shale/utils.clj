@@ -3,6 +3,7 @@
             [clojure.string :as string]
             [clojure.pprint :refer [pprint]]
             [clj-dns.core :refer [dns-lookup]]
+            [environ.core :as env]
             [org.bovinegenius [exploding-fish :as uri]]
             [schema.core :as s]
             [slingshot.slingshot :refer [throw+]]
@@ -134,3 +135,10 @@
                         " with args "
                         (vec args#)))
            matching-schema#)))))
+
+(defn maybe-resolve-env-keyword
+  "If k is a keyword with the namespace :env, look it up and return it, else k"
+  [k]
+  (if (and k (keyword? k) (namespace k) (= "env" (namespace k)))
+    (get env/env (keyword (name k)))
+    k))

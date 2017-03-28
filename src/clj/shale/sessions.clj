@@ -22,6 +22,7 @@
             [shale.webdriver :refer [add-prox-to-capabilities
                                      new-webdriver
                                      resume-webdriver
+                                     maybe-add-no-sandbox
                                      to-async
                                      webdriver-capabilities]])
   (:import org.openqa.selenium.WebDriverException
@@ -39,7 +40,8 @@
    proxy-pool
    logger
    webdriver-timeout
-   start-webdriver-timeout]
+   start-webdriver-timeout
+   config]
   component/Lifecycle
   (start [cmp]
     (logging/info "Starting session pool...")
@@ -52,7 +54,8 @@
   (map->SessionPool {:start-webdriver-timeout
                      (or (:start-webdriver-timeout config) 1000)
                      :webdriver-timeout
-                     (or (:webdriver-timeout config) 1000)}))
+                     (or (:webdriver-timeout config) 1000)
+                     :config config}))
 
 (s/defschema Capabilities {s/Any s/Any})
 
@@ -130,6 +133,7 @@
 
   Throws an exception on timeout, but blocks forever by default."
   [node capabilities & {:keys [timeout]}]
+  (logging/infof "start-webdriver! %s" node)
   (let [future-wd (future (new-webdriver node capabilities))
         wd (if (or (nil? timeout) (= 0 timeout))
                (deref future-wd)
@@ -312,7 +316,7 @@
   [pool :- SessionPool
    options :- CreateArg]
   (logging/info (format "Creating a new session.\nOptions: %s"
-                (pretty options)))
+                        (pretty options)))
 
   (if (= 0 (count (nodes/nodes-under-capacity (:node-pool pool))))
     (throw
@@ -347,6 +351,9 @@
               (add-prox-to-capabilities
                 rekeyed (:type prox) host (bigint port)))
             rekeyed))
+        requested-capabilities (if (-> pool :config :webdriver :chrome :no-sandbox)
+                                 (maybe-add-no-sandbox requested-capabilities)
+                                 requested-capabilities)
         id (gen-uuid)
         wd (start-webdriver!
              (:url node)
@@ -498,7 +505,7 @@
       (deref deferred))))
 
 (defn destroy-session
-  [pool id & {:keys [immediately] :or [immediately true]}]
+  [pool id & {:keys [immediately] :or {immediately true}}]
   (s/validate SessionPool pool)
   (s/validate s/Str id)
   (car/wcar (:redis-conn pool)

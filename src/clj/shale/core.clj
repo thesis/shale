@@ -1,17 +1,19 @@
 (ns shale.core
-  (:require [ring.adapter.jetty :as jetty]
-            [io.aviso.exception :as pretty]
-            [cheshire.generate :refer [add-encoder encode-str]]
-            [schema.core :as s]
+  (:require [cheshire.generate :refer [add-encoder encode-str]]
             [com.stuartsierra.component :as component]
-            [system.components.repl-server :refer [new-repl-server]]
+            [environ.core :as env]
+            [io.aviso.exception :as pretty]
+            [schema.core :as s]
             [shale.configurer :refer [get-config]]
             [shale.handler :as handler]
             [shale.logging :as logging]
             [shale.nodes :as nodes]
             [shale.periodic :as periodic]
             [shale.proxies :as proxies]
-            [shale.sessions :as sessions])
+            [shale.sessions :as sessions]
+            [shale.utils :refer (maybe-resolve-env-keyword) ]
+            [system.components.repl-server :refer [new-repl-server]]
+            [ring.adapter.jetty :as jetty])
   (:import clojure.lang.IPersistentMap
            clojure.lang.IRecord
            org.openqa.selenium.Platform
@@ -40,7 +42,16 @@
   (map->Jetty {:config conf}))
 
 (defn get-redis-config [conf]
-  {:pool {} :spec (:redis conf)})
+  (let [redis-conf (:redis conf)
+        {:keys [host port db]
+         :or {host "localhost"
+              port 6379
+              db 0}} redis-conf
+        host (maybe-resolve-env-keyword host)]
+    (when (not host)
+      (logging/infof "env: %s" env/env))
+    (assert host)
+    {:pool {} :spec {:host host :port port :db db}}))
 
 (defn keyvals->system [kv]
   (apply component/system-map kv))
@@ -81,7 +92,8 @@
             [:scheduler (component/using (periodic/new-scheduler conf)
                                          [:session-pool :node-pool :logger])
              :nrepl (if-let [nrepl-port (or (conf :nrepl-port) 5001)]
-                      (new-repl-server nrepl-port))])))
+                      (new-repl-server nrepl-port)
+                      {})])))
 
 (def shale-system nil)
 
@@ -89,7 +101,9 @@
   (alter-var-root #'shale-system component/start))
 
 (defn stop []
-  (alter-var-root #'shale-system component/stop))
+  (when shale-system
+    (component/stop shale-system))
+  (alter-var-root #'shale-system (constantly nil)))
 
 (defn init-cheshire []
   ; unfortunately, cheshire has a global encoders list
@@ -105,4 +119,5 @@
     (init)
     (start)
     (catch Exception e
+      (logging/error e)
       (stop))))
