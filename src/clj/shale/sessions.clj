@@ -118,7 +118,9 @@
                  (= arg (get s req-type))
                :tag   (some #{arg} (:tags s))
                :node  (nodes/matches-requirement (:node s) arg)
-               :proxy (proxies/matches-requirement (:proxy s) arg)
+               :proxy (if-let [prox (:proxy s)]
+                        (proxies/matches-requirement prox arg)
+                        false)
                :nil?  (nil? (get s arg))
                :not   (not     (matches-requirement s arg))
                :and   (every? #(matches-requirement s %) arg)
