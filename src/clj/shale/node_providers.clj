@@ -130,7 +130,7 @@
   (let [api-url (try
                   (str (url api-url))
                   (catch MalformedURLException e
-                    (if (.contains (.msg e) "no protocol")
+                    (if (.contains (.getMessage e) "no protocol")
                       (str (url (str "https://" api-url))))))
         options (assoc options :api-url api-url)]
     (map->KubeNodeProvider options)))
