@@ -1,9 +1,9 @@
 (ns shale.node-providers
   (:require [amazonica.aws.ec2 :as ec2]
-            [clj-kube.core :as kube]
-            [environ.core :as env])
-  (:import java.io.FileNotFoundException))
-
+            [cemerick.url :refer [url]]
+            [clj-kube.core :as kube])
+  (:import java.io.FileNotFoundException
+           java.net.MalformedURLException))
 (try
   (require '[amazonica.aws.ec2])
   (catch FileNotFoundException e))
@@ -127,10 +127,10 @@
   "Use pods with the given kubernetes label. Label is a map containing a single key & value. port-name is the named container port to connect on"
   (assert (= :kube (:provider options)))
   (assert api-url)
-  (let [api-url (if (and (keyword? api-url) (= "env" (namespace api-url)))
-                  (do
-                    (assert (get env/env (keyword (name api-url))))
-                    (str "https://" (get env/env (keyword (name api-url)))))
-                  api-url)
+  (let [api-url (try
+                  (str (url api-url))
+                  (catch MalformedURLException e
+                    (if (.contains (.msg e) "no protocol")
+                      (str (url (str "https://" api-url))))))
         options (assoc options :api-url api-url)]
     (map->KubeNodeProvider options)))
