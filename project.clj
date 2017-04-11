@@ -1,4 +1,4 @@
-(defproject shale "0.3.3-SNAPSHOT"
+(defproject shale "0.3.3"
   :description "A Clojure-backed Selenium hub replacement"
   :url "https://github.com/cardforcoin/shale"
   :license {:name "MIT License"
