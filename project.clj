@@ -133,5 +133,7 @@
                                              :compiler
                                              {:optimizations :advanced
                                               :pretty-print false}}}}}}
+  :deploy-repositories [["releases" :clojars]
+                        ["snapshots" :clojars]]
 
   :aot [#"shale\.ext\.*" #"shale\.core"])
