@@ -75,11 +75,11 @@
        (merge {:id id})
        keywordize-keys))
 
-(s/defn view-model :- NodeView
+(s/defn view-model :- (s/maybe NodeView)
   "Given a node pool, get a view model from Redis."
   [pool :- NodePool
    id   :- s/Str]
-  (let [m (redis/model (:redis-conn pool) redis/NodeInRedis id)]
+  (when-let [m (redis/model (:redis-conn pool) redis/NodeInRedis id)]
     (->NodeView id m)))
 
 (s/defn view-models :- [NodeView]
