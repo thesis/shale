@@ -284,7 +284,7 @@
                                             :go-to-url :current-url})
                               (if-not (nil? new-tags)
                                 {:tags new-tags}))]
-      (if (or (not go-to-url)
+      (when (or (not go-to-url)
               (session-go-to-url-or-destroy-session id go-to-url))
         (save-session-diff-to-redis pool id session-diff)))
     (view-model pool id)))
@@ -436,17 +436,17 @@
       (let [force-create (and (contains? arg :create)
                               (not (contains? arg :require)))
             candidate (or
-                        (if (not force-create)
-                          (->> (view-models pool)
-                               (filter
-                                 (fn [session-model]
-                                   (matches-requirement
-                                     session-model
-                                     (:require arg))))
-                               first))
-                        (let [create (or (:create arg)
-                                         (require->create (:require arg)))]
-                          (create-session pool create)))]
+                       (when (not force-create)
+                         (->> (view-models pool)
+                              (filter
+                               (fn [session-model]
+                                 (matches-requirement
+                                  session-model
+                                  (:require arg))))
+                              first))
+                       (let [create (or (:create arg)
+                                        (require->create (:require arg)))]
+                         (create-session pool create)))]
         (if-let [modifications (:modify arg)]
           (modify-session pool
                           (:id candidate)
@@ -537,11 +537,11 @@
 (s/defn ^:always-validate model->view-model :- (s/maybe SessionView)
   [pool  :- SessionPool
    model :- (s/maybe redis/SessionInRedis)]
-  (if-let [base (some->> model
-                         (merge view-model-defaults))]
+  (when-let [base (some->> model
+                           (merge view-model-defaults))]
     (let [node (nodes/view-model (:node-pool pool)
                                  (:node-id model))
-          prox (if-let [prox-id (:proxy-id model)]
+          prox (when-let [prox-id (:proxy-id model)]
                  (proxies/view-model (:proxy-pool pool) prox-id))]
       (-> base
           (dissoc :node-id :proxy-id)
