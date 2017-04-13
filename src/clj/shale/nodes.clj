@@ -75,11 +75,11 @@
        (merge {:id id})
        keywordize-keys))
 
-(s/defn view-model :- NodeView
+(s/defn view-model :- (s/maybe NodeView)
   "Given a node pool, get a view model from Redis."
   [pool :- NodePool
    id   :- s/Str]
-  (let [m (redis/model (:redis-conn pool) redis/NodeInRedis id)]
+  (when-let [m (redis/model (:redis-conn pool) redis/NodeInRedis id)]
     (->NodeView id m)))
 
 (s/defn view-models :- [NodeView]
@@ -132,6 +132,14 @@
                                           :tags tags
                                           :max-sessions max-sessions}))))))
 
+(s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
+                                                  node-id :- s/Str]
+  (let [redis-conn (:redis-conn pool)]
+    (->> (redis/models redis-conn
+                       redis/SessionInRedis
+                       :include-soft-deleted? true)
+         (filter #(= node-id (:node-id %))))))
+
 (s/defn ^:always-validate destroy-node
   [pool :- NodePool
    id   :- s/Str]
@@ -142,6 +150,8 @@
         (if (some #{url} (node-providers/get-nodes (:node-provider pool)))
           (node-providers/remove-node (:node-provider pool) url)))
       (finally
+        (doseq [session (raw-sessions-with-node pool id)]
+          (redis/delete-model! (:redis-conn pool) redis/SessionInRedis (:id session)))
         (redis/delete-model! (:redis-conn pool) redis/NodeInRedis id)
         (car/del (redis/node-tags-key id)))))
   true)
@@ -185,14 +195,6 @@
     :not (s/recursive #'NodeRequirement)
     :and [(s/recursive #'NodeRequirement)]
     :or  [(s/recursive #'NodeRequirement)]))
-
-(s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
-                                                  node-id :- s/Str]
-  (let [redis-conn (:redis-conn pool)]
-    (->> (redis/models redis-conn
-                       redis/SessionInRedis
-                       :include-soft-deleted? true)
-         (filter #(= node-id (:node-id %))))))
 
 (s/defn ^:always-validate raw-session-count [pool    :- NodePool
                                              node-id :- s/Str]
