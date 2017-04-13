@@ -233,7 +233,6 @@
                                        car/hgetall
                                        (wcar redis-conn)
                                        (apply hash-map))})]
-                (println "redis/models" model-schema id "=" sets lists maps)
                 (->> (concat sets lists maps)
                      (list* base)
                      (reduce merge)
