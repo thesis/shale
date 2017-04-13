@@ -174,6 +174,9 @@
                        :error coerced})))
     coerced))
 
+(defn key-exists? [conn k]
+  (pos? (car/wcar conn (car/exists k))))
+
 (defn model
   "Return a model from a Redis key given a particular schema.
 
@@ -207,37 +210,39 @@
                                     (:k %)))))
         k (model-key model-schema id)]
     (last
-      (wcar redis-conn
-        (car/watch k)
-        (car/return
-          (let [base (vector->map (wcar redis-conn
-                                    (car/hgetall k)))
-                sets (for [set-k set-keys]
-                       {set-k (->> [k set-k]
-                                   (clojure.string/join "/")
-                                   car/smembers
-                                   (wcar redis-conn)
-                                   (into #{}))})
-                lists (for [list-k list-keys]
-                       {list-k (list
-                                 (wcar redis-conn
-                                   (-> (clojure.string/join "/" [k list-k])
-                                       (car/lrange 0 -1))))})
-                maps (for [map-k map-keys]
-                       {map-k (->> [k map-k]
-                                   (clojure.string/join "/")
-                                   car/hgetall
-                                   (wcar redis-conn)
-                                   (apply hash-map))})]
-            (->> (concat sets lists maps)
-                 (list* base)
-                 (reduce merge)
-                 ; remove internal keys
-                 (filter #(not (.startsWith (key %) redis-key-prefix)))
-                 (into {})
-                 keywordize-keys
-                 (merge {:id id})
-                 (coerce-model model-schema))))))))
+     (wcar redis-conn
+           (car/watch k)
+           (car/return
+            (when (key-exists? redis-conn k)
+              (let [base (vector->map (wcar redis-conn
+                                            (car/hgetall k)))
+                    sets (for [set-k set-keys]
+                           {set-k (->> [k set-k]
+                                       (clojure.string/join "/")
+                                       car/smembers
+                                       (wcar redis-conn)
+                                       (into #{}))})
+                    lists (for [list-k list-keys]
+                            {list-k (list
+                                     (wcar redis-conn
+                                           (-> (clojure.string/join "/" [k list-k])
+                                               (car/lrange 0 -1))))})
+                    maps (for [map-k map-keys]
+                           {map-k (->> [k map-k]
+                                       (clojure.string/join "/")
+                                       car/hgetall
+                                       (wcar redis-conn)
+                                       (apply hash-map))})]
+                (println "redis/models" model-schema id "=" sets lists maps)
+                (->> (concat sets lists maps)
+                     (list* base)
+                     (reduce merge)
+                                        ; remove internal keys
+                     (filter #(not (.startsWith (key %) redis-key-prefix)))
+                     (into {})
+                     keywordize-keys
+                     (merge {:id id})
+                     (coerce-model model-schema)))))))))
 
 (defn soft-delete-model!
   "Add a flag to a Redis model to signify a \"soft delete\".
