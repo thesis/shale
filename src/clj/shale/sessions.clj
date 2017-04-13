@@ -19,12 +19,7 @@
             [shale.utils :refer :all]
             [shale.redis :as redis]
             [shale.selenium :as selenium]
-            [shale.webdriver :refer [add-prox-to-capabilities
-                                     new-webdriver
-                                     resume-webdriver
-                                     maybe-add-no-sandbox
-                                     to-async
-                                     webdriver-capabilities]])
+            shale.webdriver)
   (:import org.openqa.selenium.WebDriverException
            org.openqa.selenium.remote.UnreachableBrowserException
            org.xbill.DNS.Type
@@ -136,7 +131,7 @@
   Throws an exception on timeout, but blocks forever by default."
   [node capabilities & {:keys [timeout]}]
   (logging/infof "start-webdriver! %s" node)
-  (let [future-wd (future (new-webdriver node capabilities))
+  (let [future-wd (future (shale.webdriver/new-webdriver node capabilities))
         wd (if (or (nil? timeout) (= 0 timeout))
                (deref future-wd)
                (deref future-wd timeout ::timeout))]
@@ -167,7 +162,7 @@
                         [webdriver-id
                          node-url
                          :browser-name])
-          future-wd (future (apply resume-webdriver resume-args))
+          future-wd (future (apply shale.webdriver/resume-webdriver resume-args))
           wd (if (or (nil? timeout) (= 0 timeout))
                (deref future-wd)
                (deref future-wd timeout ::timeout))]
@@ -192,7 +187,7 @@
 (defn webdriver-go-to-url [wd url]
   "Asynchronously point a webdriver to a url.
   Return nil or :webdriver-is-dead."
-  (try (do (to-async wd url) nil)
+  (try (do (shale.webdriver/to-async wd url) nil)
     (catch WebDriverException e :webdriver-is-dead)))
 
 (s/defn ^:always-validate session-go-to-url
@@ -350,11 +345,12 @@
                                              capabilities))]
           (if proxy-require
             (let [{:keys [host port]} prox]
-              (add-prox-to-capabilities
+              (shale.webdriver/add-prox-to-capabilities
                 rekeyed (:type prox) host (bigint port)))
             rekeyed))
         requested-capabilities (if (-> pool :config :webdriver :chrome :no-sandbox)
-                                 (maybe-add-no-sandbox requested-capabilities)
+                                 (shale.webdriver/maybe-add-no-sandbox
+                                   requested-capabilities)
                                  requested-capabilities)
         id (gen-uuid)
         wd (start-webdriver!
@@ -362,7 +358,7 @@
              requested-capabilities
              :timeout (:start-webdriver-timeout pool))
         webdriver-id (remote-webdriver/session-id wd)
-        actual-capabilities (webdriver-capabilities wd)]
+        actual-capabilities (shale.webdriver/webdriver-capabilities wd)]
     (last
       (car/wcar (:redis-conn pool)
         (car/sadd (redis/model-ids-key redis/SessionInRedis) id)
@@ -460,46 +456,10 @@
    immediately  :- s/Bool
    callback     :- (s/maybe (s/pred fn? "callback"))]
   (let [timeout (:webdriver-timeout pool)
-        session-url (->> webdriver-id
-                         (format "./session/%s")
-                         (url node-url)
-                         str)
         deferred (future
-                   (try+
-                     (client/delete session-url
-                                    {:socket-timeout timeout
-                                     :conn-timeout timeout})
-                     (logging/info (format "Destroyed webdriver %s on node %s."
-                                   webdriver-id
-                                   node-url))
-                     (catch [:status 404] _
-                       (logging/error
-                         (format (str "Got a 404 attempting to delete"
-                                      " webdriver %s from node %s.")
-                                 webdriver-id
-                                 node-url)))
-                     (catch [:status 500] _
-                       (logging/error
-                         (format (str "Got a 500 attempting to delete"
-                                      " webdriver %s from node %s.")
-                                 webdriver-id
-                                 node-url)))
-
-                     (catch #(any-instance?
-                               [ConnectTimeoutException
-                                SocketTimeoutException
-                                UnreachableBrowserException]) e
-                       (logging/error
-                         (format (str "Timeout connecting to node %s"
-                                      " to delete webdriver %s.")
-                                 node-url
-                                 webdriver-id)))
-                     (catch ConnectException e
-                       (logging/error
-                         (format (str "Error connecting to node %s"
-                                      " to delete session %s.")
-                                 node-url
-                                 webdriver-id)))
+                   (try
+                     (shale.webdriver/destroy-webdriver!
+                       webdriver-id node-url timeout)
                      (finally
                        (when-not (nil? callback)
                          (callback)))))]
