@@ -132,6 +132,14 @@
                                           :tags tags
                                           :max-sessions max-sessions}))))))
 
+(s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
+                                                  node-id :- s/Str]
+  (let [redis-conn (:redis-conn pool)]
+    (->> (redis/models redis-conn
+                       redis/SessionInRedis
+                       :include-soft-deleted? true)
+         (filter #(= node-id (:node-id %))))))
+
 (s/defn ^:always-validate destroy-node
   [pool :- NodePool
    id   :- s/Str]
@@ -187,14 +195,6 @@
     :not (s/recursive #'NodeRequirement)
     :and [(s/recursive #'NodeRequirement)]
     :or  [(s/recursive #'NodeRequirement)]))
-
-(s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
-                                                  node-id :- s/Str]
-  (let [redis-conn (:redis-conn pool)]
-    (->> (redis/models redis-conn
-                       redis/SessionInRedis
-                       :include-soft-deleted? true)
-         (filter #(= node-id (:node-id %))))))
 
 (s/defn ^:always-validate raw-session-count [pool    :- NodePool
                                              node-id :- s/Str]
