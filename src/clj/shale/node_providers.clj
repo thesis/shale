@@ -102,14 +102,14 @@
     (str "http://" (-> pod :status :podIP) ":" port-num "/wd/hub")))
 
 (defn provided-node-from-pod
-  "Get a `ProvidedNode` from pod info returned from the kube API. A label with
-  the key `shale/node-tags` can optionally provide node tags in a
+  "Get a `ProvidedNode` from pod info returned from the kube API. An annotation
+  with the key `shale/node-tags` can optionally provide node tags in a
   semicolon-delimited list."
   [pod port-name]
   (let [url (selenium-url-from-pod pod port-name)
         tags (-> pod
                  :metadata
-                 :labels
+                 :annotations
                  (:shale/node-tags "")
                  (clojure.string/split #";")
                  (->> (into #{})))]
