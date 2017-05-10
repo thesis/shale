@@ -132,6 +132,17 @@
                                           :tags tags
                                           :max-sessions max-sessions}))))))
 
+(s/defn ^:always-validate create-node-from-provided-mode :- NodeView
+  "Create a node in a given pool from a `node-providers/ProvidedNode`"
+  [pool          :- NodePool
+   provided-node :- node-providers/ProvidedNode]
+  (let [args (->> {:url (:url provided-node provided-node)
+                   :tags (:tags provided-node)
+                   :max-sessions (:max-sessions provided-node)}
+                   (filter second)
+                   (into {}))]
+    (create-node pool args)))
+
 (s/defn ^:always-validate raw-sessions-with-node [pool    :- NodePool
                                                   node-id :- s/Str]
   (let [redis-conn (:redis-conn pool)]
@@ -146,8 +157,10 @@
   (car/wcar (:redis-conn pool)
     (car/watch (redis/model-ids-key redis/NodeInRedis))
     (try
-      (let [url (:url (view-model pool id))]
-        (if (some #{url} (node-providers/get-nodes (:node-provider pool)))
+      (let [url (:url (view-model pool id))
+            provided-nodes (node-providers/get-nodes (:node-provider pool))
+            provided-node-urls (map #(:url % %) provided-nodes)]
+        (if (some #{url} provided-node-urls)
           (node-providers/remove-node (:node-provider pool) url)))
       (finally
         (doseq [session (raw-sessions-with-node pool id)]
@@ -161,29 +174,32 @@
 
 (def ^:private refresh-nodes-lock {})
 
-(s/defn refresh-nodes
+(s/defn ^:always-validate refresh-nodes
   "Syncs the node list with the backing node provider."
   [pool :- NodePool]
   (locking refresh-nodes-lock
     (logging/debug "Refreshing nodes...")
     (let [nodes (->> (:node-provider pool)
                      node-providers/get-nodes
-                     to-set)
+                     (map #(vec [(:url % %) %]))
+                     (into {}))
           registered-nodes (->> (view-models pool)
-                                (map :url)
-                                to-set)]
+                                (map #(vec [(:url %) %]))
+                                (into {}))]
       (logging/debug "Live nodes:")
       (logging/debug nodes)
       (logging/debug "Nodes in Redis:")
       (logging/debug registered-nodes)
       (doall
         (concat
-          (map #(create-node pool {:url %})
+          (map #(create-node-from-provided-mode pool (get nodes %))
                (filter identity
-                       (difference nodes registered-nodes)))
-          (map #(destroy-node pool (:id (view-model-from-url pool %)))
+                       (difference (to-set (keys nodes))
+                                   (to-set (keys registered-nodes)))))
+          (map #(destroy-node pool (:id (get registered-nodes %)))
                (filter identity
-                       (difference registered-nodes nodes))))))
+                       (difference (to-set (keys registered-nodes))
+                                   (to-set (keys nodes))))))))
     true))
 
 (s/defschema NodeRequirement
