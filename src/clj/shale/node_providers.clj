@@ -1,19 +1,27 @@
 (ns shale.node-providers
   (:require [amazonica.aws.ec2 :as ec2]
             [cemerick.url :refer [url]]
-            [clj-kube.core :as kube])
+            [clj-kube.core :as kube]
+            [schema.core :as s])
   (:import java.io.FileNotFoundException
            java.net.MalformedURLException))
 (try
   (require '[amazonica.aws.ec2])
   (catch FileNotFoundException e))
 
+(s/defschema ProvidedNode
+  (s/either s/Str
+            {:url                           s/Str
+             (s/optional-key :tags)         #{s/Str}
+             (s/optional-key :max-sessions) s/Int}))
+
 (defprotocol INodeProvider
   "Basic interface for choosing and managing Selenium nodes per session.
    Implementing this allows dynamic node domains- eg, by retrieving them from
    a cloud provider's API."
 
-  (get-nodes [this])
+  (get-nodes [this]
+    "Return a seq of `ProvidedNode`s")
 
   (add-node [this url]
     "Add a new node to the pool. If a url is provided, stick with that. Otherwise
@@ -80,7 +88,7 @@
                               :as options}]
   (map->AWSNodeProvider options))
 
-(defn selenium-url
+(defn selenium-url-from-pod
   [pod port-name]
   (let [port (->> pod
                   :spec
@@ -106,7 +114,7 @@
            (filter (fn [pod]
                      (-> pod :metadata :labels (get label-key) (= label-value))))
            (map (fn [pod]
-                  (selenium-url pod (:kube/port-name this)))))))
+                  (selenium-url-from-pod pod (:kube/port-name this)))))))
   (add-node [this url]
     (throw (ex-info "Adding nodes is not yet implemented."
                     {:user-visible true :status 500})))
