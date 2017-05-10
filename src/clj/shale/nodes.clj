@@ -181,22 +181,25 @@
     (logging/debug "Refreshing nodes...")
     (let [nodes (->> (:node-provider pool)
                      node-providers/get-nodes
-                     to-set)
+                     (map #(vec [(:url % %) %]))
+                     (into {}))
           registered-nodes (->> (view-models pool)
-                                (map :url)
-                                to-set)]
+                                (map #(vec [(:url %) %]))
+                                (into {}))]
       (logging/debug "Live nodes:")
       (logging/debug nodes)
       (logging/debug "Nodes in Redis:")
       (logging/debug registered-nodes)
       (doall
         (concat
-          (map #(create-node-from-provided-mode pool %)
+          (map #(create-node-from-provided-mode pool (get nodes %))
                (filter identity
-                       (difference nodes registered-nodes)))
-          (map #(destroy-node pool (:id (view-model-from-url pool %)))
+                       (difference (to-set (keys nodes))
+                                   (to-set (keys registered-nodes)))))
+          (map #(destroy-node pool (:id (get registered-nodes %)))
                (filter identity
-                       (difference registered-nodes nodes))))))
+                       (difference (to-set (keys registered-nodes))
+                                   (to-set (keys nodes))))))))
     true))
 
 (s/defschema NodeRequirement
