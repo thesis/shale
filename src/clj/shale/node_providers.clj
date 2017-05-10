@@ -101,6 +101,21 @@
         port-num (:containerPort port)]
     (str "http://" (-> pod :status :podIP) ":" port-num "/wd/hub")))
 
+(defn provided-node-from-pod
+  "Get a `ProvidedNode` from pod info returned from the kube API. A label with
+  the key `shale/node-tags` can optionally provide node tags in a
+  semicolon-delimited list."
+  [pod port-name]
+  (let [url (selenium-url-from-pod pod port-name)
+        tags (-> pod
+                 :metadata
+                 :labels
+                 (:shale/node-tags "")
+                 (clojure.string/split #";")
+                 (->> (into #{})))]
+    {:url url
+     :tags tags}))
+
 (defrecord KubeNodeProvider [api-url]
   INodeProvider
   (get-nodes [this]
@@ -114,7 +129,7 @@
            (filter (fn [pod]
                      (-> pod :metadata :labels (get label-key) (= label-value))))
            (map (fn [pod]
-                  (selenium-url-from-pod pod (:kube/port-name this)))))))
+                  (provided-node-from-pod pod (:kube/port-name this)))))))
   (add-node [this url]
     (throw (ex-info "Adding nodes is not yet implemented."
                     {:user-visible true :status 500})))
