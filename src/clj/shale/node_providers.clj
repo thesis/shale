@@ -112,7 +112,9 @@
                  :annotations
                  (:shale/node-tags "")
                  (clojure.string/split #";")
-                 (->> (into #{})))]
+                 (->> (map clojure.string/trim)
+                      (remove clojure.string/blank?)
+                      (into #{})))]
     {:url url
      :tags tags}))
 
