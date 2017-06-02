@@ -53,7 +53,8 @@
   :auto-clean false
   :main shale.core
   :plugins [[lein-environ "1.0.0"]
-            [lein-cljsbuild "1.1.3"]]
+            [lein-cljsbuild "1.1.3"]
+            [lein-asset-minifier "0.3.2"]]
   :test-selectors {:default (complement :integration)
                    :integration :integration
                    :all (constantly true)}
